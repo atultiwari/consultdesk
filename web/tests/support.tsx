@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
+import { useEffect } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { AppRoutes } from '../src/app/App';
 
@@ -49,13 +50,15 @@ export const fail = (
   },
 });
 
-let currentPath = '';
+const currentPath = { value: '' };
 function LocationProbe() {
   const location = useLocation();
-  currentPath = location.pathname + location.search;
+  useEffect(() => {
+    currentPath.value = location.pathname + location.search;
+  }, [location]);
   return null;
 }
-export const path = () => currentPath;
+export const path = () => currentPath.value;
 
 export function renderAt(entry: string) {
   const client = new QueryClient({
