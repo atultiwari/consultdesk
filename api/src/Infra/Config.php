@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Infra;
 
+use ConsultDesk\Telegram\TelegramConfig;
 use InvalidArgumentException;
 
 /**
@@ -31,6 +32,7 @@ final class Config
         /** @var list<string> */
         public readonly array $trustedProxies = [],
         public readonly ?string $trustedProxyHeader = null,
+        public readonly ?TelegramConfig $telegram = null,
     ) {}
 
     /**
@@ -102,6 +104,7 @@ final class Config
             ),
             trustedProxies: array_values(array_filter(array_map('trim', explode(',', $v['TRUSTED_PROXIES'] ?? '')))),
             trustedProxyHeader: ($v['TRUSTED_PROXY_HEADER'] ?? '') === '' ? null : $v['TRUSTED_PROXY_HEADER'],
+            telegram: TelegramConfig::fromValues($v),
         );
     }
 }

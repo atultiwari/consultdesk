@@ -88,6 +88,32 @@ final class ConfigTest extends TestCase
         self::assertSame([], Config::load('/nonexistent/config.php', self::env())->trustedProxies);
     }
 
+    public function testTelegramIsOptionalAndValidatedWhenConfigured(): void
+    {
+        self::assertNull(Config::load('/nonexistent/config.php', self::env())->telegram);
+
+        $config = Config::load('/nonexistent/config.php', array_merge(self::env(), [
+            'TELEGRAM_BOT_TOKEN' => '123456789:' . str_repeat('A', 35),
+            'TELEGRAM_WEBHOOK_SECRET' => str_repeat('s', 40),
+            'TELEGRAM_BOT_USERNAME' => '@ConsultDeskDemoBot',
+        ]));
+        self::assertNotNull($config->telegram);
+        self::assertSame('ConsultDeskDemoBot', $config->telegram->botUsername);
+
+        foreach ([
+            ['TELEGRAM_BOT_TOKEN' => 'not-a-token', 'TELEGRAM_WEBHOOK_SECRET' => str_repeat('s', 40)],
+            ['TELEGRAM_BOT_TOKEN' => '123456789:' . str_repeat('A', 35), 'TELEGRAM_WEBHOOK_SECRET' => 'short'],
+            ['TELEGRAM_BOT_TOKEN' => '123456789:' . str_repeat('A', 35)],
+        ] as $bad) {
+            try {
+                Config::load('/nonexistent/config.php', array_merge(self::env(), $bad));
+                self::fail('Expected invalid Telegram settings to be rejected.');
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString('TELEGRAM_', $e->getMessage());
+            }
+        }
+    }
+
     public function testRejectsAWeakOrMissingKey(): void
     {
         foreach (['APP_KEY' => 'base64:' . base64_encode('short'), 'CRON_KEY' => 'short', 'APP_URL' => 'not a url'] as $key => $value) {

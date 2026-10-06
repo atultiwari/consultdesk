@@ -148,7 +148,7 @@ final class BookingService
             // A lapsed hold may already have been rebooked by someone else.
             $this->assertHoldLive($booking, $now);
 
-            $this->bookings->markConfirmed($bookingId, $actor->type === ActorType::User ? $actor->id : null, $now);
+            $this->bookings->markConfirmed($bookingId, in_array($actor->type, [ActorType::User, ActorType::Telegram], true) ? $actor->id : null, $now);
             $this->bookings->audit($actor, 'booking.confirmed', $bookingId, [], $now);
             $this->events->record(BookingEvent::Confirmed, $bookingId);
         });

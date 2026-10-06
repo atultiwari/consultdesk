@@ -8,6 +8,7 @@ use ConsultDesk\Bootstrap\AppServices;
 use ConsultDesk\Http\Action\BookingActions;
 use ConsultDesk\Http\Action\CronAction;
 use ConsultDesk\Http\Action\ProviderActions;
+use ConsultDesk\Http\Action\TelegramWebhookAction;
 use ConsultDesk\Http\Middleware\ErrorHandling;
 use ConsultDesk\Http\Middleware\RateLimit;
 use ConsultDesk\Http\Middleware\SecurityHeaders;
@@ -54,6 +55,8 @@ final class AppFactory
             $api->post('/bookings', static fn($rq, $rs) => $bookings()->create($rq, $rs))->add($limit('book', 10, self::HOUR));
             $api->get('/bookings/{ref}', static fn($rq, $rs, array $a) => $bookings()->show($rq, $rs, $a))->add($limit('status', 60, self::MINUTE));
             $api->post('/bookings/{ref}/utr', static fn($rq, $rs, array $a) => $bookings()->submitUtr($rq, $rs, $a))->add($limit('utr', 10, self::HOUR));
+
+            $api->post('/webhooks/telegram', static fn($rq, $rs) => (new TelegramWebhookAction($services->telegramBot(), $services->config->telegram?->webhookSecret))($rq, $rs))->add($limit('telegram', 600, self::MINUTE));
 
             $api->get('/cron', static fn($rq, $rs) => (new CronAction($services->cronRunner(), $services->config->cronKey))($rq, $rs))->add($limit('cron', 30, self::MINUTE));
         });

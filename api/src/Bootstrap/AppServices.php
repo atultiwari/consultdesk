@@ -26,6 +26,14 @@ use ConsultDesk\Notify\NotificationHandlers;
 use ConsultDesk\Notify\Outbox;
 use ConsultDesk\Notify\OutboxBookingEvents;
 use ConsultDesk\Notify\OutboxWorker;
+use ConsultDesk\Telegram\HttpTelegramApi;
+use ConsultDesk\Telegram\LinkCodes;
+use ConsultDesk\Telegram\MessageLog;
+use ConsultDesk\Telegram\TelegramApi;
+use ConsultDesk\Telegram\TelegramBot;
+use ConsultDesk\Telegram\TelegramDirectory;
+use ConsultDesk\Telegram\TelegramServices;
+use GuzzleHttp\Client;
 use PDO;
 
 /**
@@ -43,6 +51,7 @@ final class AppServices
         private ?Db $db = null,
         private readonly Clock $clock = new SystemClock(),
         private ?Mailer $mailer = null,
+        private ?TelegramApi $telegramApi = null,
     ) {}
 
     public function clock(): Clock
@@ -106,9 +115,45 @@ final class AppServices
             new BookingEmails(),
             $this->crypto(),
             $this->config->appUrl,
+            $this->telegramServices(),
+            $this->clock,
         );
 
         return new CronRunner($this->pdo(), $this->bookingService(), new OutboxWorker($this->outbox(), $handlers), $this->rateLimiter());
+    }
+
+    public function telegramServices(): ?TelegramServices
+    {
+        $telegram = $this->config->telegram;
+        if ($telegram === null) {
+            return null;
+        }
+        $this->telegramApi ??= new HttpTelegramApi($telegram->botToken, new Client());
+
+        return new TelegramServices($this->telegramApi, new TelegramDirectory($this->pdo()), new MessageLog($this->pdo(), $this->clock));
+    }
+
+    public function telegramBot(): ?TelegramBot
+    {
+        $telegram = $this->telegramServices();
+        if ($telegram === null) {
+            return null;
+        }
+
+        return new TelegramBot(
+            $this->bookingViews(),
+            $this->bookingService(),
+            $telegram,
+            $this->linkCodes(),
+            $this->db(),
+            $this->clock,
+            $this->config->telegram?->botUsername,
+        );
+    }
+
+    public function linkCodes(): LinkCodes
+    {
+        return new LinkCodes($this->pdo(), $this->clock);
     }
 
     private function outbox(): Outbox

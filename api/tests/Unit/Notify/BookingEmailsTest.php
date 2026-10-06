@@ -66,6 +66,18 @@ final class BookingEmailsTest extends TestCase
         }
     }
 
+    public function testStaffSeeTheProvidersTimezone(): void
+    {
+        $email = (new BookingEmails())->render(
+            EmailTemplate::StaffConfirmed,
+            BookingViews::make(['status' => BookingStatus::Confirmed, 'customerTimezone' => 'Europe/London']),
+            self::STATUS_URL,
+        );
+
+        self::assertStringContainsString('Wed, 7 Oct 2026, 10:00 AM IST', $email->text);
+        self::assertStringNotContainsString('BST', $email->text);
+    }
+
     public function testTimesUseTheCustomersTimezoneWhenKnown(): void
     {
         $email = (new BookingEmails())->render(
