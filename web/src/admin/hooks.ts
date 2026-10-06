@@ -159,11 +159,12 @@ export function useBookingAction() {
   });
 }
 
-export function useAdminProviders() {
+export function useAdminProviders(enabled = true) {
   return useQuery({
     queryKey: adminKeys.providers,
     queryFn: ({ signal }) => adminFetch<AdminProvider[]>('/providers', { signal }),
     retry: noRetryOnClientError,
+    enabled,
   });
 }
 

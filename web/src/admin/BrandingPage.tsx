@@ -3,7 +3,10 @@ import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
 import { Loading, Notice } from '../design/components/Notice';
 import { safeImageUrl } from '../lib/safeUrl';
+import { Link } from 'react-router';
+import { useAdmin } from './context';
 import { fieldErrors } from './forms';
+import { useSetup } from './setupHooks';
 import { useBranding, useRemoveLogo, useSaveBranding, useUploadLogo } from './settingsHooks';
 import type { Branding } from './types';
 
@@ -203,6 +206,19 @@ function LogoPanel({ logoUrl }: { logoUrl: string | null }) {
   );
 }
 
+function SiteModeNote() {
+  const { base } = useAdmin();
+  const setup = useSetup();
+  if (!setup.data?.mode) return null;
+  return (
+    <p className="hint site-mode">
+      This site is for{' '}
+      <strong>{setup.data.mode === 'single' ? 'one teacher' : 'several teachers'}</strong>.{' '}
+      <Link to={`${base}/setup?step=mode`}>Change</Link>
+    </p>
+  );
+}
+
 export function BrandingPage() {
   const branding = useBranding();
   return (
@@ -211,6 +227,7 @@ export function BrandingPage() {
         <h1>Branding</h1>
         <p className="page__sub">How the booking site looks to your customers.</p>
       </header>
+      <SiteModeNote />
       {branding.isPending && <Loading />}
       {branding.isError && (
         <Notice tone="danger" live>

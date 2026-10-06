@@ -8,6 +8,7 @@ import { AccountPage } from './AccountPage';
 import { AdminLayout } from './AdminLayout';
 import { BrandingPage } from './BrandingPage';
 import { PaymentsPage } from './PaymentsPage';
+import { SetupPage } from './SetupPage';
 import { SystemPage } from './SystemPage';
 import { UsersPage } from './UsersPage';
 import { ForgotPage, LoginPage, ResetPage } from './AuthPages';
@@ -103,6 +104,7 @@ export default function AdminApp({ segment }: { segment: string }) {
               <Route path="branding" element={<BrandingPage />} />
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="system" element={<SystemPage />} />
+              <Route path="setup" element={<SetupPage />} />
             </>
           )}
           <Route path="*" element={<DashboardPage />} />

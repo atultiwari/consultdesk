@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
 import { Badge, Loading, Notice } from '../design/components/Notice';
+import { useSite } from '../api/hooks';
 import { initials } from '../lib/initials';
 import { visitorTimezone } from '../lib/time';
 import { isStaff, useAdmin } from './context';
@@ -83,13 +84,16 @@ function AddProvider({ onClose }: { onClose: () => void }) {
 export function ProvidersPage() {
   const { base, user } = useAdmin();
   const providers = useAdminProviders();
+  const { data: site } = useSite();
   const [adding, setAdding] = useState(false);
 
   return (
     <div className="page">
       <header className="page__head page__head--row">
         <h1>Providers</h1>
-        {isStaff(user) && <Button onClick={() => setAdding(true)}>Add provider</Button>}
+        {isStaff(user) && site?.mode !== 'single' && (
+          <Button onClick={() => setAdding(true)}>Add provider</Button>
+        )}
       </header>
       {providers.isPending && <Loading />}
       {providers.isError && (

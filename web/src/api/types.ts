@@ -6,6 +6,8 @@ export type Site = {
   accent: string | null;
   accent_2: string | null;
   logo_url: string | null;
+  /** "single" (one teacher) or "multi"; null until the owner sets the site up. */
+  mode?: 'single' | 'multi' | null;
   single_provider: string | null;
 };
 
