@@ -1,0 +1,51 @@
+{
+    "name": "atultiwari/consultdesk-api",
+    "description": "ConsultDesk API \u2014 self-hosted consultation booking (PHP 8.1+, Slim 4)",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "ext-intl": "*",
+        "ext-json": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-sodium": "*",
+        "slim/psr7": "^1.7",
+        "slim/slim": "^4.14"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "ConsultDesk\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ConsultDesk\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.1.29"
+        },
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite unit",
+        "test:coverage": "phpunit --coverage-text --coverage-clover coverage/clover.xml",
+        "stan": "phpstan analyse --memory-limit=512M",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "lint": [
+            "@cs",
+            "@stan"
+        ],
+        "coverage:check": "php bin/coverage-check.php coverage/clover.xml 80"
+    }
+}

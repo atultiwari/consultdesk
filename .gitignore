@@ -1,5 +1,6 @@
 # Secrets (see docs/PLAN.md — never commit)
-config.php
+/config.php
+/api/config.php
 .env
 .env.*
 !.env.example
@@ -15,3 +16,12 @@ build/
 .idea/
 .vscode/
 *.log
+
+# Tooling caches / reports
+.phpunit.cache/
+.php-cs-fixer.cache
+coverage/
+api/var/
+web/coverage/
+e2e/test-results/
+e2e/playwright-report/
