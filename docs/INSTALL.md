@@ -225,6 +225,19 @@ updates to run from the web.
 - Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
   their old and new values.
 
+## How long slots are held
+
+| Situation | Slot held for |
+|---|---|
+| Customer chose UPI and hasn't sent the UTR yet | 30 minutes |
+| UTR sent, waiting for the teacher or an admin to verify | up to 24 hours |
+| Customer chose to pay online (Razorpay) | 30 minutes |
+| Free session that needs approval | up to 24 hours |
+
+None of these runs past the start of the session. When a hold runs out, the slot is freed and the
+customer is told not to pay. Staff can confirm or reject from the admin panel, Telegram or the links in
+the emails.
+
 ## Online payments with Razorpay (Phase 7, optional)
 
 Customers can pay online (card, any UPI app, netbanking or wallet) on Razorpay's page. ConsultDesk

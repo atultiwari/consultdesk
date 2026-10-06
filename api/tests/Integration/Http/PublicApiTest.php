@@ -124,7 +124,7 @@ final class PublicApiTest extends ApiTestCase
         self::assertMatchesRegularExpression('/^CD-[2-9A-Z]{4}$/', $data['ref']);
         self::assertSame(self::APP_URL . "/b/{$data['ref']}?t={$data['token']}", $data['status_url']);
         self::assertSame('held', $data['booking']['status']);
-        self::assertSame('2026-10-05T01:00:00Z', $data['booking']['hold_expires_at']);
+        self::assertSame('2026-10-05T00:30:00Z', $data['booking']['hold_expires_at']);
         self::assertSame('placeholder@upi', $data['booking']['payment']['vpa']);
         self::assertStringStartsWith('upi://pay?pa=placeholder%40upi', $data['booking']['payment']['upi_uri']);
         self::assertTrue($data['booking']['payment']['can_submit_utr']);

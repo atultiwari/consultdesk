@@ -15,7 +15,8 @@ final class HoldPolicy
     public static function holdMinutes(PaymentMethod $method): int
     {
         return match ($method) {
-            PaymentMethod::Upi => 60,
+            // Half an hour to pay and send the UTR; then staff have up to a day to verify it.
+            PaymentMethod::Upi => 30,
             // Razorpay payment links must stay open at least 15 minutes.
             PaymentMethod::RazorpayLink => 30,
             // Free sessions that need approval wait up to a day for the provider.
