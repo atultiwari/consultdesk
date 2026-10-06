@@ -16,6 +16,9 @@ use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\SystemClock;
 use ConsultDesk\Notify\Mail\BookingEmails;
 use ConsultDesk\Notify\Mail\Mailer;
+use ConsultDesk\Payments\Razorpay\RazorpayCancelHandler;
+use ConsultDesk\Payments\Razorpay\RazorpayCheckout;
+use ConsultDesk\Payments\Razorpay\RazorpayEventHandler;
 use ConsultDesk\Telegram\TelegramAlertHandler;
 use ConsultDesk\Telegram\TelegramEventHandler;
 use ConsultDesk\Telegram\TelegramResolveHandler;
@@ -39,6 +42,7 @@ final class NotificationHandlers
         ?TelegramServices $telegram = null,
         ?Clock $clock = null,
         ?CalendarServices $calendar = null,
+        ?RazorpayCheckout $razorpay = null,
     ): array {
         $handlers = [BookingEventHandler::EMAIL_JOB => new BookingEmailHandler($views, $emails, $mailer, $crypto, $appUrl)];
         if ($telegram !== null) {
@@ -52,8 +56,14 @@ final class NotificationHandlers
             $handlers[GoogleCalendar::DISCONNECTED_JOB] = $calendar->disconnected;
         }
 
+        if ($razorpay !== null) {
+            $handlers[RazorpayEventHandler::CANCEL_JOB] = new RazorpayCancelHandler($razorpay);
+        }
         foreach (BookingEvent::cases() as $event) {
             $fanOut = [new BookingEventHandler($event, $views, $outbox, $clock)];
+            if ($razorpay !== null) {
+                $fanOut[] = new RazorpayEventHandler($event, $views, $outbox);
+            }
             if ($telegram !== null) {
                 $fanOut[] = new TelegramEventHandler($event, $views, $outbox, $telegram->directory);
             }

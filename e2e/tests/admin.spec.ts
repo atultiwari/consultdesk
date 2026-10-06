@@ -109,14 +109,19 @@ test('signing out ends the session', async ({ page }) => {
 
 test('the owner uploads a logo and the booking site shows it', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Branding' }).click();
+  await page
+    .getByRole('navigation', { name: 'Admin' })
+    .getByRole('link', { name: 'Branding' })
+    .click();
 
   // A 1×1 PNG made on the spot; the server re-encodes whatever it gets.
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
     'base64',
   );
-  await page.getByLabel('Upload a logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
+  await page
+    .getByLabel('Upload a logo')
+    .setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
   const logo = page.getByRole('img', { name: 'Current logo' });
   await expect(logo).toBeVisible();
   const src = (await logo.getAttribute('src')) ?? '';
@@ -132,7 +137,10 @@ test('the owner uploads a logo and the booking site shows it', async ({ page }) 
 
 test('the owner invites a provider', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Users' }).click();
+  await page
+    .getByRole('navigation', { name: 'Admin' })
+    .getByRole('link', { name: 'Users' })
+    .click();
   const email = `invitee-${Date.now()}@example.test`;
 
   await page.getByRole('button', { name: 'Invite someone' }).click();
@@ -145,4 +153,27 @@ test('the owner invites a provider', async ({ page }) => {
   const row = page.getByRole('row', { name: new RegExp(email) });
   await expect(row.getByText('Invited')).toBeVisible();
   expect(sql("SELECT COUNT(*) FROM outbox_jobs WHERE type = 'email.invite'")).not.toBe('0');
+});
+
+test('the owner saves Razorpay test keys and gets the webhook details', async ({ page }) => {
+  sql('DELETE FROM payment_gateways WHERE provider_id IS NULL');
+  await signIn(page);
+  await page
+    .getByRole('navigation', { name: 'Admin' })
+    .getByRole('link', { name: 'Payments' })
+    .click();
+  const org = page.getByRole('region', { name: /organisation account/ });
+
+  // Placeholder keys: saving never calls Razorpay, and they are removed again below.
+  await org.getByLabel('Key ID').fill(`rzp_test_${'E'.repeat(14)}`);
+  await org.getByLabel('Key Secret').fill(randomBytes(18).toString('hex'));
+  await org.getByRole('button', { name: 'Save keys' }).click();
+
+  await expect(org.getByText('Test mode', { exact: true })).toBeVisible();
+  await expect(org.getByText(/\/api\/webhooks\/razorpay$/)).toBeVisible();
+  await expect(org.getByRole('button', { name: 'Copy Webhook secret' })).toBeVisible();
+
+  await org.getByRole('button', { name: 'Remove keys' }).click();
+  await org.getByRole('button', { name: 'Yes, remove keys' }).click();
+  await expect(org.getByLabel('Key ID')).toBeVisible();
 });

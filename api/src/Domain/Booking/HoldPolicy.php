@@ -16,7 +16,8 @@ final class HoldPolicy
     {
         return match ($method) {
             PaymentMethod::Upi => 60,
-            PaymentMethod::RazorpayLink => 20,
+            // Razorpay payment links must stay open at least 15 minutes.
+            PaymentMethod::RazorpayLink => 30,
             // Free sessions that need approval wait up to a day for the provider.
             PaymentMethod::Free => 24 * 60,
         };

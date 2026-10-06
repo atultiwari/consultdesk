@@ -244,6 +244,20 @@ final class PdoBookingRepository implements BookingRepository
         ]);
     }
 
+    public function paymentRecorded(int $bookingId, string $paymentId): bool
+    {
+        $statement = $this->pdo->prepare('SELECT gateway_payment_id = :payment FROM bookings WHERE id = :id');
+        $statement->execute(['payment' => $paymentId, 'id' => $bookingId]);
+
+        return (bool) $statement->fetchColumn();
+    }
+
+    public function recordPayment(int $bookingId, string $paymentId, DateTimeImmutable $now): void
+    {
+        $this->pdo->prepare('UPDATE bookings SET gateway_payment_id = :payment, updated_at = :now WHERE id = :id')
+            ->execute(['payment' => $paymentId, 'now' => $now->format(self::SQL_DATETIME), 'id' => $bookingId]);
+    }
+
     public function setStatus(int $bookingId, BookingStatus $status, DateTimeImmutable $now): void
     {
         $this->pdo->prepare(

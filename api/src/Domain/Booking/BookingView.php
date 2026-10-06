@@ -48,6 +48,10 @@ final class BookingView
         public readonly ?string $gcalEventId = null,
         public readonly ?string $gcalCalendarId = null,
         public readonly bool $calendarConnected = false,
+        /** Razorpay payment link id and short URL, once made. */
+        public readonly ?string $gatewayRef = null,
+        public readonly ?string $gatewayUrl = null,
+        public readonly ?string $gatewayKeyId = null,
     ) {}
 
     /**

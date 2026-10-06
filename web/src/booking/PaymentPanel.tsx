@@ -5,6 +5,7 @@ import type { BookingView, UpiPayment } from '../api/types';
 import { Button, ButtonAnchor, ButtonLink } from '../design/components/Button';
 import { Notice } from '../design/components/Notice';
 import { safeHttpsUrl, safeUpiUri } from '../lib/safeUrl';
+import { OnlinePayment } from './OnlinePayment';
 import { Qr } from './Qr';
 import { useRemaining } from './useRemaining';
 import { UtrForm } from './UtrForm';
@@ -75,6 +76,21 @@ function UpiDetails({ payment }: { payment: UpiPayment }) {
   );
 }
 
+function HoldRanOut({ booking }: { booking: BookingView }) {
+  return (
+    <section className="pay card" aria-labelledby="pay-heading">
+      <h2 id="pay-heading" className="pay__title">
+        This hold has run out
+      </h2>
+      <Notice tone="danger" title="Do not pay for this booking" live>
+        The time is no longer reserved. If you already paid just now, contact{' '}
+        {booking.provider.name} with booking {booking.ref}.
+      </Notice>
+      <ButtonLink to={`/p/${booking.provider.slug}`}>Book a new time</ButtonLink>
+    </section>
+  );
+}
+
 export function PaymentPanel({ booking, token }: { booking: BookingView; token: string }) {
   const client = useQueryClient();
   const refresh = useCallback(
@@ -84,6 +100,12 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
   const left = useRemaining(booking.hold_expires_at, refresh);
   const payment = booking.payment;
   if (!payment) return null;
+  if (payment.method === 'razorpay_link' && !left?.expired) {
+    return <OnlinePayment booking={booking} payment={payment} token={token} left={left} />;
+  }
+  if (payment.method === 'razorpay_link') {
+    return <HoldRanOut booking={booking} />;
+  }
   const whatsapp = safeHttpsUrl(payment.whatsapp_url);
 
   if (!payment.can_submit_utr) {
@@ -113,18 +135,7 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
   // The hold ran out on this device's (server-corrected) clock: stop offering payment right away,
   // without waiting for the server to mark it expired.
   if (left?.expired) {
-    return (
-      <section className="pay card" aria-labelledby="pay-heading">
-        <h2 id="pay-heading" className="pay__title">
-          This hold has run out
-        </h2>
-        <Notice tone="danger" title="Do not pay for this booking" live>
-          The time is no longer reserved. If you already paid just now, contact{' '}
-          {booking.provider.name} with booking {booking.ref}.
-        </Notice>
-        <ButtonLink to={`/p/${booking.provider.slug}`}>Book a new time</ButtonLink>
-      </section>
-    );
+    return <HoldRanOut booking={booking} />;
   }
 
   return (

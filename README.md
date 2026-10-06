@@ -2,7 +2,7 @@
 
 ConsultDesk is a self-hosted app for booking consultations with doctors, teachers and mentors. It's built to run on ordinary shared hosting with just PHP and MySQL. Each provider's calendar syncs with Google Calendar, and one installation can hold several providers. Bookings can be paid by manual UPI, confirmed through a Telegram bot or the admin panel, or through Razorpay Payment Links. A secret admin panel manages availability, blocked times, services and rules.
 
-**Status:** Phase 6 (admin panel) done: sign-in at a secret path, dashboard, bookings, providers, sessions with the question builder, weekly hours, blocked times, users with email invites, branding with uploads, Telegram and Google from the panel, and a system page; on top of the public booking site, Google Calendar, Telegram, booking API, email and cron phases. Razorpay next (Phase 7).
+**Status:** Phase 7 (Razorpay Payment Links, test mode) in progress: online payment per booking with automatic confirmation, organisation keys with optional per-teacher accounts, and switches for each way to pay; on top of the admin panel, public booking site, Google Calendar, Telegram, booking API, email and cron phases. Installer and release next (Phase 8).
 
 - Build plan: [docs/PLAN.md](docs/PLAN.md)
 - Kick-off prompt for a new Claude Code session: [START_PROMPT.md](START_PROMPT.md)

@@ -113,7 +113,7 @@ final class AdminBookings
         $providerScope = $viewer->providerScope();
         [$condition, $params] = self::scoped('b.id = :id', $providerScope, ['id' => $bookingId]);
         $statement = $this->pdo->prepare(
-            'SELECT b.id, b.customer_phone, b.customer_timezone, b.answers, b.meet_url, b.confirmed_at, s.questions
+            'SELECT b.id, b.customer_phone, b.customer_timezone, b.answers, b.meet_url, b.confirmed_at, b.gateway_payment_id, s.questions
              FROM bookings b JOIN services s ON s.id = b.service_id WHERE ' . $condition,
         );
         $statement->execute($params);
@@ -136,6 +136,8 @@ final class AdminBookings
             ],
             'answers' => self::labelledAnswers(is_array($answers) ? $answers : [], is_array($questions) ? $questions : []),
             'meet_url' => $extra['meet_url'],
+            // Razorpay's payment id, to find it in the dashboard (e.g. for a refund).
+            'gateway_payment_id' => $extra['gateway_payment_id'],
             'confirmed_at' => self::iso($extra['confirmed_at']),
             'history' => $this->history($bookingId, $viewer),
             'actions' => self::actionsFor(BookingStatus::from((string) $row['status']), PaymentMethod::from((string) $row['payment_method']), $lapsed),

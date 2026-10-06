@@ -20,7 +20,7 @@ const SLOT_GONE = ['slot_unavailable', 'daily_limit_reached'];
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   upi: 'UPI (GPay, PhonePe, Paytm, BHIM…)',
   free: 'No payment needed',
-  razorpay_link: 'Card / UPI via Razorpay',
+  razorpay_link: 'Pay online: card, UPI app, netbanking or wallet (Razorpay)',
 };
 
 /** Each step's heading takes focus when the step appears, so keyboard and screen-reader users land on it. */
@@ -217,6 +217,13 @@ export default function BookingPage() {
                   your UPI app.
                 </Notice>
               )}
+              {chosenMethod === 'razorpay_link' && (
+                <Notice tone="info" title="What happens next">
+                  Your time is held for 30 minutes. On the next page, pay {service.price_display} on
+                  Razorpay's secure page; your booking is confirmed as soon as the payment goes
+                  through.
+                </Notice>
+              )}
               {service.requires_approval && (
                 <Notice tone="info" title="Needs approval">
                   {provider.name} will confirm this request by email, usually within a day.
@@ -240,7 +247,7 @@ export default function BookingPage() {
                 <Button onClick={submit} disabled={create.isPending || !chosenMethod} large>
                   {create.isPending
                     ? 'Booking…'
-                    : chosenMethod === 'upi'
+                    : chosenMethod === 'upi' || chosenMethod === 'razorpay_link'
                       ? `Book and pay ${service.price_display}`
                       : service.requires_approval
                         ? 'Send request'

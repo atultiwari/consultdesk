@@ -7,6 +7,8 @@ namespace ConsultDesk\Notify\Mail;
 enum EmailTemplate: string
 {
     case CustomerPaymentDue = 'customer.payment_due';
+    case CustomerPayOnline = 'customer.pay_online';
+    case CustomerPaidLate = 'customer.paid_late';
     case CustomerRequestReceived = 'customer.request_received';
     case CustomerPaymentReceived = 'customer.payment_received';
     case CustomerConfirmed = 'customer.confirmed';
@@ -16,6 +18,7 @@ enum EmailTemplate: string
     case StaffApprovalNeeded = 'staff.approval_needed';
     case StaffVerifyPayment = 'staff.verify_payment';
     case StaffConfirmed = 'staff.confirmed';
+    case StaffRefundNeeded = 'staff.refund_needed';
 
     public function isForCustomer(): bool
     {

@@ -17,7 +17,10 @@ final class ProviderProfile
         public readonly ?string $bio,
         public readonly ?string $photoPath,
         public readonly string $timezone,
+        /** Has a UPI ID, and UPI is switched on. */
         public readonly bool $acceptsUpi,
+        /** Razorpay keys exist for them (their own or the organisation's), and Razorpay is switched on. */
+        public readonly bool $acceptsRazorpay = false,
     ) {}
 
     /**

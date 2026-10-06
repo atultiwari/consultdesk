@@ -45,7 +45,16 @@ final class BookingPresenter
             'hold_expires_at' => $pending ? $booking->holdExpiresAt?->format(self::ISO) : null,
             'utr' => $booking->utr,
             'meet_url' => $status === BookingStatus::Confirmed ? $booking->meetUrl : null,
-            'payment' => $pending && $booking->paymentMethod === PaymentMethod::Upi ? self::upi($booking, $status) : null,
+            'payment' => match (true) {
+                !$pending => null,
+                $booking->paymentMethod === PaymentMethod::Upi => self::upi($booking, $status),
+                $booking->paymentMethod === PaymentMethod::RazorpayLink => [
+                    'method' => 'razorpay_link',
+                    'pay_url' => $status === BookingStatus::Held ? $booking->gatewayUrl : null,
+                    'amount_display' => Money::format($booking->amountMinor, $booking->currency),
+                ],
+                default => null,
+            },
         ];
     }
 

@@ -11,6 +11,7 @@ use ConsultDesk\Infra\FrozenClock;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
 use ConsultDesk\Tests\Support\ArrayMailer;
 use ConsultDesk\Tests\Support\FakeGoogleApi;
+use ConsultDesk\Tests\Support\FakeRazorpayApi;
 use ConsultDesk\Tests\Support\FakeTelegramApi;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -26,6 +27,7 @@ abstract class ApiTestCase extends IntegrationTestCase
     protected ArrayMailer $mailer;
     protected ?FakeTelegramApi $telegram = null;
     protected ?FakeGoogleApi $google = null;
+    protected ?FakeRazorpayApi $razorpay = null;
     private string $now = self::NOW;
 
     protected function setUp(): void
@@ -54,7 +56,7 @@ abstract class ApiTestCase extends IntegrationTestCase
             ...$this->extraEnv(),
         ]);
 
-        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram, googleApi: $this->google);
+        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram, googleApi: $this->google, razorpayApi: $this->razorpay);
     }
 
     /**
@@ -89,5 +91,25 @@ abstract class ApiTestCase extends IntegrationTestCase
         $body = json_decode((string) $response->getBody(), true);
 
         return [$response->getStatusCode(), is_array($body) ? $body : [], $response];
+    }
+
+    /**
+     * Sends a raw body (e.g. a signed webhook), byte for byte.
+     *
+     * @param array<string, string> $headers
+     *
+     * @return array{int, array<string, mixed>, ResponseInterface}
+     */
+    protected function callRaw(string $method, string $uri, string $body, array $headers = [], string $ip = '203.0.113.9'): array
+    {
+        $request = (new ServerRequestFactory())->createServerRequest($method, $uri, ['REMOTE_ADDR' => $ip])
+            ->withBody((new StreamFactory())->createStream($body));
+        foreach ($headers as $name => $value) {
+            $request = $request->withHeader($name, $value);
+        }
+        $response = AppFactory::create($this->services())->handle($request);
+        $decoded = json_decode((string) $response->getBody(), true);
+
+        return [$response->getStatusCode(), is_array($decoded) ? $decoded : [], $response];
     }
 }

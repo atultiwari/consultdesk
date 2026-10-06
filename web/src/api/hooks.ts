@@ -6,6 +6,7 @@ import type {
   NewBooking,
   ProviderDetail,
   ProviderProfile,
+  RazorpayReturn,
   Site,
   SlotsResponse,
 } from './types';
@@ -95,5 +96,27 @@ export function useSubmitUtr(ref: string, token: string) {
         json: { token, utr },
       }),
     onSuccess: (booking) => client.setQueryData(keys.booking(ref), booking),
+  });
+}
+
+export function usePayOnline(ref: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) =>
+      apiFetch<BookingView>(`/bookings/${encodeURIComponent(ref)}/razorpay`, {
+        method: 'POST',
+        json: { token },
+      }),
+    onSuccess: (booking) => client.setQueryData(keys.booking(ref), booking),
+  });
+}
+
+export function useRazorpayReturn(ref: string) {
+  return useMutation({
+    mutationFn: (params: Record<string, string>) =>
+      apiFetch<RazorpayReturn>(`/bookings/${encodeURIComponent(ref)}/razorpay/return`, {
+        method: 'POST',
+        json: params,
+      }),
   });
 }

@@ -6,6 +6,7 @@ import { Badge, Loading, Notice } from '../design/components/Notice';
 import { safeHttpsUrl } from '../lib/safeUrl';
 import { formatLongDateTime, formatTime, timezoneLabel } from '../lib/time';
 import { PaymentPanel } from './PaymentPanel';
+import { RazorpayReturn } from './RazorpayReturn';
 import './booking.css';
 import './status.css';
 
@@ -140,6 +141,10 @@ export default function StatusPage() {
   const [params] = useSearchParams();
   const token = params.get('t') ?? '';
   const query = useBooking(ref, token);
+
+  if (params.get('paid') === '1' && params.has('razorpay_signature')) {
+    return <RazorpayReturn refCode={ref} params={params} />;
+  }
 
   // A failed background refresh keeps the last good data; only a failed first load is an error.
   if (token === '' || (query.isError && !query.data)) {

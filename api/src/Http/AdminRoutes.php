@@ -15,6 +15,7 @@ use ConsultDesk\Http\Action\AdminBookingActions;
 use ConsultDesk\Http\Action\AdminImageActions;
 use ConsultDesk\Http\Action\AdminIntegrationActions;
 use ConsultDesk\Http\Action\AdminMeActions;
+use ConsultDesk\Http\Action\AdminPaymentActions;
 use ConsultDesk\Http\Action\AdminProviderActions;
 use ConsultDesk\Http\Action\AdminScheduleActions;
 use ConsultDesk\Http\Action\AdminServiceActions;
@@ -68,6 +69,14 @@ final class AdminRoutes
             $services->googleCalendar(),
             $services->auditLog(),
         );
+        $payments = static fn(): AdminPaymentActions => new AdminPaymentActions(
+            $services->settings(),
+            $services->gatewayKeys(),
+            $services->razorpayApi(),
+            new ProviderSettings($pdo()),
+            $services->auditLog(),
+            $services->config->appUrl,
+        );
         $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog());
         $id = self::ID;
 
@@ -117,6 +126,16 @@ final class AdminRoutes
         $admin->get("/providers/{$id}/google/calendars", static fn($rq, $rs, array $a) => $integrations()->googleCalendars($rq, $rs, $a));
         $admin->put("/providers/{$id}/google/calendars", static fn($rq, $rs, array $a) => $integrations()->googleSetCalendars($rq, $rs, $a));
         $admin->delete("/providers/{$id}/google", static fn($rq, $rs, array $a) => $integrations()->googleDisconnect($rq, $rs, $a));
+
+        $admin->get('/payments', static fn($rq, $rs) => $payments()->show($rq, $rs));
+        $admin->put('/payments/methods', static fn($rq, $rs) => $payments()->saveMethods($rq, $rs));
+        $admin->put('/payments/razorpay', static fn($rq, $rs) => $payments()->saveOrgKeys($rq, $rs));
+        $admin->delete('/payments/razorpay', static fn($rq, $rs) => $payments()->removeOrgKeys($rq, $rs));
+        $admin->post('/payments/razorpay/check', static fn($rq, $rs) => $payments()->check($rq, $rs));
+        $admin->post('/payments/razorpay/webhook-secret', static fn($rq, $rs) => $payments()->newWebhookSecret($rq, $rs));
+        $admin->put("/providers/{$id}/razorpay", static fn($rq, $rs, array $a) => $payments()->saveProviderKeys($rq, $rs, $a));
+        $admin->post("/providers/{$id}/razorpay/check", static fn($rq, $rs, array $a) => $payments()->checkProviderKeys($rq, $rs, $a));
+        $admin->delete("/providers/{$id}/razorpay", static fn($rq, $rs, array $a) => $payments()->removeProviderKeys($rq, $rs, $a));
 
         $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
         $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));
