@@ -82,13 +82,13 @@ final class Fixtures
         ], $overrides));
     }
 
-    public static function user(PDO $pdo, string $role = 'admin', ?int $providerId = null): int
+    public static function user(PDO $pdo, string $role = 'admin', ?int $providerId = null, ?string $email = null): int
     {
         static $n = 0;
         $n++;
 
         return self::insert($pdo, 'users', [
-            'email' => "user{$n}@example.test",
+            'email' => $email ?? "user{$n}@example.test",
             'password_hash' => 'not-a-real-hash',
             'role' => $role,
             'provider_id' => $providerId,

@@ -22,9 +22,19 @@ final class PdoBookingRepository implements BookingRepository
 
     public function lockActiveProvider(int $providerId): ?ProviderRecord
     {
+        return $this->provider($providerId, ' FOR UPDATE');
+    }
+
+    public function findActiveProvider(int $providerId): ?ProviderRecord
+    {
+        return $this->provider($providerId, '');
+    }
+
+    private function provider(int $providerId, string $lock): ?ProviderRecord
+    {
         $row = $this->fetchOne(
             'SELECT id, timezone, min_notice_min, horizon_days, buffer_before, buffer_after, slot_interval, max_per_day
-             FROM providers WHERE id = :id AND active = 1 FOR UPDATE',
+             FROM providers WHERE id = :id AND active = 1' . $lock,
             ['id' => $providerId],
         );
         if ($row === null) {
@@ -122,22 +132,34 @@ final class PdoBookingRepository implements BookingRepository
         return array_map(static fn(array $r): Interval => self::interval($r), $rows);
     }
 
+    public function countOpenForEmail(string $email, DateTimeImmutable $now): int
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM bookings
+             WHERE customer_email = :email AND status IN ('held', 'awaiting_verification') AND hold_expires_at > :now",
+        );
+        $statement->execute(['email' => $email, 'now' => $now->format(self::SQL_DATETIME)]);
+
+        return (int) $statement->fetchColumn();
+    }
+
     public function insert(NewBooking $booking): int
     {
         $created = $booking->createdAt->format(self::SQL_DATETIME);
         try {
             $this->pdo->prepare(
-                'INSERT INTO bookings (ref, public_token_hash, provider_id, service_id, start_at, end_at,
+                'INSERT INTO bookings (ref, public_token_hash, public_token_enc, provider_id, service_id, start_at, end_at,
                     customer_name, customer_email, customer_phone, customer_timezone, answers,
                     amount_minor, currency, payment_method, status, hold_expires_at,
                     status_changed_at, created_at, updated_at)
-                 VALUES (:ref, :token_hash, :provider, :service, :start_at, :end_at,
+                 VALUES (:ref, :token_hash, :token_enc, :provider, :service, :start_at, :end_at,
                     :name, :email, :phone, :timezone, :answers,
                     :amount, :currency, :method, :status, :hold_expires_at,
                     :status_changed_at, :created_at, :updated_at)',
             )->execute([
                 'ref' => $booking->ref,
                 'token_hash' => $booking->publicTokenHash,
+                'token_enc' => $booking->publicTokenEnc,
                 'provider' => $booking->providerId,
                 'service' => $booking->serviceId,
                 'start_at' => $booking->slot->start->format(self::SQL_DATETIME),

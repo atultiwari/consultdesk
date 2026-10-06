@@ -8,6 +8,14 @@ services:
       - ./api:/var/www/api
     environment:
       APP_DEBUG: "1"
+      # Throwaway local-dev values. Real installs get these from config.php (Phase 8 installer).
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      # No default on purpose: generate a local key into .env (see README), never commit one.
+      APP_KEY: ${APP_KEY:?Set APP_KEY in .env - see README "Local development"}
+      CRON_KEY: ${CRON_KEY:-local-dev-cron-key-not-secret-0000}
+      MAIL_FROM: bookings@example.test
+      MAIL_FROM_NAME: ConsultDesk (local)
+      SMTP_ENCRYPTION: none
       DB_HOST: db
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:-consultdesk}
@@ -16,6 +24,7 @@ services:
       DB_TEST_NAME: consultdesk_test
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      MAILPIT_API: http://mailpit:8025
     depends_on:
       db:
         condition: service_healthy

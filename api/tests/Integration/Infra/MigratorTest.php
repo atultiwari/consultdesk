@@ -29,15 +29,15 @@ final class MigratorTest extends IntegrationTestCase
         self::dropAllTables($this->pdo);
         $migrator = new Migrator($this->pdo, self::MIGRATIONS_DIR, new FrozenClock('2026-10-05T00:00Z'));
 
-        self::assertSame(['001_init'], $migrator->pending());
-        self::assertSame(['001_init'], $migrator->migrate());
+        self::assertSame(['001_init', '002_notifications_and_rate_limits', '003_customer_email_index'], $migrator->pending());
+        self::assertSame(['001_init', '002_notifications_and_rate_limits', '003_customer_email_index'], $migrator->migrate());
         self::assertSame([], $migrator->pending());
         self::assertSame([], $migrator->migrate(), 'a second run is a no-op');
 
         $tables = self::column($this->pdo, 'SHOW TABLES');
         foreach (['settings', 'providers', 'users', 'services', 'availability_rules', 'blocked_periods', 'bookings',
             'payment_gateways', 'payment_events', 'oauth_tokens', 'outbox_jobs', 'login_attempts', 'sessions',
-            'audit_log', 'migrations'] as $table) {
+            'audit_log', 'migrations', 'rate_limits'] as $table) {
             self::assertContains($table, $tables);
         }
         self::assertSame(['2026-10-05 00:00:00'], self::column($this->pdo, "SELECT applied_at FROM migrations WHERE version = '001_init'"));

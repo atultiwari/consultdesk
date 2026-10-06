@@ -19,13 +19,17 @@ final class JsonResponse
         return self::write($response, ['success' => true, 'data' => $data, 'error' => null, 'meta' => $meta], $status);
     }
 
-    public static function error(ResponseInterface $response, string $code, string $message, int $status): ResponseInterface
+    /**
+     * @param array<string, string> $fields per-field messages for validation errors
+     */
+    public static function error(ResponseInterface $response, string $code, string $message, int $status, array $fields = []): ResponseInterface
     {
-        return self::write(
-            $response,
-            ['success' => false, 'data' => null, 'error' => ['code' => $code, 'message' => $message], 'meta' => null],
-            $status,
-        );
+        $error = ['code' => $code, 'message' => $message];
+        if ($fields !== []) {
+            $error['fields'] = $fields;
+        }
+
+        return self::write($response, ['success' => false, 'data' => null, 'error' => $error, 'meta' => null], $status);
     }
 
     /**

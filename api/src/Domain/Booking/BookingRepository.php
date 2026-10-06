@@ -21,6 +21,11 @@ interface BookingRepository
      */
     public function lockActiveProvider(int $providerId): ?ProviderRecord;
 
+    /**
+     * Same as lockActiveProvider() without the lock, for read-only use such as listing slots.
+     */
+    public function findActiveProvider(int $providerId): ?ProviderRecord;
+
     public function findActiveService(int $serviceId): ?ServiceRecord;
 
     /**
@@ -37,6 +42,11 @@ interface BookingRepository
      * @return list<Interval> provider-specific and organisation-wide blocked periods overlapping $range
      */
     public function blockedPeriods(int $providerId, Interval $range): array;
+
+    /**
+     * Held or awaiting-verification bookings for this email whose hold has not lapsed.
+     */
+    public function countOpenForEmail(string $email, DateTimeImmutable $now): int;
 
     /**
      * @throws RefCollision when the ref is already taken

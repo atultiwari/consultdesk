@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Domain\Booking;
 
+use ConsultDesk\Domain\Availability\BusyTimeSource;
 use ConsultDesk\Domain\Availability\Interval;
+use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotEngine;
 use ConsultDesk\Domain\Availability\SlotRequest;
 use ConsultDesk\Infra\Clock;
+use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
 use DateTimeImmutable;
 use RuntimeException;
@@ -25,12 +28,17 @@ use RuntimeException;
 final class BookingService
 {
     private const MAX_REF_ATTEMPTS = 5;
+    /** Open (unpaid or unapproved) bookings one email address may have at once. */
+    public const MAX_OPEN_PER_EMAIL = 3;
 
     public function __construct(
         private readonly Db $db,
         private readonly BookingRepository $bookings,
         private readonly Clock $clock,
         private readonly RefGenerator $refs,
+        private readonly BookingEvents $events,
+        private readonly Crypto $crypto,
+        private readonly BusyTimeSource $busy = new NoBusyTime(),
         private readonly SlotEngine $slotEngine = new SlotEngine(),
     ) {}
 
@@ -41,11 +49,18 @@ final class BookingService
      * inside the weekly hours, on the slot grid, outside blocked periods, within notice and horizon,
      * clear of other bookings by the gap and under the daily cap.
      *
-     * @throws ServiceNotBookable|PaymentMethodNotAllowed|SlotUnavailable|DailyLimitReached
+     * With $confirmImmediately (free services that need no approval) the booking is confirmed in
+     * the same transaction, so a failure can never leave a stray hold behind.
+     *
+     * @throws ServiceNotBookable|PaymentMethodNotAllowed|SlotUnavailable|DailyLimitReached|TooManyOpenBookings
      */
-    public function hold(HoldRequest $request): HeldBooking
+    public function hold(HoldRequest $request, bool $confirmImmediately = false): HeldBooking
     {
-        return $this->db->transaction(function () use ($request): HeldBooking {
+        if ($confirmImmediately && $request->paymentMethod !== PaymentMethod::Free) {
+            throw new PaymentMethodNotAllowed();
+        }
+
+        return $this->db->transaction(function () use ($request, $confirmImmediately): HeldBooking {
             $provider = $this->bookings->lockActiveProvider($request->providerId) ?? throw new ServiceNotBookable();
             $now = $this->clock->now();
             $service = $this->bookings->findActiveService($request->serviceId);
@@ -53,6 +68,9 @@ final class BookingService
                 throw new ServiceNotBookable();
             }
             $this->assertPaymentMethod($service, $request->paymentMethod);
+            if ($this->bookings->countOpenForEmail($request->customer->email, $now) >= self::MAX_OPEN_PER_EMAIL) {
+                throw new TooManyOpenBookings();
+            }
 
             $slot = new Interval($request->start, $request->start->modify(sprintf('+%d minutes', $service->durationMinutes)));
             $this->assertOffered($provider, $service, $slot, $now);
@@ -62,6 +80,7 @@ final class BookingService
             [$id, $ref] = $this->insertWithUniqueRef(new NewBooking(
                 $this->refs->next(),
                 RandomRefGenerator::hashToken($token),
+                $this->crypto->encrypt($token),
                 $provider->id,
                 $service->id,
                 $slot,
@@ -79,6 +98,13 @@ final class BookingService
                 'start_at' => $slot->start->format(DATE_ATOM),
                 'payment_method' => $request->paymentMethod->value,
             ], $now);
+            if ($confirmImmediately) {
+                $this->bookings->markConfirmed($id, null, $now);
+                $this->bookings->audit(Actor::system(), 'booking.confirmed', $id, [], $now);
+                $this->events->record(BookingEvent::Confirmed, $id);
+            } else {
+                $this->events->record(BookingEvent::Held, $id);
+            }
 
             return new HeldBooking($id, $ref, $token, $holdExpiresAt);
         });
@@ -106,6 +132,7 @@ final class BookingService
             $verifyBy = min($now->modify(sprintf('+%d minutes', HoldPolicy::VERIFICATION_WINDOW_MINUTES)), $booking->startAt);
             $this->bookings->markAwaitingVerification($bookingId, $validUtr, $verifyBy, $now);
             $this->bookings->audit(Actor::customer(), 'booking.utr_submitted', $bookingId, ['utr' => $validUtr->value], $now);
+            $this->events->record(BookingEvent::UtrSubmitted, $bookingId);
         });
     }
 
@@ -123,6 +150,7 @@ final class BookingService
 
             $this->bookings->markConfirmed($bookingId, $actor->type === ActorType::User ? $actor->id : null, $now);
             $this->bookings->audit($actor, 'booking.confirmed', $bookingId, [], $now);
+            $this->events->record(BookingEvent::Confirmed, $bookingId);
         });
     }
 
@@ -165,6 +193,7 @@ final class BookingService
             foreach ($ids as $id) {
                 $this->bookings->setStatus($id, BookingStatus::Expired, $now);
                 $this->bookings->audit(Actor::system(), 'booking.expired', $id, [], $now);
+                $this->events->record(BookingEvent::Expired, $id);
             }
 
             return count($ids);
@@ -183,6 +212,10 @@ final class BookingService
 
             $this->bookings->setStatus($bookingId, $to, $now);
             $this->bookings->audit($actor, 'booking.' . $to->value, $bookingId, [], $now);
+            $event = BookingEvent::tryFrom('booking.' . $to->value);
+            if ($event !== null) {
+                $this->events->record($event, $bookingId);
+            }
         });
     }
 
@@ -224,6 +257,7 @@ final class BookingService
             now: $now,
             blocked: $this->bookings->blockedPeriods($provider->id, $context),
             bookings: $bookings,
+            busy: $this->busy->busy($provider->id, $context),
         ));
 
         foreach ($offered as $candidate) {

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Tests\Integration\Domain\Booking;
 
+use ConsultDesk\Domain\Availability\BusyTimeSource;
+use ConsultDesk\Domain\Availability\Interval;
+use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Domain\Booking\BookingNotFound;
 use ConsultDesk\Domain\Booking\BookingService;
@@ -23,8 +26,13 @@ use ConsultDesk\Domain\Booking\RefGenerator;
 use ConsultDesk\Domain\Booking\ServiceNotBookable;
 use ConsultDesk\Domain\Booking\SessionNotStarted;
 use ConsultDesk\Domain\Booking\SlotUnavailable;
+use ConsultDesk\Domain\Booking\TooManyOpenBookings;
+use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\FrozenClock;
+use ConsultDesk\Notify\Outbox;
+use ConsultDesk\Notify\OutboxBookingEvents;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
+use ConsultDesk\Tests\Integration\Support\FixedBusyTime;
 use ConsultDesk\Tests\Integration\Support\Fixtures;
 use ConsultDesk\Tests\Integration\Support\SequenceRefs;
 use DateTimeImmutable;
@@ -67,6 +75,31 @@ final class BookingServiceTest extends IntegrationTestCase
         self::assertSame(['goal' => 'Thesis feedback'], json_decode((string) $row['answers'], true));
         self::assertSame('Asha Placeholder', $row['customer_name']);
         self::assertSame(['booking.held'], $this->auditActions($held->id));
+        self::assertSame($held->publicToken, self::crypto()->decrypt((string) $row['public_token_enc']));
+        self::assertSame([['booking.held', ['booking_id' => $held->id]]], $this->outboxJobs());
+    }
+
+    public function testEveryStatusChangeQueuesAnEventInTheSameTransaction(): void
+    {
+        $service = $this->service();
+        $upi = $service->hold($this->request('10:00'));
+        $service->submitUtr($upi->id, '412345678901');
+        $service->confirm($upi->id, Actor::system());
+        $service->cancel($upi->id, Actor::system());
+        $toExpire = $service->hold($this->request('14:00'));
+        $this->service('2026-10-05T01:00Z')->expireStale();
+
+        self::assertSame(
+            ['booking.held', 'booking.utr_submitted', 'booking.confirmed', 'booking.cancelled', 'booking.held', 'booking.expired'],
+            array_column($this->outboxJobs(), 0),
+        );
+        self::assertSame(['booking_id' => $toExpire->id], $this->outboxJobs()[5][1]);
+
+        try {
+            $service->hold($this->request('10:00', '2026-10-08', serviceId: 999_999));
+        } catch (ServiceNotBookable) {
+        }
+        self::assertCount(6, $this->outboxJobs(), 'a failed hold queues nothing');
     }
 
     public function testRejectsASecondHoldOnTheSameSlot(): void
@@ -250,7 +283,7 @@ final class BookingServiceTest extends IntegrationTestCase
         $toReject = $service->hold($this->request('09:00', serviceId: $free, method: PaymentMethod::Free));
         $toComplete = $service->hold($this->request('11:00', serviceId: $free, method: PaymentMethod::Free));
         $toNoShow = $service->hold($this->request('13:00', '2026-10-08', serviceId: $free, method: PaymentMethod::Free));
-        $toCancel = $service->hold($this->request('15:00', '2026-10-08', serviceId: $free, method: PaymentMethod::Free));
+        $toCancel = $service->hold($this->request('15:00', '2026-10-08', serviceId: $free, method: PaymentMethod::Free, email: 'second@example.test'));
 
         $service->reject($toReject->id, Actor::system());
         foreach ([$toComplete, $toNoShow, $toCancel] as $booking) {
@@ -281,7 +314,7 @@ final class BookingServiceTest extends IntegrationTestCase
         $lapsedAwaiting = $service->hold($this->request('11:00'));
         $service->submitUtr($lapsedAwaiting->id, '412345678901'); // verification window ends 2026-10-06 00:00
         $lapsedLink = $service->hold($this->request('13:00', method: PaymentMethod::RazorpayLink));
-        $this->service('2026-10-05T00:10Z')->hold($this->request('15:00', '2026-10-08', method: PaymentMethod::RazorpayLink));
+        $this->service('2026-10-05T00:10Z')->hold($this->request('15:00', '2026-10-08', method: PaymentMethod::RazorpayLink, email: 'second@example.test'));
 
         $count = $this->service('2026-10-06T00:00Z')->expireStale();
 
@@ -347,14 +380,60 @@ final class BookingServiceTest extends IntegrationTestCase
         $this->assertThrows(HoldExpired::class, fn() => $this->service('2026-10-05T06:30Z')->confirm($later->id, Actor::system()));
     }
 
-    private function service(string $now = self::NOW, ?RefGenerator $refs = null): BookingService
+    public function testExternalBusyTimeBlocksAHold(): void
     {
+        $busy = new FixedBusyTime([Interval::fromStrings('2026-10-07T04:00Z', '2026-10-07T05:00Z')]);
+
+        $this->assertThrows(SlotUnavailable::class, fn() => $this->service(busy: $busy)->hold($this->request('10:00')));
+        self::assertInstanceOf(HeldBooking::class, $this->service(busy: $busy)->hold($this->request('12:00')));
+    }
+
+    public function testFreeBookingsCanBeConfirmedInTheSameTransaction(): void
+    {
+        $free = Fixtures::service($this->pdo, $this->providerId, ['price_minor' => 0, 'payment_methods' => '["free"]']);
+
+        $held = $this->service()->hold($this->request('10:00', serviceId: $free, method: PaymentMethod::Free), confirmImmediately: true);
+
+        $row = $this->booking($held->id);
+        self::assertSame('confirmed', $row['status']);
+        self::assertNull($row['hold_expires_at']);
+        self::assertSame(['booking.held', 'booking.confirmed'], $this->auditActions($held->id));
+        self::assertSame(['booking.confirmed'], array_column($this->outboxJobs(), 0));
+
+        $this->assertThrows(PaymentMethodNotAllowed::class, fn() => $this->service()->hold($this->request('14:00'), confirmImmediately: true));
+    }
+
+    public function testOneEmailCannotHoldMoreThanThreeOpenBookings(): void
+    {
+        $service = $this->service();
+        foreach (['09:00', '11:00', '13:00'] as $time) {
+            $service->hold($this->request($time));
+        }
+
+        $this->assertThrows(TooManyOpenBookings::class, fn() => $service->hold($this->request('15:00', '2026-10-08')));
+
+        $this->service('2026-10-05T01:00Z')->hold($this->request('15:00', '2026-10-08'));
+        $this->addToAssertionCount(1); // lapsed holds no longer count
+    }
+
+    private function service(string $now = self::NOW, ?RefGenerator $refs = null, ?BusyTimeSource $busy = null): BookingService
+    {
+        $clock = new FrozenClock($now);
+
         return new BookingService(
             $this->database,
             new PdoBookingRepository($this->pdo),
-            new FrozenClock($now),
+            $clock,
             $refs ?? new RandomRefGenerator(),
+            new OutboxBookingEvents(new Outbox($this->pdo, $clock)),
+            self::crypto(),
+            $busy ?? new NoBusyTime(),
         );
+    }
+
+    private static function crypto(): Crypto
+    {
+        return new Crypto(str_repeat('t', SODIUM_CRYPTO_SECRETBOX_KEYBYTES));
     }
 
     /**
@@ -367,12 +446,13 @@ final class BookingServiceTest extends IntegrationTestCase
         ?int $serviceId = null,
         PaymentMethod $method = PaymentMethod::Upi,
         array $answers = [],
+        string $email = 'asha@example.test',
     ): HoldRequest {
         return new HoldRequest(
             providerId: $providerId ?? $this->providerId,
             serviceId: $serviceId ?? $this->serviceId,
             start: new DateTimeImmutable("{$date} {$istTime}", new DateTimeZone('Asia/Kolkata')),
-            customer: new Customer('Asha Placeholder', 'asha@example.test', '+910000000000', 'Asia/Kolkata'),
+            customer: new Customer('Asha Placeholder', $email, '+910000000000', 'Asia/Kolkata'),
             paymentMethod: $method,
             answers: $answers,
         );
@@ -417,6 +497,20 @@ final class BookingServiceTest extends IntegrationTestCase
         self::assertIsArray($row);
 
         return $row;
+    }
+
+    /**
+     * @return list<array{string, mixed}>
+     */
+    private function outboxJobs(): array
+    {
+        $statement = $this->pdo->prepare('SELECT type, payload FROM outbox_jobs ORDER BY id');
+        $statement->execute();
+
+        return array_values(array_map(
+            static fn(array $r): array => [(string) $r['type'], json_decode((string) $r['payload'], true)],
+            $statement->fetchAll(\PDO::FETCH_ASSOC),
+        ));
     }
 
     /**
