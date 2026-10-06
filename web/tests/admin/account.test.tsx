@@ -7,6 +7,9 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('my account', () => {
   it('renames me, changes my password and links my Telegram', async () => {
+    // Throwaway values made per run, so no password-like literal sits in the code.
+    const current = crypto.randomUUID();
+    const next = crypto.randomUUID();
     let attempt = 0;
     const calls = mockApi({
       ...signedIn(providerUser),
@@ -28,15 +31,15 @@ describe('my account', () => {
     await user.click(screen.getByRole('button', { name: 'Save name' }));
     expect(await screen.findByText('Dr. Demo', { selector: '.account__name' })).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Current password'), 'wrong-one');
-    await user.type(screen.getByLabelText('New password'), 'a long new password');
+    await user.type(screen.getByLabelText('Current password'), current);
+    await user.type(screen.getByLabelText('New password'), next);
     await user.click(screen.getByRole('button', { name: 'Change password' }));
     expect(await screen.findByText('That isn’t your current password.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Change password' }));
     expect(await screen.findByText(/Password changed/)).toBeInTheDocument();
     expect(calls.filter((c) => c.path === '/api/admin/me/password').at(-1)?.body).toEqual({
-      current_password: 'wrong-one',
-      new_password: 'a long new password',
+      current_password: current,
+      new_password: next,
     });
 
     await user.click(screen.getByRole('button', { name: 'Get a Telegram link' }));
@@ -57,8 +60,9 @@ describe('welcome page', () => {
       await screen.findByRole('heading', { name: 'Welcome! Choose a password' }),
     ).toBeInTheDocument();
     await waitFor(() => expect(path()).toBe(`${ADMIN}/welcome`));
-    await user.type(screen.getByLabelText('New password'), 'my chosen password');
-    await user.type(screen.getByLabelText('Repeat it'), 'my chosen password');
+    const chosen = crypto.randomUUID();
+    await user.type(screen.getByLabelText('New password'), chosen);
+    await user.type(screen.getByLabelText('Repeat it'), chosen);
     await user.click(screen.getByRole('button', { name: 'Set password' }));
 
     expect(await screen.findByText(/You can sign in now/)).toBeInTheDocument();
