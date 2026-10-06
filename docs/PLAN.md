@@ -111,9 +111,9 @@ consultdesk/
 - `providers`: `slug`, `name`, `title`, `bio`, `photo_path`, `timezone`, `active`, `sort_order`.
   - Contact: `whatsapp`, `telegram_chat_id`.
   - UPI: `upi_vpa`, `upi_payee_name`.
-  - Booking rules: `min_notice_min`, `horizon_days`, `buffer_before`, `buffer_after`, `slot_interval`, `max_per_day`.
+  - Booking rules: `min_notice_min`, `horizon_days`, `buffer_before`, `buffer_after`, `slot_interval`, `max_per_day`. All are editable per provider in the admin panel (Rules).
 - `services`: `provider_id`, `slug`, `title`, `tagline`, `description`, `audience`, `duration_min`, `price_minor`, `currency`, `requires_approval`, `payment_methods` (JSON), `questions` (JSON schema: text, textarea, select, url, checkbox, required), `active`, `sort_order`.
-- `availability_rules`: `provider_id`, `weekday`, `start_time`, `end_time`, and an optional `service_id`.
+- `availability_rules`: `provider_id`, `weekday` (ISO: 1 = Monday … 7 = Sunday), `start_time`, `end_time`, and an optional `service_id`. If a service has its own rules, **only those apply** to it; otherwise the provider's general rules apply.
 - `blocked_periods`: `provider_id` (nullable means an org-wide holiday), `start_at`, `end_at`, `all_day`, `reason`.
 - `bookings`:
   - Identity: `ref` (e.g. `CD-7F3K`), `public_token_hash`, `provider_id`, `service_id`, `start_at`/`end_at` (UTC).
@@ -128,13 +128,14 @@ consultdesk/
 
 **Preventing double bookings without Postgres exclusion constraints:**
 1. `BookingService::hold()` opens a transaction and runs `SELECT … FROM providers WHERE id=? FOR UPDATE`, which serialises bookings per provider.
-2. It re-checks for overlaps against `held`, `awaiting_verification` and `confirmed` bookings, buffers included, then inserts.
+2. It re-checks notice, horizon, the daily cap and overlaps against `confirmed` bookings and `held` / `awaiting_verification` bookings whose hold has not lapsed (gap included, see §8), then inserts.
 3. Integration tests run two concurrent connections to prove it.
 
 **Status machine:**
-- UPI: `held → awaiting_verification` (UTR submitted; the hold is extended to 24 h) `→ confirmed | rejected`.
+- UPI: `held → awaiting_verification` (UTR submitted; the hold is extended to 24 h) `→ confirmed | rejected`. If nobody verifies within 24 h it becomes `expired` and the slot is released.
 - Razorpay Payment Links: `held → confirmed` (webhook) `| expired`.
-- Free services that require approval: `held → confirmed | rejected`.
+- Free services that require approval: `held → confirmed | rejected`, held for up to 24 h.
+- A booking whose hold has lapsed cannot be confirmed (the slot may already be rebooked).
 - Admin actions after booking: `cancelled`, `completed`, `no_show`, `rescheduled`.
 - Cron expires stale holds.
 
@@ -142,7 +143,7 @@ consultdesk/
 
 1. **Slots.** `SlotEngine` is pure and heavily unit-tested. Given a provider and service, it starts from the weekly rules for the date range and removes:
    - blocked periods (provider-specific and org-wide),
-   - existing bookings, including buffers,
+   - existing bookings, keeping the gap from §8 on both sides,
    - **Google free/busy** times across that provider's chosen calendars, cached for 2 minutes,
    - anything inside the minimum-notice window, beyond the horizon, or on days already at `max_per_day`.
 
@@ -222,10 +223,10 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 - Timezone: Asia/Kolkata.
 - Minimum notice: 24 h.
 - Booking horizon: 30 days.
-- Buffers: 10 min before and 15 min after.
+- Buffers: 10 min before and 10 min after, customisable per provider. Between two of a provider's sessions the required gap is the **larger** of the two buffers (not their sum). Against external busy time (Google), a session's own before/after buffers apply.
 - Slot interval: 30 min.
 - At most 3 sessions per day.
-- Holds: 60 min for UPI, 20 min for Razorpay links.
+- Holds: 60 min for UPI, 20 min for Razorpay links, 24 h for free sessions awaiting approval. A UPI booking awaiting verification is held for 24 h after the UTR is submitted.
 
 ## 9. Phases (TDD throughout; one PR per phase)
 

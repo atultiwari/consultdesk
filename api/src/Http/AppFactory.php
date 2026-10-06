@@ -15,11 +15,11 @@ final class AppFactory
     /**
      * @return App<ContainerInterface|null>
      */
-    public static function create(bool $displayErrorDetails = false): App
+    public static function create(bool $displayErrorDetails = false, bool $logErrors = true): App
     {
         $app = SlimAppFactory::create();
         $app->addRoutingMiddleware();
-        $app->addErrorMiddleware($displayErrorDetails, true, true);
+        $app->addErrorMiddleware($displayErrorDetails, $logErrors, $logErrors);
 
         $app->get('/api/health', static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
             return JsonResponse::success($response, ['status' => 'ok']);

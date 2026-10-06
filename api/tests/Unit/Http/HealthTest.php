@@ -27,7 +27,7 @@ final class HealthTest extends TestCase
 
     public function testUnknownRouteReturns404(): void
     {
-        $app = AppFactory::create();
+        $app = AppFactory::create(logErrors: false);
         $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/nope');
 
         self::assertSame(404, $app->handle($request)->getStatusCode());

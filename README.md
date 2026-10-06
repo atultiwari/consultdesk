@@ -2,7 +2,7 @@
 
 ConsultDesk is a self-hosted app for booking consultations with doctors, teachers and mentors. It's built to run on ordinary shared hosting with just PHP and MySQL. Each provider's calendar syncs with Google Calendar, and one installation can hold several providers. Bookings can be paid by manual UPI, confirmed through a Telegram bot or the admin panel, or through Razorpay Payment Links. A secret admin panel manages availability, blocked times, services and rules.
 
-**Status:** Phase 0 (bootstrap) done. Repo skeleton, tooling and CI are in place; no product features yet.
+**Status:** Phase 1 (domain core) done: schema and migrator, slot engine, booking state machine and a concurrency-safe `hold()`. No HTTP endpoints or UI yet.
 
 - Build plan: [docs/PLAN.md](docs/PLAN.md)
 - Kick-off prompt for a new Claude Code session: [START_PROMPT.md](START_PROMPT.md)
@@ -39,10 +39,11 @@ Run inside the container (PHP 8.1, pcov for coverage) with `docker compose exec 
 
 | Command | Does |
 |---|---|
-| `composer test` | All PHPUnit suites |
+| `composer test` | All PHPUnit suites. Integration tests need `DB_HOST`, `DB_TEST_NAME`, `DB_USER`, `DB_PASSWORD` (set in the container) and are skipped without them |
 | `composer test:unit` | Unit suite only |
 | `composer test:coverage` | Tests + text and Clover coverage (needs pcov — use the container) |
-| `composer coverage:check` | Fails if line coverage < 80 % |
+| `composer coverage:check` | Fails if line coverage < 80 % overall or < 90 % in `src/Domain/` |
+| `composer migrate` / `composer migrate:status` | Apply / list pending migrations (reads `DB_*` env vars) |
 | `composer stan` | PHPStan level 8 |
 | `composer cs` / `composer cs:fix` | Check / fix code style |
 
