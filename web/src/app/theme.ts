@@ -65,9 +65,12 @@ export function inkOn(hex: string): string {
  * Brand colours chosen in the admin panel override the preset in the light theme only; dark themes
  * keep their tuned palette, because an arbitrary colour rarely reads well on a dark background.
  */
+const HEX = /^#[0-9a-f]{6}$/i;
+
 export function overrideCss(site: Site): string {
   const rules: string[] = [];
-  if (site.accent) rules.push(`--brand:${site.accent};--brand-ink:${inkOn(site.accent)};`);
-  if (site.accent_2) rules.push(`--accent:${site.accent_2};`);
+  if (site.accent && HEX.test(site.accent))
+    rules.push(`--brand:${site.accent};--brand-ink:${inkOn(site.accent)};`);
+  if (site.accent_2 && HEX.test(site.accent_2)) rules.push(`--accent:${site.accent_2};`);
   return rules.length === 0 ? '' : `:root[data-mode='light']{${rules.join('')}}`;
 }

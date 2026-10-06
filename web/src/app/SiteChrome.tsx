@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router';
 import { useSite } from '../api/hooks';
 import type { Site } from '../api/types';
 import { loadPresetFonts } from '../design/fonts';
-import { isEmbedded, reportHeight } from './embed';
+import { safeImageUrl } from '../lib/safeUrl';
+import { connectToHost, isEmbedded } from './embed';
 import {
   applyTheme,
   cachePreset,
@@ -77,7 +78,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   const location = useLocation();
   useSiteTheme(site, data !== undefined);
 
-  useEffect(() => (embedded ? reportHeight() : undefined), [embedded]);
+  useEffect(() => (embedded ? connectToHost() : undefined), [embedded]);
 
   const overrides = overrideCss(site);
 
@@ -91,8 +92,12 @@ export function SiteChrome({ children }: { children: ReactNode }) {
         <header className="site-header">
           <div className="container site-header__inner">
             <Link to="/" className="site-header__brand">
-              {site.logo_url ? (
-                <img src={site.logo_url} alt="" className="site-header__logo" />
+              {safeImageUrl(site.logo_url) ? (
+                <img
+                  src={safeImageUrl(site.logo_url) ?? undefined}
+                  alt=""
+                  className="site-header__logo"
+                />
               ) : (
                 <span className="site-header__mark" aria-hidden="true" />
               )}

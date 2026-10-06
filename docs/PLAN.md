@@ -290,7 +290,11 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 - Telegram: secret-token header plus the chat-id allowlist.
 - Login: argon2id, rate limits, and session ID regeneration on login.
 - CSRF on every state-changing admin route.
-- CSP headers in the shipped `.htaccess`.
+- CSP headers in the shipped `.htaccess` (Phase 8). For the static web app:
+  - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: <allowed logo/photo hosts>; font-src 'self'; connect-src 'self'; frame-ancestors <'self' + sites allowed to embed>; base-uri 'none'; form-action 'self'; object-src 'none'` (the brand-colour `<style>` needs `'unsafe-inline'` for styles or a nonce);
+  - `Referrer-Policy: no-referrer` (status URLs carry the token; the page also sets the meta tag), `X-Content-Type-Options: nosniff`, HSTS, a `Permissions-Policy`, `Cross-Origin-Opener-Policy: same-origin`;
+  - `Cache-Control: no-store` on `/b/*`; no `X-Frame-Options` on pages meant to be embedded (it cannot express an allowlist; `frame-ancestors` does);
+  - the SPA fallback rewrite must not swallow `/embed.js` or `/api/*`.
 - `/install` locks itself once installation is done.
 - Public status pages are reachable only with the token. The token is looked up by hash and kept otherwise only encrypted (`public_token_enc`); unknown ref and wrong token return the same 404.
 - Uploads (provider photos only) are checked by MIME, re-encoded with GD, and stored outside executable paths.

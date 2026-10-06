@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { resetRateLimits, sql } from '../helpers/backend';
 
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -6,7 +6,7 @@ const PROVIDER_CHAT = '7770001';
 
 test.beforeEach(() => resetRateLimits());
 
-test('book → pay by UPI → submit UTR → provider confirms in Telegram → status shows confirmed', async ({ page, request }) => {
+async function bookAndSubmitUtr(page: Page): Promise<string> {
   const email = `e2e-${Date.now()}@example.test`;
   const utr = `9${String(Date.now()).slice(-11)}`;
 
@@ -34,7 +34,16 @@ test('book → pay by UPI → submit UTR → provider confirms in Telegram → s
   await page.getByRole('button', { name: /submit UTR/ }).click();
   await expect(page.getByText('Verifying payment')).toBeVisible();
 
+  return ref;
+}
+
+test('book → pay by UPI → submit UTR → awaiting verification', async ({ page }) => {
+  await bookAndSubmitUtr(page);
+});
+
+test('the provider confirms in Telegram → the status page shows confirmed', async ({ page, request }) => {
   test.skip(!WEBHOOK_SECRET, 'Set TELEGRAM_WEBHOOK_SECRET (and configure the API with it) to test confirmation.');
+  const ref = await bookAndSubmitUtr(page);
 
   // The provider taps ✅ Confirm in Telegram: Telegram posts this callback to our webhook.
   sql("UPDATE providers SET telegram_chat_id = ? WHERE slug = 'demo'", [PROVIDER_CHAT]);

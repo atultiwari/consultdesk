@@ -3,6 +3,7 @@ import { useBooking } from '../api/hooks';
 import type { BookingState, BookingView } from '../api/types';
 import { ButtonAnchor, ButtonLink } from '../design/components/Button';
 import { Badge, Loading, Notice } from '../design/components/Notice';
+import { safeHttpsUrl } from '../lib/safeUrl';
 import { formatLongDateTime, formatTime, timezoneLabel } from '../lib/time';
 import { PaymentPanel } from './PaymentPanel';
 import './booking.css';
@@ -29,9 +30,13 @@ function Outcome({ booking }: { booking: BookingView }) {
       return (
         <Notice tone="success" title="You’re booked" live>
           A calendar invite and confirmation are on their way to your email.
-          {booking.meet_url && (
+          {safeHttpsUrl(booking.meet_url) && (
             <div className="outcome__action">
-              <ButtonAnchor href={booking.meet_url} target="_blank" rel="noopener noreferrer">
+              <ButtonAnchor
+                href={safeHttpsUrl(booking.meet_url) ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Join the video call
               </ButtonAnchor>
             </div>
@@ -136,7 +141,8 @@ export default function StatusPage() {
   const token = params.get('t') ?? '';
   const query = useBooking(ref, token);
 
-  if (token === '' || query.isError) {
+  // A failed background refresh keeps the last good data; only a failed first load is an error.
+  if (token === '' || (query.isError && !query.data)) {
     return (
       <div className="container status">
         <Notice tone="danger" title="We couldn’t find that booking" live>
@@ -145,7 +151,7 @@ export default function StatusPage() {
       </div>
     );
   }
-  if (query.isPending) {
+  if (!query.data) {
     return (
       <div className="container">
         <Loading label="Loading your booking…" />

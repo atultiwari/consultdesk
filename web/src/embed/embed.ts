@@ -5,6 +5,7 @@
 
 const SLUG = /^[a-z0-9-]{1,64}$/;
 const HEIGHT_MESSAGE = 'consultdesk:height';
+const CLOSE_MESSAGE = 'consultdesk:close';
 const CSS =
   '.cdk-btn{font:600 16px/1.2 system-ui,sans-serif;padding:12px 20px;border:0;border-radius:999px;background:#40297a;color:#fff;cursor:pointer;min-height:44px}' +
   '.cdk-btn:focus-visible,.cdk-x:focus-visible{outline:3px solid #2f6bff;outline-offset:2px}' +
@@ -48,23 +49,24 @@ function open(url: string, origin: string, label: string, opener: HTMLElement): 
   overlay.append(box);
 
   const previousOverflow = document.body.style.overflow;
+  // Everything else on the host page is made inert while the dialog is open, so Tab cannot leave it.
+  const background = [...document.body.children].filter((el) => !el.hasAttribute('inert'));
   const onMessage = (event: MessageEvent) => {
+    if (event.origin !== origin || event.source !== frame.contentWindow) return;
     const data = event.data as { type?: unknown; height?: unknown } | null;
-    if (event.origin !== origin || data?.type !== HEIGHT_MESSAGE || typeof data.height !== 'number')
-      return;
-    frame.style.height = `${Math.max(400, Math.min(Math.round(data.height), 20000))}px`;
+    if (data?.type === CLOSE_MESSAGE) dismiss();
+    if (data?.type === HEIGHT_MESSAGE && typeof data.height === 'number') {
+      frame.style.height = `${Math.max(400, Math.min(Math.round(data.height), 20000))}px`;
+    }
   };
+  // Escape inside the iframe arrives as a CLOSE_MESSAGE; this catches it on the host page.
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') dismiss();
-    if (event.key === 'Tab') {
-      // Keep focus inside the dialog: the iframe and the close button.
-      event.preventDefault();
-      (document.activeElement === close ? frame : close).focus();
-    }
   };
   function dismiss(): void {
     window.removeEventListener('message', onMessage);
     document.removeEventListener('keydown', onKey);
+    background.forEach((el) => el.removeAttribute('inert'));
     overlay.remove();
     document.body.style.overflow = previousOverflow;
     opener.focus();
@@ -77,6 +79,7 @@ function open(url: string, origin: string, label: string, opener: HTMLElement): 
   window.addEventListener('message', onMessage);
   document.addEventListener('keydown', onKey);
   document.body.style.overflow = 'hidden';
+  background.forEach((el) => el.setAttribute('inert', ''));
   document.body.append(overlay);
   close.focus();
 }

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { keys, useCreateBooking, useProvider } from '../api/hooks';
@@ -22,6 +22,17 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
   free: 'No payment needed',
   razorpay_link: 'Card / UPI via Razorpay',
 };
+
+/** Each step's heading takes focus when the step appears, so keyboard and screen-reader users land on it. */
+function StepTitle({ children }: { children: string }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => ref.current?.focus({ preventScroll: true }), []);
+  return (
+    <h2 className="step-title" tabIndex={-1} ref={ref}>
+      {children}
+    </h2>
+  );
+}
 
 export default function BookingPage() {
   const { provider: providerSlug = '', service: serviceSlug = '' } = useParams();
@@ -61,6 +72,7 @@ export default function BookingPage() {
 
   const goTo = (next: number) => {
     setProblem(null);
+    if (next === 0) setServerErrors({});
     setStep(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -118,7 +130,7 @@ export default function BookingPage() {
       </header>
 
       <div className="booking__layout">
-        <section className="booking__step card" aria-live="polite">
+        <section className="booking__step card" key={step}>
           {problem && (
             <Notice tone="danger" title="Not booked yet" live>
               {problem}
@@ -127,14 +139,17 @@ export default function BookingPage() {
 
           {step === 0 && (
             <>
-              <h2 className="step-title">Choose a time</h2>
+              <StepTitle>Choose a time</StepTitle>
               <DateSlotPicker
                 provider={provider.slug}
                 service={service.slug}
                 timezone={timezone}
                 onTimezoneChange={setTimezone}
                 selected={slot}
-                onSelect={setSlot}
+                onSelect={(chosen) => {
+                  setSlot(chosen);
+                  setServerErrors({});
+                }}
               />
               <div className="step-actions">
                 <Button onClick={() => goTo(1)} disabled={slot === null}>
@@ -146,7 +161,7 @@ export default function BookingPage() {
 
           {step === 1 && (
             <>
-              <h2 className="step-title">Your details</h2>
+              <StepTitle>Your details</StepTitle>
               <DetailsForm
                 questions={service.questions}
                 initial={details}
@@ -163,7 +178,7 @@ export default function BookingPage() {
 
           {step === 2 && slot && details && (
             <>
-              <h2 className="step-title">Review & pay</h2>
+              <StepTitle>Review & pay</StepTitle>
               <p className="muted">
                 {service.title} with {provider.name}, {formatLongDateTime(slot.start, timezone)}.
                 We'll email {details.email}.

@@ -9,7 +9,10 @@ function script(attrs: Record<string, string>): HTMLScriptElement {
 }
 
 function message(origin: string, data: unknown) {
-  window.dispatchEvent(new MessageEvent('message', { origin, data }));
+  const frame = document.querySelector('iframe');
+  window.dispatchEvent(
+    new MessageEvent('message', { origin, data, source: frame?.contentWindow ?? null }),
+  );
 }
 
 afterEach(() => {
@@ -69,6 +72,35 @@ describe('embed', () => {
 
     message('https://book.example.test', { type: 'consultdesk:height', height: 'tall' });
     expect(iframe.style.height).toBe('812px');
+  });
+
+  it('closes when the booking page asks, makes the host page inert, and ignores other windows', () => {
+    const host = document.createElement('main');
+    document.body.prepend(host);
+    const el = script({ 'data-provider': 'atul' });
+    init(el);
+    (el.nextElementSibling as HTMLButtonElement).click();
+    const iframe = document.querySelector('iframe') as HTMLIFrameElement;
+    expect(host.hasAttribute('inert')).toBe(true);
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://book.example.test',
+        data: { type: 'consultdesk:close' },
+        source: window,
+      }),
+    );
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://book.example.test',
+        data: { type: 'consultdesk:close' },
+        source: iframe.contentWindow,
+      }),
+    );
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.hasAttribute('inert')).toBe(false);
   });
 
   it('defaults to the provider list and refuses unsafe slugs', () => {

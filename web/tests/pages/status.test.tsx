@@ -150,6 +150,80 @@ describe('status page', () => {
     expect(await screen.findByText('This hold has expired')).toBeInTheDocument();
   });
 
+  it('stops offering payment the moment the hold runs out, before the server catches up', async () => {
+    vi.setSystemTime(new Date('2026-10-05T00:59:59Z'));
+    mockApi({ 'GET /api/site': ok(site), 'GET /api/bookings/CD-7F3K': ok(heldBooking) });
+    renderAt('/b/CD-7F3K?t=tok');
+    await screen.findByLabelText('UPI reference (UTR)');
+
+    await act(async () => {
+      vi.setSystemTime(new Date('2026-10-05T01:00:01Z'));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+
+    expect(screen.getByText(/Do not pay for this booking/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('UPI reference (UTR)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /UPI QR code/ })).not.toBeInTheDocument();
+  });
+
+  it('explains a reused UTR and offers WhatsApp with the reference', async () => {
+    mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/bookings/CD-7F3K': ok(heldBooking),
+      'POST /api/bookings/CD-7F3K/utr': fail(
+        409,
+        'duplicate_utr',
+        'This UTR has already been used for a booking.',
+      ),
+    });
+    const user = userEvent.setup();
+    renderAt('/b/CD-7F3K?t=tok');
+
+    await user.type(await screen.findByLabelText('UPI reference (UTR)'), '412345678901');
+    await user.click(screen.getByRole('button', { name: /submit UTR/ }));
+
+    expect(await screen.findByText(/can.t be reused for another booking/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Message .* on WhatsApp/ })).toHaveAttribute(
+      'href',
+      heldBooking.payment.whatsapp_url,
+    );
+  });
+
+  it('keeps showing the booking when a background refresh fails', async () => {
+    let served = 0;
+    mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/bookings/CD-7F3K': () =>
+        served++ === 0 ? ok(heldBooking) : fail(503, 'server_error', 'Down'),
+    });
+    const { rerender } = renderAt('/b/CD-7F3K?t=tok');
+    await screen.findByText('CD-7F3K');
+
+    await act(async () => {
+      vi.setSystemTime(new Date('2026-10-05T01:00:01Z'));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+    rerender(<></>);
+
+    expect(screen.queryByText(/couldn.t find that booking/)).not.toBeInTheDocument();
+  });
+
+  it('never renders unsafe links from the API', async () => {
+    mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/bookings/CD-7F3K': ok({
+        ...heldBooking,
+        status: 'confirmed',
+        payment: null,
+        meet_url: 'javascript:alert(1)',
+      }),
+    });
+    renderAt('/b/CD-7F3K?t=tok');
+
+    expect(await screen.findByText(/You.re booked/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Join the video call' })).not.toBeInTheDocument();
+  });
+
   it('asks for the emailed link when the token is wrong', async () => {
     mockApi({
       'GET /api/site': ok(site),

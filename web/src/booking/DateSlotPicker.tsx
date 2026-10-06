@@ -18,9 +18,12 @@ const DAYS_SHOWN = 7;
 const MAX_WEEKS_AHEAD = 8;
 const PERIOD_LABEL = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' } as const;
 
-function timezones(): string[] {
+function timezones(current: string): string[] {
   try {
-    return [...new Set(Intl.supportedValuesOf('timeZone').map(canonicalTimezone))].sort();
+    // Some browsers leave UTC out of the list; always include the visitor's own zone.
+    return [
+      ...new Set([current, ...Intl.supportedValuesOf('timeZone').map(canonicalTimezone)]),
+    ].sort();
   } catch {
     return [
       'UTC',
@@ -54,7 +57,10 @@ export function DateSlotPicker({
   onSelect,
 }: Props) {
   const today = dayKey(new Date(), timezone);
-  const [weekStart, setWeekStart] = useState(today);
+  // Coming back from a later step, reopen the week that holds the chosen time.
+  const [weekStart, setWeekStart] = useState(() =>
+    selected ? dayKey(new Date(selected.start), timezone) : today,
+  );
   const [day, setDay] = useState<string | null>(
     selected ? dayKey(new Date(selected.start), timezone) : null,
   );
@@ -94,7 +100,7 @@ export function DateSlotPicker({
             value={timezone}
             onChange={(e) => onTimezoneChange(e.target.value)}
           >
-            {timezones().map((tz) => (
+            {timezones(timezone).map((tz) => (
               <option key={tz} value={tz}>
                 {tz.replace(/_/g, ' ')}
               </option>
@@ -154,7 +160,7 @@ export function DateSlotPicker({
       </div>
 
       <div className="picker__slots">
-        {slots.isPending ? (
+        {slots.isPending || slots.isPlaceholderData ? (
           <Loading label="Finding open times…" />
         ) : slots.isError ? (
           <Notice tone="danger" title="Couldn't load times" live>

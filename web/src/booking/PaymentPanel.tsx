@@ -2,32 +2,37 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { keys } from '../api/hooks';
 import type { BookingView, UpiPayment } from '../api/types';
-import { Button, ButtonAnchor } from '../design/components/Button';
+import { Button, ButtonAnchor, ButtonLink } from '../design/components/Button';
 import { Notice } from '../design/components/Notice';
-import { Countdown } from './Countdown';
+import { safeHttpsUrl, safeUpiUri } from '../lib/safeUrl';
 import { Qr } from './Qr';
+import { useRemaining } from './useRemaining';
 import { UtrForm } from './UtrForm';
 
 function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copy = () => {
+    const done = (next: 'copied' | 'failed') => {
+      setState(next);
+      window.setTimeout(() => setState('idle'), 2500);
+    };
+    if (!navigator.clipboard) return done('failed');
+    navigator.clipboard.writeText(value).then(
+      () => done('copied'),
+      () => done('failed'),
+    );
+  };
+
   return (
-    <Button
-      variant="ghost"
-      onClick={() => {
-        void navigator.clipboard?.writeText(value).then(() => {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      aria-label={`Copy ${label}`}
-    >
-      {copied ? 'Copied ✓' : 'Copy'}
+    <Button variant="ghost" onClick={copy} aria-label={`Copy ${label}`}>
+      {state === 'copied' ? 'Copied ✓' : state === 'failed' ? 'Copy it by hand' : 'Copy'}
     </Button>
   );
 }
 
 function UpiDetails({ payment }: { payment: UpiPayment }) {
-  if (!payment.available || !payment.upi_uri || !payment.vpa) {
+  const uri = safeUpiUri(payment.upi_uri);
+  if (!payment.available || !uri || !payment.vpa) {
     return (
       <Notice tone="warn" title="UPI details are unavailable right now">
         Please contact the provider before paying.
@@ -38,12 +43,12 @@ function UpiDetails({ payment }: { payment: UpiPayment }) {
   return (
     <div className="upi">
       <div className="upi__pay">
-        <ButtonAnchor href={payment.upi_uri} large block className="upi__app-button">
+        <ButtonAnchor href={uri} large block className="upi__app-button">
           Pay {payment.amount_display} in a UPI app
         </ButtonAnchor>
         <div className="upi__qr">
           <Qr
-            value={payment.upi_uri}
+            value={uri}
             label={`UPI QR code to pay ${payment.amount_display} to ${payment.payee_name}`}
           />
           <p className="muted">Scan with any UPI app</p>
@@ -76,8 +81,10 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
     () => void client.invalidateQueries({ queryKey: keys.booking(booking.ref) }),
     [client, booking.ref],
   );
+  const left = useRemaining(booking.hold_expires_at, refresh);
   const payment = booking.payment;
   if (!payment) return null;
+  const whatsapp = safeHttpsUrl(payment.whatsapp_url);
 
   if (!payment.can_submit_utr) {
     return (
@@ -89,10 +96,10 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
           UTR <span className="mono">{booking.utr}</span> is with {booking.provider.name} for
           verification. You’ll get an email as soon as your session is confirmed.
         </p>
-        {payment.whatsapp_url && (
+        {whatsapp && (
           <ButtonAnchor
             variant="secondary"
-            href={payment.whatsapp_url}
+            href={whatsapp}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -103,38 +110,41 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
     );
   }
 
+  // The hold ran out on this device's (server-corrected) clock: stop offering payment right away,
+  // without waiting for the server to mark it expired.
+  if (left?.expired) {
+    return (
+      <section className="pay card" aria-labelledby="pay-heading">
+        <h2 id="pay-heading" className="pay__title">
+          This hold has run out
+        </h2>
+        <Notice tone="danger" title="Do not pay for this booking" live>
+          The time is no longer reserved. If you already paid just now, contact{' '}
+          {booking.provider.name} with booking {booking.ref}.
+        </Notice>
+        <ButtonLink to={`/p/${booking.provider.slug}`}>Book a new time</ButtonLink>
+      </section>
+    );
+  }
+
   return (
     <section className="pay card" aria-labelledby="pay-heading">
       <div className="pay__head">
         <h2 id="pay-heading" className="pay__title">
           Pay to confirm
         </h2>
-        {booking.hold_expires_at && (
-          <Countdown expiresAt={booking.hold_expires_at} onExpire={refresh}>
-            {(t) => (
-              <p
-                className={`hold${t.urgent ? ' hold--urgent' : ''}`}
-                role="timer"
-                aria-live={t.urgent ? 'polite' : 'off'}
-              >
-                Held for <span className="mono">{t.label}</span>
-              </p>
-            )}
-          </Countdown>
+        {left && (
+          <p className={`hold${left.urgent ? ' hold--urgent' : ''}`} role="timer" aria-live="off">
+            Held for <span className="mono">{left.label}</span>
+          </p>
         )}
       </div>
 
-      {booking.hold_expires_at && (
-        <Countdown expiresAt={booking.hold_expires_at}>
-          {(t) =>
-            t.urgent ? (
-              <Notice tone="warn" title="Less than 10 minutes left" live>
-                Only start a payment if you can enter its UTR before the timer ends. Otherwise book
-                a new time instead.
-              </Notice>
-            ) : null
-          }
-        </Countdown>
+      {left?.urgent && (
+        <Notice tone="warn" title="Less than 10 minutes left" live>
+          Only start a payment if you can enter its UTR before the timer ends. Otherwise book a new
+          time instead.
+        </Notice>
       )}
 
       <UpiDetails payment={payment} />
@@ -144,12 +154,17 @@ export function PaymentPanel({ booking, token }: { booking: BookingView; token: 
         first, don’t pay for it — book a new time.
       </Notice>
 
-      <UtrForm refCode={booking.ref} token={token} />
+      <UtrForm
+        refCode={booking.ref}
+        token={token}
+        providerName={booking.provider.name}
+        whatsappUrl={whatsapp}
+      />
 
-      {payment.whatsapp_url && (
+      {whatsapp && (
         <p className="muted pay__wa">
           Prefer to send a screenshot?{' '}
-          <a href={payment.whatsapp_url} target="_blank" rel="noopener noreferrer">
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer">
             Send it on WhatsApp
           </a>{' '}
           as well.

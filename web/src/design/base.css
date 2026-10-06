@@ -12,6 +12,14 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+}
+
+/* Inside the embed iframe, 100vh is the iframe itself: let content decide the height so it can shrink. */
+:root[data-embedded] body {
+  min-height: 0;
+}
+
+body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);

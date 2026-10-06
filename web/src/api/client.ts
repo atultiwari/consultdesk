@@ -1,5 +1,7 @@
 // Thin fetch wrapper for the ConsultDesk API envelope: { success, data, error, meta }.
 
+import { recordServerDate } from '../lib/serverTime';
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -46,6 +48,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       'network_error',
     );
   }
+
+  recordServerDate(response.headers.get('Date'));
 
   let body: Envelope<T>;
   try {

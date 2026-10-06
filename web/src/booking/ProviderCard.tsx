@@ -1,10 +1,12 @@
 import { Link } from 'react-router';
 import type { ProviderProfile } from '../api/types';
 import { initials } from '../lib/initials';
+import { safeImageUrl } from '../lib/safeUrl';
 
 export function Avatar({ provider, size = 56 }: { provider: ProviderProfile; size?: number }) {
-  return provider.photo_url ? (
-    <img className="avatar" src={provider.photo_url} alt="" width={size} height={size} />
+  const photo = safeImageUrl(provider.photo_url);
+  return photo ? (
+    <img className="avatar" src={photo} alt="" width={size} height={size} />
   ) : (
     <span
       className="avatar avatar--initials"
