@@ -51,6 +51,11 @@ final class AdminCatalogTest extends AdminTestCase
         self::assertSame('me@example.test', $body['data']['notify_email']);
         self::assertSame(['min_notice_min' => 120, 'horizon_days' => 30, 'buffer_before' => 15, 'buffer_after' => 5, 'slot_interval' => 5, 'max_per_day' => null], $body['data']['rules']);
 
+        self::assertSame(
+            ['upi_vpa' => ['from' => 'placeholder@upi', 'to' => 'demo.placeholder@okaxis']],
+            array_intersect_key(json_decode((string) (self::column($this->pdo, "SELECT data FROM audit_log WHERE action = 'admin.provider_updated'")[0] ?? '{}'), true)['changes'] ?? [], ['upi_vpa' => 1]),
+            'payout details are audited with their old and new values',
+        );
         self::assertSame(403, $this->admin('PATCH', "/api/admin/providers/{$this->demo}", ['slug' => 'renamed'])[0], 'slug and active are for staff');
         self::assertSame(404, $this->admin('PATCH', "/api/admin/providers/{$this->other}", ['title' => 'x'])[0]);
 
@@ -81,6 +86,11 @@ final class AdminCatalogTest extends AdminTestCase
 
         [, $free] = $this->admin('PATCH', "/api/admin/services/{$serviceId}", ['price_minor' => 0, 'payment_methods' => ['upi']]);
         self::assertSame(['free'], $free['data']['payment_methods'], 'free sessions only take "free"');
+
+        [, $paidAgain] = $this->admin('PATCH', "/api/admin/services/{$serviceId}", ['price_minor' => 149900]);
+        self::assertSame(['upi'], $paidAgain['data']['payment_methods'], 'a free session made paid again takes UPI');
+        self::assertSame(422, $this->admin('PATCH', "/api/admin/services/{$serviceId}", ['price_minor' => 0, 'payment_methods' => ['bogus']])[0]);
+        self::assertSame(422, $this->admin('PATCH', "/api/admin/services/{$serviceId}", ['payment_methods' => [['upi']]])[0]);
 
         [$bad, $errors] = $this->admin('PATCH', "/api/admin/services/{$serviceId}", [
             'questions' => [['id' => 'goal', 'label' => 'A', 'type' => 'text'], ['id' => 'goal', 'label' => 'B', 'type' => 'text']],
@@ -116,6 +126,14 @@ final class AdminCatalogTest extends AdminTestCase
         self::assertSame(422, $bad);
         self::assertSame(['rules.0', 'rules.1', 'rules.2'], array_keys($errors['error']['fields']));
         self::assertCount(2, $this->admin('GET', "/api/admin/providers/{$this->demo}/availability")[1]['data'], 'a bad save changes nothing');
+
+        [$overlap, $overlapErrors] = $this->admin('PUT', "/api/admin/providers/{$this->demo}/availability", ['rules' => [
+            ['weekday' => 1, 'start' => '10:00', 'end' => '13:00'],
+            ['weekday' => 1, 'start' => '12:00', 'end' => '15:00'],
+            ['weekday' => 1, 'start' => '12:00', 'end' => '15:00', 'service_id' => $own],
+        ]]);
+        self::assertSame(422, $overlap);
+        self::assertSame(['rules.1'], array_keys($overlapErrors['error']['fields']), 'overlapping windows for the same sessions are refused');
     }
 
     public function testBlockedTimesForAProviderOrTheWholeOrganisation(): void

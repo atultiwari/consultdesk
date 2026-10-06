@@ -22,6 +22,8 @@ final class AdminProviderActions
 {
     public const SLUG = '/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/';
     private const STAFF_ONLY = ['slug', 'active', 'sort_order'];
+    /** Where money and messages go: audited with old and new values, so a change can be traced. */
+    private const TRACED = ['upi_vpa', 'upi_payee_name', 'notify_email', 'whatsapp'];
     private const UPI_VPA = '/^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/';
     /** Rule => [min, max]. Matches BookingRules. */
     private const RULE_LIMITS = [
@@ -68,7 +70,7 @@ final class AdminProviderActions
     public function update(Request $request, Response $response, array $args): Response
     {
         $id = (int) ($args['id'] ?? 0);
-        AdminScope::provider($this->providers, $request, $id);
+        $before = AdminScope::provider($this->providers, $request, $id);
         $user = AdminScope::user($request);
         $body = JsonInput::decode($request);
         if (!$user->isStaff() && array_intersect(self::STAFF_ONLY, array_keys($body)) !== []) {
@@ -83,10 +85,31 @@ final class AdminProviderActions
 
         $this->providers->update($id, $values);
         if ($values !== []) {
-            $this->audit->record(Actor::user($user->id), 'admin.provider_updated', 'provider', $id, ['fields' => array_keys($values)]);
+            $this->audit->record(Actor::user($user->id), 'admin.provider_updated', 'provider', $id, [
+                'fields' => array_keys($values),
+                'changes' => self::tracedChanges($before, $values),
+            ]);
         }
 
         return JsonResponse::success($response, $this->providers->find($id));
+    }
+
+    /**
+     * @param array<string, mixed>       $before
+     * @param array<string, scalar|null> $values
+     *
+     * @return array<string, array{from: mixed, to: scalar|null}>
+     */
+    private static function tracedChanges(array $before, array $values): array
+    {
+        $changes = [];
+        foreach (array_intersect_key($values, array_flip(self::TRACED)) as $field => $value) {
+            if (($before[$field] ?? null) !== $value) {
+                $changes[$field] = ['from' => $before[$field] ?? null, 'to' => $value];
+            }
+        }
+
+        return $changes;
     }
 
     /**

@@ -47,7 +47,7 @@ final class AdminAuthActions
     {
         $input = $this->guarded($request);
         $email = $input->string('email', max: 254);
-        $password = $input->string('password', max: Passwords::MAX_LENGTH);
+        $password = $input->secret('password', max: Passwords::MAX_LENGTH);
         $input->assertValid();
 
         $session = $this->auth->login((string) $email, (string) $password, $this->clientIp->of($request), $request->getHeaderLine('User-Agent'));
@@ -89,7 +89,7 @@ final class AdminAuthActions
     {
         $input = $this->guarded($request);
         $token = $input->string('token', max: 64);
-        $password = $input->string('password', max: Passwords::MAX_LENGTH);
+        $password = $input->secret('password', max: Passwords::MAX_LENGTH);
         if ($password !== null && !Passwords::acceptable($password)) {
             $input->reject('password', sprintf('Use at least %d characters.', Passwords::MIN_LENGTH));
         }

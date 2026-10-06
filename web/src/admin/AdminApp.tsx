@@ -11,20 +11,19 @@ import { BookingDetailPage } from './BookingDetailPage';
 import { BookingsPage } from './BookingsPage';
 import { AdminContext } from './context';
 import { DashboardPage } from './DashboardPage';
-import { adminKeys, isUnauthenticated, useMe } from './hooks';
+import { isUnauthenticated, signedOut, useMe } from './hooks';
 import { ProviderPage } from './ProviderPage';
 import { ProvidersPage } from './ProvidersPage';
 import '../app/chrome.css';
 import './admin.css';
 
-/** When any admin request finds the session gone, ask who is signed in again (shows sign-in). */
+/** When any admin request finds the session gone, show sign-in. */
 function useSessionExpiry() {
   const client = useQueryClient();
   useEffect(() => {
     const recheck = (error: unknown, key: readonly unknown[] | undefined) => {
-      if (isUnauthenticated(error) && key?.[0] === 'admin' && key[1] !== 'me') {
-        void client.invalidateQueries({ queryKey: adminKeys.me });
-      }
+      if (isUnauthenticated(error) && key?.[0] === 'admin' && key[1] !== 'me')
+        void signedOut(client);
     };
     const offQueries = client.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ConsultDesk\Tests\Integration\Admin;
 
 use ConsultDesk\Admin\AdminUsers;
+use ConsultDesk\Admin\LoginThrottle;
 use ConsultDesk\Admin\Passwords;
 use ConsultDesk\Admin\Sessions;
 use ConsultDesk\Admin\UserCommand;
@@ -61,11 +62,13 @@ final class UserCommandTest extends IntegrationTestCase
         $id = Fixtures::user($this->pdo, 'admin', null, 'admin@example.test');
         $this->pdo->exec("INSERT INTO sessions (id, user_id, csrf_token_hash, created_at, last_seen_at, expires_at)
             VALUES (REPEAT('a', 64), {$id}, REPEAT('b', 64), '2026-10-05 00:00:00', '2026-10-05 00:00:00', '2026-10-05 08:00:00')");
+        $this->pdo->exec("INSERT INTO login_attempts (ip, email, succeeded, attempted_at) VALUES (0x00, 'admin@example.test', 0, '2026-10-05 00:00:00')");
         $this->passwords = ['a brand new password', 'a brand new password'];
 
         self::assertSame(0, $this->cli('reset-password', '--email=admin@example.test'));
         self::assertTrue(password_verify('a brand new password', (string) $this->scalar("SELECT password_hash FROM users WHERE id = {$id}")));
         self::assertSame(0, (int) $this->scalar('SELECT COUNT(*) FROM sessions'));
+        self::assertSame(0, (int) $this->scalar("SELECT COUNT(*) FROM login_attempts WHERE email = 'admin@example.test'"), 'and lifts a lockout');
         self::assertSame(1, $this->cli('reset-password', '--email=nobody@example.test'));
     }
 
@@ -98,6 +101,7 @@ final class UserCommandTest extends IntegrationTestCase
             $users,
             new Passwords(),
             new Sessions($this->pdo, $clock, $users, str_repeat('k', 32)),
+            new LoginThrottle($this->pdo, $clock),
             new AuditLog($this->pdo, $clock),
             function (string $prompt): string {
                 return array_shift($this->passwords) ?? '';

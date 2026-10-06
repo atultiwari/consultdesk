@@ -61,8 +61,9 @@ final class AdminScheduleActions
         $rules = [];
         foreach ($raw as $i => $item) {
             $rule = is_array($item) ? $this->rule($item, $serviceIds) : 'Each window needs a weekday, start and end.';
-            if (is_string($rule)) {
-                $input->reject("rules.{$i}", $rule);
+            $clash = is_array($rule) ? self::overlapping($rule, $rules) : null;
+            if (is_string($rule) || $clash !== null) {
+                $input->reject("rules.{$i}", is_string($rule) ? $rule : sprintf('Overlaps %s–%s on the same day.', $clash['start'], $clash['end']));
             } else {
                 $rules[] = $rule;
             }
@@ -127,6 +128,26 @@ final class AdminScheduleActions
         ]);
 
         return JsonResponse::success($response, null);
+    }
+
+    /**
+     * An earlier window on the same day, for the same sessions, that this one overlaps.
+     *
+     * @param array{weekday: int, start: string, end: string, service_id: ?int}       $rule
+     * @param list<array{weekday: int, start: string, end: string, service_id: ?int}> $earlier
+     *
+     * @return array{weekday: int, start: string, end: string, service_id: ?int}|null
+     */
+    private static function overlapping(array $rule, array $earlier): ?array
+    {
+        foreach ($earlier as $other) {
+            if ($other['weekday'] === $rule['weekday'] && $other['service_id'] === $rule['service_id']
+                && $rule['start'] < $other['end'] && $other['start'] < $rule['end']) {
+                return $other;
+            }
+        }
+
+        return null;
     }
 
     /**

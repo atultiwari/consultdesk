@@ -32,6 +32,7 @@ final class UserCommand
         private readonly AdminUsers $users,
         private readonly Passwords $passwords,
         private readonly Sessions $sessions,
+        private readonly LoginThrottle $throttle,
         private readonly AuditLog $audit,
         private readonly Closure $askPassword,
         private readonly Closure $write,
@@ -110,8 +111,9 @@ final class UserCommand
 
         $this->users->setPasswordHash($user->id, $this->passwords->hash($password));
         $this->sessions->endAll($user->id);
+        $this->throttle->clear($user->email);
         $this->audit->record(Actor::system(), 'admin.password_reset', 'user', $user->id, ['via' => 'cli']);
-        ($this->write)(sprintf("Password changed for %s. They have been signed out everywhere.\n", $user->email));
+        ($this->write)(sprintf("Password changed for %s. They have been signed out everywhere, and any sign-in lockout is lifted.\n", $user->email));
 
         return 0;
     }

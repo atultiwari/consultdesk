@@ -144,22 +144,29 @@ final class AppServices
         );
         if ($this->config->adminPath !== null) {
             $handlers[PasswordResets::EMAIL_JOB] = new PasswordResetEmailHandler(
-                $this->pdo(),
+                $this->passwordResets(),
                 $this->mailer(),
-                $this->crypto(),
                 $this->config->appUrl,
                 $this->config->adminPath,
             );
         }
         $cache = new GoogleBusyCache($this->pdo(), $this->clock);
         $sessions = $this->sessions();
+        $throttle = $this->loginThrottle();
+        $resets = $this->passwordResets();
 
         return new CronRunner(
             $this->pdo(),
             $this->bookingService(),
             new OutboxWorker($this->outbox(), $handlers),
             $this->rateLimiter(),
-            [static fn(): int => $cache->prune(), fn(): int => $this->googleOAuth()?->prune() ?? 0, static fn(): int => $sessions->prune()],
+            [
+                static fn(): int => $cache->prune(),
+                fn(): int => $this->googleOAuth()?->prune() ?? 0,
+                static fn(): int => $sessions->prune(),
+                static fn(): int => $throttle->prune(),
+                static fn(): int => $resets->prune(),
+            ],
         );
     }
 
@@ -185,12 +192,17 @@ final class AppServices
 
     public function authService(): AuthService
     {
-        return new AuthService($this->adminUsers(), new Passwords(), $this->sessions(), new LoginThrottle($this->pdo(), $this->clock), $this->auditLog());
+        return new AuthService($this->adminUsers(), new Passwords(), $this->sessions(), $this->loginThrottle(), $this->auditLog());
+    }
+
+    public function loginThrottle(): LoginThrottle
+    {
+        return new LoginThrottle($this->pdo(), $this->clock);
     }
 
     public function passwordResets(): PasswordResets
     {
-        return new PasswordResets($this->db(), $this->adminUsers(), new Passwords(), $this->sessions(), $this->outbox(), $this->crypto(), $this->auditLog(), $this->clock);
+        return new PasswordResets($this->db(), $this->adminUsers(), new Passwords(), $this->sessions(), $this->outbox(), $this->auditLog(), $this->clock);
     }
 
     public function telegramServices(): ?TelegramServices

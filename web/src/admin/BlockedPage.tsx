@@ -55,6 +55,10 @@ function BlockForm() {
       setProblem('Choose the first day.');
       return;
     }
+    if (!wholeDays && (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime))) {
+      setProblem('Choose a start and end time.');
+      return;
+    }
     const start = zonedIso(from, wholeDays ? '00:00' : startTime, timeZone);
     const end = wholeDays
       ? zonedIso(addDays(until, 1), '00:00', timeZone)
@@ -162,7 +166,7 @@ function BlockForm() {
       </Field>
       <p className="hint">Times are in {timeZone}. Existing bookings are not cancelled.</p>
       <div className="form-actions">
-        <Button type="submit" disabled={create.isPending}>
+        <Button type="submit" disabled={create.isPending || providers.isPending}>
           Block
         </Button>
       </div>

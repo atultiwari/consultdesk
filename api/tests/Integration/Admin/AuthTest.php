@@ -47,25 +47,31 @@ final class AuthTest extends AdminTestCase
         self::assertSame($b1['error']['message'], $b2['error']['message']);
     }
 
-    public function testRepeatedFailuresLockTheAccountAndTheAddress(): void
+    public function testRepeatedFailuresLockTheAddressAndThePairButNotTheOwnerOnAKnownAddress(): void
     {
         $this->createUser('owner@example.test');
+        self::assertSame(200, $this->login('owner@example.test', self::PASSWORD, '198.51.100.99')[0], 'a known address');
+
         for ($i = 0; $i < 5; $i++) {
+            $this->login('owner@example.test', 'wrong', '192.0.2.9');
+        }
+        [$pair, $body] = $this->login('owner@example.test', self::PASSWORD, '192.0.2.9');
+        self::assertSame([429, 'too_many_attempts'], [$pair, $body['error']['code']], 'this address may not keep guessing this account');
+
+        for ($i = 0; $i < 20; $i++) {
             $this->login('owner@example.test', 'wrong', '198.51.100.' . $i);
         }
-
-        [$locked, $body] = $this->login('owner@example.test', self::PASSWORD, '198.51.100.99');
-        self::assertSame(429, $locked, 'the account is locked even with the right password, from a new address');
-        self::assertSame('too_many_attempts', $body['error']['code']);
+        self::assertSame(429, $this->login('owner@example.test', self::PASSWORD, '203.0.113.50')[0], 'a spread-out attack locks the account for new addresses');
+        self::assertSame(200, $this->login('owner@example.test', self::PASSWORD, '198.51.100.99')[0], 'but not for where the owner has signed in before');
 
         $this->createUser('second@example.test');
         for ($i = 0; $i < 5; $i++) {
             $this->login('nobody' . $i . '@example.test', 'wrong', '192.0.2.50');
         }
-        self::assertSame(429, $this->login('second@example.test', self::PASSWORD, '192.0.2.50')[0], 'the address is locked too');
+        self::assertSame(429, $this->login('second@example.test', self::PASSWORD, '192.0.2.50')[0], 'the address is locked for every account');
 
         $this->at('2026-10-05T00:15Z');
-        self::assertSame(200, $this->login('owner@example.test', self::PASSWORD, '198.51.100.99')[0], 'locks lift after 15 minutes');
+        self::assertSame(200, $this->login('owner@example.test', self::PASSWORD, '203.0.113.50')[0], 'locks lift after 15 minutes');
     }
 
     public function testEveryWriteNeedsTheCsrfToken(): void
@@ -148,6 +154,7 @@ final class AuthTest extends AdminTestCase
         [$status] = $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'owner@example.test']);
         [$unknown] = $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'nobody@example.test']);
         self::assertSame([200, 200], [$status, $unknown], 'no way to tell which addresses exist');
+        self::assertSame(['2'], self::column($this->pdo, "SELECT COUNT(*) FROM outbox_jobs WHERE type = 'email.password_reset'"), 'and both do the same work');
         $this->services()->cronRunner()->run();
 
         self::assertCount(1, $this->mailer->sent);
@@ -163,7 +170,49 @@ final class AuthTest extends AdminTestCase
         [$this->cookie, $this->csrf] = $oldSession;
         self::assertSame(401, $this->admin('GET', '/api/admin/me')[0], 'old sessions are signed out');
         self::assertSame(200, $this->login('owner@example.test', 'a brand new passphrase')[0]);
-        self::assertSame(['1'], self::column($this->pdo, 'SELECT token_enc IS NULL FROM password_resets'), 'the emailed token is not kept');
+        self::assertSame(['0'], self::column($this->pdo, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'password_resets' AND column_name <> 'token_hash' AND column_name LIKE 'token%'"), 'only a hash of the emailed token is kept');
+    }
+
+    public function testANewLinkReplacesOlderOnesAndAFewLinksAnHourAtMost(): void
+    {
+        $this->createUser('owner@example.test');
+        foreach (range(1, 5) as $_) {
+            $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'owner@example.test'], '198.51.100.' . random_int(1, 250));
+        }
+        $this->services()->cronRunner()->run();
+
+        self::assertCount(3, $this->mailer->sent, 'three emails an hour, however often someone asks');
+        $tokens = array_map(static fn($mail): string => preg_match('/token=([A-Za-z0-9_-]{43})/', $mail->text, $m) === 1 ? $m[1] : '', $this->mailer->sent);
+        self::assertSame([400, 'invalid_reset_link'], $this->codeOf($this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $tokens[0], 'password' => 'a brand new passphrase'])), 'only the newest link works');
+        self::assertSame(200, $this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $tokens[2], 'password' => 'a brand new passphrase'])[0]);
+    }
+
+    public function testSignInsAndResetsAreForgottenAfterADay(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test', 'wrong');
+        $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'owner@example.test']);
+        $this->services()->cronRunner()->run();
+
+        $this->at('2026-10-06T01:00Z');
+        $this->services()->cronRunner()->run();
+
+        self::assertSame(['0', '0'], [
+            self::column($this->pdo, 'SELECT COUNT(*) FROM login_attempts')[0] ?? null,
+            self::column($this->pdo, 'SELECT COUNT(*) FROM password_resets')[0] ?? null,
+        ]);
+    }
+
+    public function testPasswordsAreTakenExactlyAsTyped(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'owner@example.test']);
+        $this->services()->cronRunner()->run();
+        preg_match('/token=([A-Za-z0-9_-]{43})/', $this->mailer->sent[0]->text, $m);
+        $this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $m[1] ?? '', 'password' => '  spaced passphrase  ']);
+
+        self::assertSame(401, $this->login('owner@example.test', 'spaced passphrase')[0]);
+        self::assertSame(200, $this->login('owner@example.test', '  spaced passphrase  ')[0]);
     }
 
     public function testResetLinksExpireAfterThirtyMinutes(): void
@@ -173,7 +222,7 @@ final class AuthTest extends AdminTestCase
         $this->services()->cronRunner()->run();
         preg_match('/token=([A-Za-z0-9_-]{43})/', $this->mailer->sent[0]->text, $m);
 
-        $this->at('2026-10-05T00:30Z');
+        $this->at('2026-10-05T00:30:01Z');
 
         self::assertSame([400, 'invalid_reset_link'], $this->codeOf($this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $m[1] ?? '', 'password' => 'a brand new passphrase'])));
     }

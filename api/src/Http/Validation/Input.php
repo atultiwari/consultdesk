@@ -47,6 +47,22 @@ final class Input
         return $value;
     }
 
+    /**
+     * A password or similar: taken exactly as sent, spaces included.
+     */
+    public function secret(string $field, int $max = 255): ?string
+    {
+        $value = $this->raw($field);
+        if ($value === null || $value === '') {
+            return $this->missing($field, true);
+        }
+        if (!is_string($value)) {
+            return $this->fail($field, 'Must be text.');
+        }
+
+        return mb_strlen($value) > $max ? $this->fail($field, sprintf('Must be at most %d characters.', $max)) : $value;
+    }
+
     public function email(string $field, bool $required = true): ?string
     {
         $value = $this->string($field, $required, 254);

@@ -108,8 +108,9 @@ final class AdminBookings
      *
      * @return array<string, mixed>|null
      */
-    public function find(int $bookingId, ?int $providerScope, DateTimeImmutable $now): ?array
+    public function find(int $bookingId, AdminUser $viewer, DateTimeImmutable $now): ?array
     {
+        $providerScope = $viewer->providerScope();
         [$condition, $params] = self::scoped('b.id = :id', $providerScope, ['id' => $bookingId]);
         $statement = $this->pdo->prepare(
             'SELECT b.id, b.customer_phone, b.customer_timezone, b.answers, b.meet_url, b.confirmed_at, s.questions
@@ -136,7 +137,7 @@ final class AdminBookings
             'answers' => self::labelledAnswers(is_array($answers) ? $answers : [], is_array($questions) ? $questions : []),
             'meet_url' => $extra['meet_url'],
             'confirmed_at' => self::iso($extra['confirmed_at']),
-            'history' => $this->history($bookingId),
+            'history' => $this->history($bookingId, $viewer),
             'actions' => self::actionsFor(BookingStatus::from((string) $row['status']), PaymentMethod::from((string) $row['payment_method']), $lapsed),
         ];
     }
@@ -151,7 +152,11 @@ final class AdminBookings
     {
         $actions = [];
         foreach (self::ACTIONS as $action => $target) {
-            if (StatusMachine::canTransition($status, $target, $method) && !($holdLapsed && $target !== BookingStatus::Cancelled)) {
+            $allowed = StatusMachine::canTransition($status, $target, $method)
+                && !($holdLapsed && $target !== BookingStatus::Cancelled)
+                // A payment link is confirmed by the gateway's webhook, never by hand.
+                && !($method === PaymentMethod::RazorpayLink && $target === BookingStatus::Confirmed);
+            if ($allowed) {
                 $actions[] = $action;
             }
         }
@@ -188,10 +193,10 @@ final class AdminBookings
     /**
      * @return list<array<string, mixed>>
      */
-    private function history(int $bookingId): array
+    private function history(int $bookingId, AdminUser $viewer): array
     {
         $statement = $this->pdo->prepare(
-            "SELECT a.action, a.actor_type, a.data, a.created_at, u.email, u.name
+            "SELECT a.action, a.actor_type, a.data, a.created_at, u.id AS user_id, u.email, u.name, u.role
              FROM audit_log a
              LEFT JOIN users u ON u.id = a.actor_id AND a.actor_type IN ('user', 'telegram')
              WHERE a.entity_type = 'booking' AND a.entity_id = :id
@@ -199,17 +204,35 @@ final class AdminBookings
         );
         $statement->execute(['id' => $bookingId]);
 
-        return array_values(array_map(static function (array $r): array {
+        return array_values(array_map(static function (array $r) use ($viewer): array {
             $data = $r['data'] === null ? [] : json_decode((string) $r['data'], true, 16, JSON_THROW_ON_ERROR);
 
             return [
                 'action' => (string) $r['action'],
                 'actor_type' => (string) $r['actor_type'],
-                'actor' => $r['name'] ?? $r['email'],
+                'actor' => self::actorName($r, $viewer),
                 'data' => is_array($data) ? $data : [],
                 'at' => self::iso($r['created_at']),
             ];
         }, $statement->fetchAll(PDO::FETCH_ASSOC)));
+    }
+
+    /**
+     * Who acted, as the viewer may see them: staff see names or emails; a provider sees colleagues'
+     * names, or just their role, but never their email addresses.
+     *
+     * @param array<string, mixed> $r
+     */
+    private static function actorName(array $r, AdminUser $viewer): ?string
+    {
+        if ($r['user_id'] === null) {
+            return null;
+        }
+        if ($r['name'] !== null && $r['name'] !== '') {
+            return (string) $r['name'];
+        }
+
+        return $viewer->isStaff() || (int) $r['user_id'] === $viewer->id ? (string) $r['email'] : ucfirst((string) $r['role']);
     }
 
     /**

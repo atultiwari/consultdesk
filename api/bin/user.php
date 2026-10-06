@@ -43,6 +43,7 @@ try {
         $services->adminUsers(),
         new Passwords(),
         $services->sessions(),
+        $services->loginThrottle(),
         $services->auditLog(),
         $askPassword,
         static function (string $text): void {

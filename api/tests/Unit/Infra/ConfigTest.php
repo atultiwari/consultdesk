@@ -76,6 +76,16 @@ final class ConfigTest extends TestCase
         self::assertSame('http://localhost:5173', $local->appUrl);
     }
 
+    public function testTheAdminAreaNeedsHttpsExceptOnALocalMachine(): void
+    {
+        $admin = ['ADMIN_PATH' => 'desk-7q2x-placeholder'];
+        self::assertSame('desk-7q2x-placeholder', Config::load('/nonexistent/config.php', array_merge(self::env(), $admin))->adminPath);
+        self::assertSame('desk-7q2x-placeholder', Config::load('/nonexistent/config.php', array_merge(self::env(), $admin, ['APP_URL' => 'http://localhost:5173']))->adminPath);
+
+        $this->expectException(InvalidArgumentException::class);
+        Config::load('/nonexistent/config.php', array_merge(self::env(), $admin, ['APP_URL' => 'http://book.example.com']));
+    }
+
     public function testReadsTrustedProxySettings(): void
     {
         $config = Config::load('/nonexistent/config.php', array_merge(self::env(), [

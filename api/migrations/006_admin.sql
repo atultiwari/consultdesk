@@ -1,13 +1,12 @@
 -- Phase 6: admin sign-in and password resets.
 ALTER TABLE users ADD COLUMN name VARCHAR(120) NULL AFTER email;
 
--- One-time password reset links (30 minutes). The token is looked up by hash and kept encrypted
--- only so the email job can include it; it is cleared once used.
+-- One-time password reset links (30 minutes). The email job creates the token and sends it at once,
+-- so only its hash is ever stored.
 CREATE TABLE IF NOT EXISTS password_resets (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     token_hash CHAR(64) NOT NULL,
-    token_enc VARCHAR(255) NULL,
     expires_at DATETIME NOT NULL,
     used_at DATETIME NULL,
     created_at DATETIME NOT NULL,

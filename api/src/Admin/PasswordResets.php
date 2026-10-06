@@ -7,19 +7,24 @@ namespace ConsultDesk\Admin;
 use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Clock;
-use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
 use ConsultDesk\Notify\Outbox;
 use PDO;
 
 /**
- * "Forgot password": a one-time link valid for 30 minutes, emailed through the outbox. Asking for a
- * link never reveals whether the email belongs to anyone. Using it signs the user out everywhere.
+ * "Forgot password": a one-time link valid for 30 minutes.
+ *
+ * Asking for a link only queues a job, whether or not the email belongs to anyone, so the answer and
+ * its timing reveal nothing. The job (PasswordResetEmailHandler) creates the token and emails it
+ * straight away, so only its hash is stored. A new link replaces older ones, an account gets at most
+ * three links an hour, and using a link signs the user out everywhere.
  */
 final class PasswordResets
 {
     public const EMAIL_JOB = 'email.password_reset';
-    private const TTL_MINUTES = 30;
+    public const TTL_MINUTES = 30;
+    private const MAX_PER_HOUR = 3;
+    private const KEEP_HOURS = 24;
     private const SQL = 'Y-m-d H:i:s';
 
     public function __construct(
@@ -28,31 +33,47 @@ final class PasswordResets
         private readonly Passwords $passwords,
         private readonly Sessions $sessions,
         private readonly Outbox $outbox,
-        private readonly Crypto $crypto,
         private readonly AuditLog $audit,
         private readonly Clock $clock,
     ) {}
 
     public function request(string $email): void
     {
+        $this->outbox->enqueue(self::EMAIL_JOB, ['email' => strtolower(trim($email))]);
+    }
+
+    /**
+     * Called by the email job: a fresh token for this account, or null when there is no such
+     * account or it has had enough links this hour. Older unused links stop working.
+     */
+    public function issue(string $email): ?IssuedReset
+    {
         $found = $this->users->findForLogin($email);
         if ($found === null) {
-            return;
+            return null;
         }
-
-        $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        [$user] = $found;
         $now = $this->clock->now();
-        $this->db->transaction(function (PDO $pdo) use ($found, $token, $now): void {
+
+        return $this->db->transaction(function (PDO $pdo) use ($user, $now): ?IssuedReset {
+            $recent = $pdo->prepare('SELECT COUNT(*) FROM password_resets WHERE user_id = :user AND created_at > :since FOR UPDATE');
+            $recent->execute(['user' => $user->id, 'since' => $now->modify('-1 hour')->format(self::SQL)]);
+            if ((int) $recent->fetchColumn() >= self::MAX_PER_HOUR) {
+                return null;
+            }
+
+            $this->retireOpenLinks($pdo, $user->id);
+            $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
             $pdo->prepare(
-                'INSERT INTO password_resets (user_id, token_hash, token_enc, expires_at, created_at) VALUES (:user, :hash, :enc, :expires, :created)',
+                'INSERT INTO password_resets (user_id, token_hash, expires_at, created_at) VALUES (:user, :hash, :expires, :created)',
             )->execute([
-                'user' => $found[0]->id,
+                'user' => $user->id,
                 'hash' => hash('sha256', $token),
-                'enc' => $this->crypto->encrypt($token),
                 'expires' => $now->modify(sprintf('+%d minutes', self::TTL_MINUTES))->format(self::SQL),
                 'created' => $now->format(self::SQL),
             ]);
-            $this->outbox->enqueue(self::EMAIL_JOB, ['reset_id' => (int) $pdo->lastInsertId()]);
+
+            return new IssuedReset($user->email, $token);
         });
     }
 
@@ -71,8 +92,7 @@ final class PasswordResets
                 throw AuthFailed::invalidResetLink();
             }
 
-            $pdo->prepare('UPDATE password_resets SET used_at = :now, token_enc = NULL WHERE id = :id')
-                ->execute(['now' => $this->clock->now()->format(self::SQL), 'id' => $row['id']]);
+            $this->retireOpenLinks($pdo, (int) $row['user_id']);
             $this->users->setPasswordHash((int) $row['user_id'], $this->passwords->hash($password));
 
             return (int) $row['user_id'];
@@ -80,5 +100,22 @@ final class PasswordResets
 
         $this->sessions->endAll($userId);
         $this->audit->record(Actor::user($userId), 'admin.password_reset', 'user', $userId);
+    }
+
+    /**
+     * Cron: forgets links a day after they were made.
+     */
+    public function prune(): int
+    {
+        $statement = $this->db->pdo()->prepare('DELETE FROM password_resets WHERE created_at < :before');
+        $statement->execute(['before' => $this->clock->now()->modify(sprintf('-%d hours', self::KEEP_HOURS))->format(self::SQL)]);
+
+        return $statement->rowCount();
+    }
+
+    private function retireOpenLinks(PDO $pdo, int $userId): void
+    {
+        $pdo->prepare('UPDATE password_resets SET used_at = :now WHERE user_id = :user AND used_at IS NULL')
+            ->execute(['now' => $this->clock->now()->format(self::SQL), 'user' => $userId]);
     }
 }

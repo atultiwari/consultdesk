@@ -33,8 +33,15 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
   const toggleMethod = (method: PaymentMethod, on: boolean) =>
     setMethods((current) => (on ? [...current, method] : current.filter((m) => m !== method)));
 
+  const [priceProblem, setPriceProblem] = useState<string | null>(null);
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (price.trim() === '' || !Number.isFinite(Number(price))) {
+      setPriceProblem('Enter a price, or 0 for a free session.');
+      return;
+    }
+    setPriceProblem(null);
     const priceMinor = Math.round(Number(price) * 100);
     save.mutate(
       {
@@ -46,7 +53,7 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
           description: orNull(description),
           audience: orNull(audience),
           duration_min: /^\d+$/.test(duration) ? Number(duration) : duration,
-          price_minor: Number.isFinite(priceMinor) ? priceMinor : price,
+          price_minor: priceMinor,
           payment_methods: paid ? methods : ['free'],
           requires_approval: approval,
           active,
@@ -108,7 +115,11 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
               onChange={(e) => setDuration(e.target.value)}
             />
           </Field>
-          <Field label="Price (₹)" hint="0 makes it free." error={errors.price_minor}>
+          <Field
+            label="Price (₹)"
+            hint="0 makes it free."
+            error={priceProblem ?? errors.price_minor}
+          >
             <input
               className="input input--short"
               type="number"

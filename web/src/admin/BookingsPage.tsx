@@ -108,75 +108,78 @@ export function BookingsPage() {
           {list.error.message}
         </Notice>
       )}
-      {list.data && list.data.data.length === 0 && <p className="empty">No bookings match.</p>}
+      {list.data && list.data.data.length === 0 && (
+        <p className="empty">{total > 0 ? 'No bookings on this page.' : 'No bookings match.'}</p>
+      )}
       {list.data && list.data.data.length > 0 && (
-        <>
-          <div className="table-wrap">
-            <table className="table" aria-label="Bookings">
-              <thead>
-                <tr>
-                  <th scope="col">Ref</th>
-                  <th scope="col">When</th>
-                  <th scope="col">Customer</th>
-                  <th scope="col">Session</th>
-                  <th scope="col" className="num">
-                    Amount
-                  </th>
-                  <th scope="col">Status</th>
+        <div className="table-wrap">
+          <table className="table" aria-label="Bookings">
+            <thead>
+              <tr>
+                <th scope="col">Ref</th>
+                <th scope="col">When</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Session</th>
+                <th scope="col" className="num">
+                  Amount
+                </th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.data.data.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <Link className="mono" to={`${base}/bookings/${row.id}`}>
+                      {row.ref}
+                    </Link>
+                  </td>
+                  <td>
+                    <time dateTime={row.start}>{formatWhen(row.start, tz)}</time>
+                  </td>
+                  <td>
+                    <span className="cell-main">{row.customer_name}</span>
+                    <span className="cell-sub">{row.customer_email}</span>
+                  </td>
+                  <td>
+                    <span className="cell-main">{row.service_title}</span>
+                    {isStaff(user) && <span className="cell-sub">{row.provider.name}</span>}
+                  </td>
+                  <td className="num">
+                    {row.amount_minor > 0 ? formatMoney(row.amount_minor, row.currency) : 'Free'}
+                  </td>
+                  <td>
+                    <Badge tone={STATUS_TONE[row.status]}>{statusLabel(row)}</Badge>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {list.data.data.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <Link className="mono" to={`${base}/bookings/${row.id}`}>
-                        {row.ref}
-                      </Link>
-                    </td>
-                    <td>
-                      <time dateTime={row.start}>{formatWhen(row.start, tz)}</time>
-                    </td>
-                    <td>
-                      <span className="cell-main">{row.customer_name}</span>
-                      <span className="cell-sub">{row.customer_email}</span>
-                    </td>
-                    <td>
-                      <span className="cell-main">{row.service_title}</span>
-                      {isStaff(user) && <span className="cell-sub">{row.provider.name}</span>}
-                    </td>
-                    <td className="num">
-                      {row.amount_minor > 0 ? formatMoney(row.amount_minor, row.currency) : 'Free'}
-                    </td>
-                    <td>
-                      <Badge tone={STATUS_TONE[row.status]}>{statusLabel(row)}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <nav className="pager" aria-label="Pages">
-            <p>
-              {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
-            </p>
-            <Button
-              variant="secondary"
-              disabled={page <= 1}
-              onClick={() => goTo(page - 1)}
-              aria-label="Previous page"
-            >
-              ←
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={page * PER_PAGE >= total}
-              onClick={() => goTo(page + 1)}
-              aria-label="Next page"
-            >
-              →
-            </Button>
-          </nav>
-        </>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {total > 0 && (
+        <nav className="pager" aria-label="Pages">
+          <p>
+            {Math.min((page - 1) * PER_PAGE + 1, total)}–{Math.min(page * PER_PAGE, total)} of{' '}
+            {total}
+          </p>
+          <Button
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => goTo(page - 1)}
+            aria-label="Previous page"
+          >
+            ←
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={page * PER_PAGE >= total}
+            onClick={() => goTo(page + 1)}
+            aria-label="Next page"
+          >
+            →
+          </Button>
+        </nav>
       )}
     </div>
   );

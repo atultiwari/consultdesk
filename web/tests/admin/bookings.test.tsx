@@ -48,7 +48,8 @@ describe('admin bookings', () => {
     let status = 'awaiting_verification';
     mockApi({
       ...signedIn(),
-      'GET /api/admin/bookings/11': () => ok({ ...detail, status }),
+      'GET /api/admin/bookings/11': () =>
+        ok({ ...detail, status, actions: status === 'rejected' ? [] : detail.actions }),
       'POST /api/admin/bookings/11/reject': () => {
         status = 'rejected';
         return ok({ ...detail, status, actions: [] });

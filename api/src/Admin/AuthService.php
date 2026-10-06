@@ -8,8 +8,8 @@ use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Infra\AuditLog;
 
 /**
- * Admin sign-in. Unknown emails and wrong passwords behave the same (same error, same hashing work),
- * and five failures lock both the account and the address for 15 minutes.
+ * Admin sign-in. Unknown emails and wrong passwords behave the same (same error, same hashing work);
+ * LoginThrottle decides when to stop listening.
  */
 final class AuthService
 {
@@ -51,6 +51,7 @@ final class AuthService
     public function logout(AdminSession $session): void
     {
         $this->sessions->end($session->token);
+        $this->audit->record(Actor::user($session->user->id), 'admin.logout', 'user', $session->user->id);
     }
 
     public function logoutEverywhere(AdminSession $session): void

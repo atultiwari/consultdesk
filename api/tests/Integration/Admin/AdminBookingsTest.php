@@ -116,6 +116,20 @@ final class AdminBookingsTest extends AdminTestCase
         self::assertSame(404, $this->admin('POST', '/api/admin/bookings/' . $this->idOf($paid) . '/explode')[0]);
     }
 
+    public function testProvidersSeeWhoActedByRoleNotByEmail(): void
+    {
+        $ref = $this->book('demo', 'thesis', '2026-10-07T04:30:00Z', utr: '412345678901');
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('POST', '/api/admin/bookings/' . $this->idOf($ref) . '/confirm');
+
+        $this->createUser('demo@example.test', 'provider', $this->demo);
+        $this->login('demo@example.test');
+        $history = $this->admin('GET', '/api/admin/bookings/' . $this->idOf($ref))[1]['data']['history'];
+
+        self::assertSame([null, null, 'Owner'], array_column($history, 'actor'));
+    }
+
     private function book(string $provider, string $service, string $start, ?string $utr = null, string $method = 'upi', string $email = 'asha@example.test'): string
     {
         [$status, $body] = $this->call('POST', '/api/bookings', [

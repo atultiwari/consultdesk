@@ -109,7 +109,7 @@ export function BookingDetailPage() {
             <div>
               <dt>Email</dt>
               <dd>
-                <a href={`mailto:${b.customer.email}`}>{b.customer.email}</a>
+                <a href={`mailto:${encodeURIComponent(b.customer.email)}`}>{b.customer.email}</a>
               </dd>
             </div>
             {b.customer.phone && (

@@ -181,10 +181,17 @@ php bin/user.php list
 
 - A sign-in lasts 8 hours of inactivity and 30 days at most. "Sign out everywhere" ends every
   session for that account.
-- After 5 wrong passwords in 15 minutes, from one address or for one account, sign-in pauses for
-  that address or account.
-- "Forgot your password?" emails a link that works once, for 30 minutes. It needs outgoing email and
-  the cron (above) to be set up. Asking for a link never says whether the address has an account.
+- After 5 wrong passwords in 15 minutes from one address, that address must wait out the 15 minutes.
+  After 20 wrong passwords for one account from anywhere, the account pauses too, except from
+  addresses where it has signed in before, so a stranger cannot lock the owner out.
+  `php bin/user.php reset-password` lifts a pause straight away.
+- "Forgot your password?" emails a link that works once, for 30 minutes; a newer link replaces older
+  ones, and an account gets at most three an hour. It needs outgoing email and the cron (above).
+  Asking for a link never says, or takes longer to say, whether the address has an account.
+- The admin area needs `APP_URL` to start with `https://` (plain HTTP is allowed only for
+  `localhost` and `*.test` while developing).
+- Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
+  their old and new values.
 
 ## Putting booking on another site (Phase 5)
 

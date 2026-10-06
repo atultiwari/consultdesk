@@ -135,8 +135,8 @@ final class AdminServiceActions
     }
 
     /**
-     * Free sessions take only "free"; paid ones take at least one paid method. Returns null when
-     * nothing needs saving.
+     * Free sessions take only "free"; paid ones at least one paid method (UPI when nothing else is
+     * chosen, e.g. when a free session becomes paid). Returns null when nothing needs saving.
      *
      * @param array<string, mixed>|null $existing
      *
@@ -148,17 +148,27 @@ final class AdminServiceActions
             return null;
         }
         $sent = $input->list('payment_methods', max: 3);
-        $requested = $sent ?? ($existing['payment_methods'] ?? ['upi']);
+        if ($sent !== null) {
+            foreach ($sent as $method) {
+                if (!is_string($method) || !in_array($method, [...self::PAID_METHODS, 'free'], true)) {
+                    $input->reject('payment_methods', 'Unknown payment method.');
+
+                    return null;
+                }
+            }
+        }
         if (!is_int($price)) {
             return null;
         }
         if ($price === 0) {
             return ['free'];
         }
-        $methods = array_values(array_intersect(self::PAID_METHODS, is_array($requested) ? $requested : []));
-        if ($sent !== null && array_diff($sent, [...self::PAID_METHODS, 'free']) !== []) {
-            $input->reject('payment_methods', 'Unknown payment method.');
-        } elseif ($methods === []) {
+        $requested = $sent ?? (is_array($existing['payment_methods'] ?? null) ? $existing['payment_methods'] : []);
+        $methods = array_values(array_intersect(self::PAID_METHODS, $requested));
+        if ($methods === [] && $sent === null) {
+            return ['upi'];
+        }
+        if ($methods === []) {
             $input->reject('payment_methods', 'Choose at least one way to pay for a paid session.');
         }
 

@@ -110,15 +110,24 @@ final class Config
             trustedProxyHeader: ($v['TRUSTED_PROXY_HEADER'] ?? '') === '' ? null : $v['TRUSTED_PROXY_HEADER'],
             telegram: TelegramConfig::fromValues($v),
             google: GoogleConfig::fromValues($v, $appUrl),
-            adminPath: self::adminPath($v['ADMIN_PATH'] ?? ''),
+            adminPath: self::adminPath($v['ADMIN_PATH'] ?? '', $appUrl),
         );
     }
 
-    private static function adminPath(string $value): ?string
+    /**
+     * The admin area needs HTTPS so its cookie can be Secure and __Host-; plain HTTP is allowed only
+     * on a local machine.
+     */
+    private static function adminPath(string $value, string $appUrl): ?string
     {
         $value = trim($value);
         if ($value === '') {
             return null;
+        }
+        $host = strtolower((string) parse_url($appUrl, PHP_URL_HOST));
+        $local = in_array($host, ['localhost', '127.0.0.1', '[::1]'], true) || str_ends_with($host, '.localhost') || str_ends_with($host, '.test');
+        if (!str_starts_with($appUrl, 'https://') && !$local) {
+            throw new InvalidArgumentException('APP_URL must start with https:// when the admin area is on (ADMIN_PATH).');
         }
         if (preg_match('/^[a-z0-9][a-z0-9-]{7,63}$/', $value) !== 1 || in_array($value, ['api', 'embed-js', 'install', 'assets'], true)) {
             throw new InvalidArgumentException('ADMIN_PATH must be 8–64 lowercase letters, digits or "-", and hard to guess.');

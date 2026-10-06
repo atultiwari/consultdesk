@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiFetch } from '../api/client';
 import { adminFetch, adminRequest, rememberCsrf } from './api';
 import type {
@@ -32,6 +32,18 @@ const noRetryOnClientError = (count: number, error: Error) =>
 
 export function isUnauthenticated(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
+}
+
+/** Drops everything cached for the signed-in person except who they are. */
+function forgetAdminData(client: QueryClient): void {
+  client.removeQueries({ queryKey: adminKeys.all, predicate: (q) => q.queryKey[1] !== 'me' });
+}
+
+/** The session is gone: forget its data and show sign-in (a reset query has no data to fall back on). */
+export async function signedOut(client: QueryClient): Promise<void> {
+  rememberCsrf('');
+  forgetAdminData(client);
+  await client.resetQueries({ queryKey: adminKeys.me });
 }
 
 /** Whether the secret path is the admin path. Answers 404 otherwise. */
@@ -68,6 +80,7 @@ export function useLogin(segment: string) {
       }),
     onSuccess: (session) => {
       rememberCsrf(session.csrf_token);
+      forgetAdminData(client);
       client.setQueryData(adminKeys.me, session);
     },
   });
@@ -78,11 +91,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: (everywhere: boolean) =>
       adminFetch<{ ok: true }>(everywhere ? '/logout-all' : '/logout', { method: 'POST' }),
-    onSettled: async () => {
-      rememberCsrf('');
-      client.removeQueries({ queryKey: adminKeys.all, predicate: (q) => q.queryKey[1] !== 'me' });
-      await client.resetQueries({ queryKey: adminKeys.me });
-    },
+    onSettled: () => signedOut(client),
   });
 }
 
@@ -139,13 +148,14 @@ export function useBookingAction() {
   return useMutation({
     mutationFn: ({ id, action }: { id: number; action: BookingAction }) =>
       adminFetch<BookingDetail>(`/bookings/${id}/${action}`, { method: 'POST' }),
-    onSuccess: async (booking) => {
-      client.setQueryData(adminKeys.booking(booking.id), booking);
-      await Promise.all([
+    onSuccess: (booking) => client.setQueryData(adminKeys.booking(booking.id), booking),
+    // Refresh even after a failure: someone else may have settled the booking first.
+    onSettled: (_data, _error, { id }) =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: adminKeys.booking(id) }),
         client.invalidateQueries({ queryKey: ['admin', 'dashboard'] }),
         client.invalidateQueries({ queryKey: ['admin', 'bookings'] }),
-      ]);
-    },
+      ]),
   });
 }
 
@@ -172,10 +182,21 @@ export function useUpdateProvider(id: number) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       adminFetch<AdminProvider>(`/providers/${id}`, { method: 'PATCH', json: body }),
-    onSuccess: (updated) =>
+    onSuccess: async (updated) => {
       client.setQueryData<AdminProvider[]>(adminKeys.providers, (list = []) =>
         list.map((p) => (p.id === updated.id ? updated : p)),
-      ),
+      );
+      // Names and timezones show up elsewhere too, including the public pages in this tab.
+      await Promise.all(
+        [
+          ['admin', 'blocked'],
+          ['admin', 'bookings'],
+          ['admin', 'dashboard'],
+          ['providers'],
+          ['provider'],
+        ].map((queryKey) => client.invalidateQueries({ queryKey })),
+      );
+    },
   });
 }
 

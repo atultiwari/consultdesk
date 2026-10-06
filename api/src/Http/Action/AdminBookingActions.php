@@ -99,7 +99,7 @@ final class AdminBookingActions
      */
     private function detail(Request $request, int $id): array
     {
-        return $this->bookings->find($id, AdminAuthActions::session($request)->user->providerScope(), $this->clock->now())
+        return $this->bookings->find($id, AdminAuthActions::session($request)->user, $this->clock->now())
             ?? throw ApiException::notFound();
     }
 }
