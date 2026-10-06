@@ -21,7 +21,7 @@ final class FakeTelegramApi implements TelegramApi
     public array $answers = [];
     /** @var list<string> chats whose sends fail */
     public array $failingChats = [];
-    /** @var array<string, bool> chat => permanent? for chats whose edits fail */
+    /** @var list<string> chats whose edits fail permanently (message gone) */
     public array $failingEdits = [];
     private int $nextId = 100;
 
@@ -38,8 +38,8 @@ final class FakeTelegramApi implements TelegramApi
 
     public function editMessage(string $chatId, int $messageId, string $html, ?InlineKeyboard $keyboard = null): void
     {
-        if (array_key_exists($chatId, $this->failingEdits)) {
-            throw new TelegramApiError('Telegram editMessageText failed: Bad Request: message to edit not found', $this->failingEdits[$chatId]);
+        if (in_array($chatId, $this->failingEdits, true)) {
+            throw new TelegramApiError('Telegram editMessageText failed: Bad Request: message to edit not found', true);
         }
         $this->edits[] = ['chat' => $chatId, 'id' => $messageId, 'text' => $html, 'buttons' => self::buttons($keyboard)];
     }

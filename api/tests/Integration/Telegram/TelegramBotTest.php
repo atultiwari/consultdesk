@@ -174,7 +174,7 @@ final class TelegramBotTest extends ApiTestCase
         $booking = $this->bookAndPay();
         $first = $this->telegram()->sent[0]['id'];
         $this->pdo->exec("INSERT INTO telegram_messages (booking_id, chat_id, message_id, created_at) VALUES ({$booking['id']}, '4040', 1, '2026-10-05 00:00:00')");
-        $this->telegram()->failingEdits = ['4040' => true];
+        $this->telegram()->failingEdits = ['4040'];
 
         $this->servicesNow()->bookingService()->confirm($booking['id'], Actor::user($this->adminId));
         $this->runCron();
