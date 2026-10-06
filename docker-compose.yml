@@ -16,6 +16,7 @@ services:
       DB_TEST_NAME: consultdesk_test
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      MAILPIT_API: http://mailpit:8025
     depends_on:
       db:
         condition: service_healthy
