@@ -18,6 +18,14 @@ final class JsonInput
 
     public static function from(ServerRequestInterface $request): Input
     {
+        return new Input(self::decode($request));
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    public static function decode(ServerRequestInterface $request): array
+    {
         if (!str_starts_with(strtolower($request->getHeaderLine('Content-Type')), 'application/json')) {
             throw new ApiException(415, 'unsupported_media_type', 'Send the request body as application/json.');
         }
@@ -39,6 +47,6 @@ final class JsonInput
             throw ApiException::badRequest('The request body must be a JSON object.');
         }
 
-        return new Input($data);
+        return $data;
     }
 }

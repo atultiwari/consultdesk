@@ -21,6 +21,9 @@ final class BookingEmails
 
     public function render(EmailTemplate $template, BookingView $booking, string $statusUrl): RenderedEmail
     {
+        // Customers see their own timezone; staff see the provider's.
+        $booking = $template->isForCustomer() ? $booking : $booking->asSeenByStaff();
+
         return match ($template) {
             EmailTemplate::CustomerPaymentDue => $this->paymentDue($booking, $statusUrl),
             EmailTemplate::CustomerRequestReceived => $this->customer(

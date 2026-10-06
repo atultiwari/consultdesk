@@ -66,6 +66,17 @@ final class BookingView
     }
 
     /**
+     * A copy whose display timezone is the provider's, for staff-facing messages.
+     */
+    public function asSeenByStaff(): self
+    {
+        $args = get_object_vars($this);
+        $args['customerTimezone'] = $this->providerTimezone;
+
+        return new self(...$args);
+    }
+
+    /**
      * The customer's timezone when known, otherwise the provider's.
      */
     public function displayTimezone(): DateTimeZone

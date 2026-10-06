@@ -107,7 +107,7 @@ consultdesk/
 ## 5. Data model (MySQL)
 
 - `settings`: key/value JSON. Holds org name, branding (logo, accent colours, fonts), default timezone, the admin slug, SMTP settings and the cron key.
-- `users`: `id`, `email`, `password_hash` (argon2id), `role` (owner | admin | provider), `provider_id` (nullable), `last_login_at`.
+- `users`: `id`, `email`, `password_hash` (argon2id), `role` (owner | admin | provider), `provider_id` (nullable), `telegram_chat_id` (nullable), `last_login_at`.
 - `providers`: `slug`, `name`, `title`, `bio`, `photo_path`, `timezone`, `active`, `sort_order`.
   - Contact: `whatsapp`, `telegram_chat_id`, `notify_email` (provider-side emails; the owner gets a copy, or gets them alone when this is empty).
   - UPI: `upi_vpa`, `upi_payee_name`.
@@ -124,6 +124,7 @@ consultdesk/
 - `payment_gateways`: org-level Razorpay keys (encrypted), with optional per-provider override.
 - `payment_events`: raw webhook payload; `event_id` is UNIQUE so duplicates are ignored.
 - `oauth_tokens`: Google refresh token per provider, encrypted with sodium using a key from `config.php`.
+- Telegram: `telegram_link_codes` (one-time, hashed, 24 h codes for `t.me/<bot>?start=<code>`) and `telegram_messages` (alerts that still carry buttons, so they can be updated when a booking is settled anywhere).
 - Housekeeping: `outbox_jobs`, `login_attempts`, `sessions`, `audit_log`, `rate_limits` (fixed-window counters keyed by an HMAC of the client IP), `migrations`.
 
 **Preventing double bookings without Postgres exclusion constraints:**
@@ -166,8 +167,11 @@ consultdesk/
      - once the hold has lapsed, the page hides the UPI link and QR, says **do not pay**, and offers to pick a new slot;
      - the UTR field sits right next to the payment button, so paying and submitting happen together;
      - a duplicate-UTR error explains that an expired booking's payment cannot be reused and gives the provider's WhatsApp link pre-filled with the old ref, so the provider can sort it out by hand.
-   - The **Telegram bot** messages the provider's chat (owner chat as fallback) with **[✅ Confirm] [❌ Reject]** buttons.
-   - The webhook verifies the `X-Telegram-Bot-Api-Secret-Token` header and checks that the chat id is mapped to that provider or an admin.
+   - The **Telegram bot** messages the provider's chat (the owners' chats only when the provider has not linked Telegram) with **[✅ Confirm] [❌ Reject]** buttons. Requests to approve free sessions get the same buttons.
+   - Confirm is one tap. Reject asks first (**[Yes, reject] [↩ Back]**), because a mistaken reject tells a paying customer their booking failed.
+   - The webhook verifies the `X-Telegram-Bot-Api-Secret-Token` header and that the chat may act: the provider's chat, that provider's own user, or an owner or admin. Pressing a button on a booking that was already settled explains what happened and shows the outcome.
+   - When a booking is settled anywhere (Telegram, admin panel, expiry), earlier alerts are edited to show the outcome and lose their buttons.
+   - Chats are linked with one-time links (`php bin/telegram.php link provider <slug>`, later from the admin panel) and unlinked with `/stop`.
    - The same confirm action is available in the admin panel.
 4. **Razorpay (VRL) Payment Links.**
    - `POST /v1/payment_links` is called with `reference_id=booking.id`, `expire_by=now+20m`, `callback_url=/b/{ref}?t=…` and `notes.source="consultdesk"`, then the customer is redirected to `short_url`.
