@@ -225,6 +225,71 @@ updates to run from the web.
 - Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
   their old and new values.
 
+## Online payments with Razorpay (Phase 7, optional)
+
+Customers can pay online (card, any UPI app, netbanking or wallet) on Razorpay's page. ConsultDesk
+makes a **payment link for each booking**, for its exact amount, when the customer books; there is
+nothing to set up per session or per teacher in Razorpay. The booking confirms itself as soon as the
+payment goes through.
+
+> For now only **Test Mode** keys are accepted, so no real money moves.
+
+### 1. Get your keys
+
+1. Sign in to the [Razorpay Dashboard](https://dashboard.razorpay.com) and switch to **Test Mode**
+   (top bar).
+2. **Account & Settings → API Keys → Generate Test Key.** Keep the Key ID (`rzp_test_…`) and the Key
+   Secret; Razorpay shows the secret only once.
+
+### 2. Add them to ConsultDesk
+
+In the admin panel, **Payments → Razorpay (organisation account)**: paste the Key ID and Key
+Secret and **Save keys**. ConsultDesk stores the secret encrypted, then shows:
+
+- the **webhook URL**, `https://<your-booking-site>/api/webhooks/razorpay`, and
+- a **webhook secret**, shown only this once (make a new one any time with **New webhook secret**).
+
+**Check connection** confirms Razorpay accepts the keys.
+
+### 3. Add the webhook in Razorpay
+
+**Account & Settings → Webhooks → Add new webhook** (still in Test Mode): paste the URL and the
+secret, tick **payment_link.paid**, **payment_link.cancelled** and **payment_link.expired**, and save.
+
+If the same Razorpay account already sends webhooks somewhere else (for example a WordPress site),
+add this as a **second** webhook; leave the existing one as it is. ConsultDesk ignores events for
+payments it didn't create, and only the `payment_link.*` events above are needed here.
+
+### 4. Turn it on for sessions
+
+- **Payments → Ways to pay** switches UPI and Razorpay on or off for the whole site.
+- Each paid session lists the ways it accepts (**Providers → Sessions → Edit**: "UPI" and "Razorpay
+  payment link"). Customers see a way to pay only when it is switched on, ticked on the session and set
+  up for that teacher (a UPI ID for UPI; Razorpay keys for Razorpay).
+- Make a test booking and pay with one of Razorpay's
+  [test cards](https://razorpay.com/docs/payments/payments/test-card-details/).
+
+### A teacher's own Razorpay account
+
+By default every online payment goes into the organisation's account. Under **Payments → Teachers
+with their own Razorpay account**, pick a teacher and paste their keys: their sessions are then paid
+into their own account. They add a webhook in their own Razorpay Dashboard with the same URL and the
+secret ConsultDesk shows for them.
+
+### What happens when…
+
+- **The customer pays:** the booking is confirmed (by the webhook, or as soon as Razorpay sends the
+  customer back, whichever comes first), with the usual emails, calendar event and alerts.
+- **The hold runs out first (30 minutes):** the link is cancelled at Razorpay so it can't be paid.
+- **A payment arrives after the hold ended:** the booking is not confirmed (the slot may be taken);
+  the customer and staff get an email, and the booking shows "refund it from the Razorpay
+  Dashboard" with the payment id.
+- **A paid booking is cancelled:** refund it from the Razorpay Dashboard; the booking page shows the
+  payment id to look for.
+
+On your own computer, Razorpay can't reach the webhook, but bookings still confirm when the customer
+is sent back to the booking page.
+
 ## Putting booking on another site (Phase 5)
 
 Add this where the "Book a session" button should appear (any HTML page, including WordPress in a
