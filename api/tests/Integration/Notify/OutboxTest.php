@@ -78,6 +78,17 @@ final class OutboxTest extends IntegrationTestCase
         self::assertCount(1, $this->outbox('2026-10-05T00:15Z')->claimDue(1));
     }
 
+    public function testAJobThatKeepsCrashingIsEventuallyFailed(): void
+    {
+        $this->outbox('2026-10-05T00:00Z')->enqueue('kills-php', []);
+        $job = $this->outbox('2026-10-05T00:00Z')->claimDue(1)[0];
+        $this->pdo->exec('UPDATE outbox_jobs SET attempts = ' . Outbox::MAX_ATTEMPTS . ", updated_at = '2026-10-05 00:00:00' WHERE id = {$job->id}");
+
+        self::assertSame([], $this->outbox('2026-10-05T00:15Z')->claimDue(1));
+        self::assertSame('failed', $this->row($job->id)['status']);
+        self::assertStringContainsString('interrupted', (string) $this->row($job->id)['last_error']);
+    }
+
     public function testWorkerRunsHandlersAndRecordsOutcomes(): void
     {
         $outbox = $this->outbox('2026-10-05T00:00Z');

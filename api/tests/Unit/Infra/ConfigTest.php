@@ -60,6 +60,34 @@ final class ConfigTest extends TestCase
         self::assertSame('db', $config->db->host, 'missing keys fall back to the environment');
     }
 
+    public function testRefusesTheCommittedLocalDevSecretsOnAnHttpsSite(): void
+    {
+        $dev = ['APP_KEY' => 'base64:bG9jYWwtZGV2LW9ubHkta2V5LW5vdC1zZWNyZXQhISE=', 'CRON_KEY' => 'local-dev-cron-key-not-secret-0000'];
+        foreach ($dev as $key => $value) {
+            try {
+                Config::load('/nonexistent/config.php', array_merge(self::env(), [$key => $value]));
+                self::fail("Expected the dev {$key} to be refused.");
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString($key, $e->getMessage());
+            }
+        }
+
+        $local = Config::load('/nonexistent/config.php', array_merge(self::env(), $dev, ['APP_URL' => 'http://localhost:5173']));
+        self::assertSame('http://localhost:5173', $local->appUrl);
+    }
+
+    public function testReadsTrustedProxySettings(): void
+    {
+        $config = Config::load('/nonexistent/config.php', array_merge(self::env(), [
+            'TRUSTED_PROXIES' => '10.0.0.0/8, 192.0.2.10',
+            'TRUSTED_PROXY_HEADER' => 'CF-Connecting-IP',
+        ]));
+
+        self::assertSame(['10.0.0.0/8', '192.0.2.10'], $config->trustedProxies);
+        self::assertSame('CF-Connecting-IP', $config->trustedProxyHeader);
+        self::assertSame([], Config::load('/nonexistent/config.php', self::env())->trustedProxies);
+    }
+
     public function testRejectsAWeakOrMissingKey(): void
     {
         foreach (['APP_KEY' => 'base64:' . base64_encode('short'), 'CRON_KEY' => 'short', 'APP_URL' => 'not a url'] as $key => $value) {

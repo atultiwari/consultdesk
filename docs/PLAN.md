@@ -152,7 +152,7 @@ consultdesk/
 
    Slots are returned in UTC and shown in the **visitor's timezone**, auto-detected and changeable.
 2. **Book.** Pick a service, then a date and slot, then fill the intake form, then pay.
-   - Spam protection: a honeypot field and an IP rate limit. Cloudflare Turnstile is optional.
+   - Spam protection: a honeypot field, per-IP rate limits (IPv6 grouped by /64; a trusted proxy's client-IP header is honoured only when configured), a per-email booking limit, at most 3 open (unpaid/unapproved) bookings per email, and names that may not contain links or markup. Cloudflare Turnstile is optional.
    - The status page lives at `/b/{ref}?t={token}`, and that link is also emailed.
    - Public API (Phase 2): `GET /api/providers`, `GET /api/providers/{slug}`, `GET /api/providers/{slug}/services/{service}/slots?from&to`, `POST /api/bookings`, `GET /api/bookings/{ref}?t=`, `POST /api/bookings/{ref}/utr`. POST bodies must be `application/json`. Free services without approval are confirmed straight away.
    - Emails: each booking event fans out into one outbox job per email (customer, or staff = provider `notify_email` + owners). Emails are rendered at send time; an event that is stale when cron runs (e.g. "held" after the customer already paid) sends nothing.

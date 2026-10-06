@@ -122,10 +122,23 @@ final class Outbox
         ]);
     }
 
+    /**
+     * Jobs left "running" by a crashed run go back to the queue, unless they have used every attempt
+     * (a job that always kills PHP must not be retried forever).
+     */
     private function releaseStale(DateTimeImmutable $now): void
     {
         $this->pdo->prepare(
-            "UPDATE outbox_jobs SET status = 'pending' WHERE status = 'running' AND updated_at <= :cutoff",
-        )->execute(['cutoff' => $now->modify(sprintf('-%d minutes', self::STALE_RUNNING_MINUTES))->format(self::SQL_DATETIME)]);
+            "UPDATE outbox_jobs
+             SET status = IF(attempts >= :max_attempts, 'failed', 'pending'),
+                 last_error = IF(attempts >= :max_attempts_again, 'Gave up: the job was interrupted on every attempt.', last_error),
+                 updated_at = :now
+             WHERE status = 'running' AND updated_at <= :cutoff",
+        )->execute([
+            'max_attempts' => self::MAX_ATTEMPTS,
+            'max_attempts_again' => self::MAX_ATTEMPTS,
+            'now' => $now->format(self::SQL_DATETIME),
+            'cutoff' => $now->modify(sprintf('-%d minutes', self::STALE_RUNNING_MINUTES))->format(self::SQL_DATETIME),
+        ]);
     }
 }

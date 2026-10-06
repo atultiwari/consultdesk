@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Http\Action;
 
-use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Domain\Booking\BookingService;
 use ConsultDesk\Domain\Booking\BookingView;
 use ConsultDesk\Domain\Booking\BookingViewRepository;
@@ -23,6 +22,7 @@ use ConsultDesk\Http\JsonResponse;
 use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Http\Validation\ValidationFailed;
 use ConsultDesk\Infra\Clock;
+use ConsultDesk\Infra\RateLimiter;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use RuntimeException;
@@ -33,12 +33,15 @@ use RuntimeException;
 final class BookingActions
 {
     private const HONEYPOT_FIELD = 'website';
+    private const EMAIL_LIMIT = 5;
+    private const EMAIL_WINDOW_SECONDS = 3600;
 
     public function __construct(
         private readonly CatalogRepository $catalog,
         private readonly BookingService $bookings,
         private readonly BookingViewRepository $views,
         private readonly Clock $clock,
+        private readonly RateLimiter $rateLimiter,
         private readonly string $appUrl,
     ) {}
 
@@ -58,6 +61,7 @@ final class BookingActions
             $input->reject("answers.{$question}", $message);
         }
         $input->assertValid();
+        $this->limitPerEmail($customer);
 
         $paymentMethod = $this->paymentMethod($service, $provider, $method);
         $held = $this->bookings->hold(new HoldRequest(
@@ -67,10 +71,7 @@ final class BookingActions
             $customer ?? throw new RuntimeException('Customer was validated as required.'),
             $paymentMethod,
             $answers->answers,
-        ));
-        if ($paymentMethod === PaymentMethod::Free && !$service->requiresApproval) {
-            $this->bookings->confirm($held->id, Actor::system());
-        }
+        ), confirmImmediately: $paymentMethod === PaymentMethod::Free && !$service->requiresApproval);
 
         return JsonResponse::success($response, [
             'ref' => $held->ref,
@@ -130,12 +131,26 @@ final class BookingActions
 
     private function customer(Input $input): ?Customer
     {
-        $name = $input->string('name', max: 120);
+        $name = $input->personName('name');
         $email = $input->email('email');
         $phone = $input->phone('phone');
         $timezone = $input->timezone('timezone', required: false);
 
         return $name === null || $email === null || $phone === null ? null : new Customer($name, $email, $phone, $timezone);
+    }
+
+    /**
+     * Stops one address being flooded with booking emails from many IPs.
+     */
+    private function limitPerEmail(?Customer $customer): void
+    {
+        if ($customer === null) {
+            return;
+        }
+        $retryAfter = $this->rateLimiter->hit('book-email', $customer->email, self::EMAIL_LIMIT, self::EMAIL_WINDOW_SECONDS);
+        if ($retryAfter !== null) {
+            throw new ApiException(429, 'rate_limited', 'Too many bookings for this email address. Please try again later.', ['Retry-After' => (string) $retryAfter]);
+        }
     }
 
     private function paymentMethod(ServiceOffering $service, ProviderProfile $provider, ?string $requested): PaymentMethod

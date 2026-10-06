@@ -14,6 +14,11 @@ final class Config
 {
     private const APP_KEY_PREFIX = 'base64:';
     private const MIN_CRON_KEY_LENGTH = 32;
+    /** The throwaway values in docker-compose.yml; a public site must never run with them. */
+    private const LOCAL_DEV_SECRETS = [
+        'APP_KEY' => 'base64:bG9jYWwtZGV2LW9ubHkta2V5LW5vdC1zZWNyZXQhISE=',
+        'CRON_KEY' => 'local-dev-cron-key-not-secret-0000',
+    ];
 
     private function __construct(
         public readonly string $appUrl,
@@ -24,6 +29,9 @@ final class Config
         public readonly bool $debug,
         public readonly DbConfig $db,
         public readonly MailConfig $mail,
+        /** @var list<string> */
+        public readonly array $trustedProxies = [],
+        public readonly ?string $trustedProxyHeader = null,
     ) {}
 
     /**
@@ -53,6 +61,14 @@ final class Config
         $appUrl = rtrim($v['APP_URL'] ?? '', '/');
         if (preg_match('#^https?://[^\s/]+#', $appUrl) !== 1) {
             throw new InvalidArgumentException('APP_URL must be an absolute http(s) URL.');
+        }
+
+        if (str_starts_with($appUrl, 'https://')) {
+            foreach (self::LOCAL_DEV_SECRETS as $key => $devValue) {
+                if (($v[$key] ?? '') === $devValue) {
+                    throw new InvalidArgumentException(sprintf('%s is the local development value; generate a real one for this site.', $key));
+                }
+            }
         }
 
         $encodedKey = $v['APP_KEY'] ?? '';
@@ -85,6 +101,8 @@ final class Config
                 fromEmail: $v['MAIL_FROM'] ?? '',
                 fromName: $v['MAIL_FROM_NAME'] ?? 'ConsultDesk',
             ),
+            trustedProxies: array_values(array_filter(array_map('trim', explode(',', $v['TRUSTED_PROXIES'] ?? '')))),
+            trustedProxyHeader: ($v['TRUSTED_PROXY_HEADER'] ?? '') === '' ? null : $v['TRUSTED_PROXY_HEADER'],
         );
     }
 }

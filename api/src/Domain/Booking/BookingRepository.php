@@ -44,6 +44,11 @@ interface BookingRepository
     public function blockedPeriods(int $providerId, Interval $range): array;
 
     /**
+     * Held or awaiting-verification bookings for this email whose hold has not lapsed.
+     */
+    public function countOpenForEmail(string $email, DateTimeImmutable $now): int;
+
+    /**
      * @throws RefCollision when the ref is already taken
      */
     public function insert(NewBooking $booking): int;

@@ -12,6 +12,7 @@ use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\PdoBookingViews;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
 use ConsultDesk\Domain\Catalog\PdoCatalog;
+use ConsultDesk\Http\ClientIp;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Config;
 use ConsultDesk\Infra\Crypto;
@@ -89,6 +90,11 @@ final class AppServices
     public function rateLimiter(): RateLimiter
     {
         return new RateLimiter($this->pdo(), $this->clock, $this->config->appKey);
+    }
+
+    public function clientIp(): ClientIp
+    {
+        return new ClientIp($this->config->trustedProxies, $this->config->trustedProxyHeader);
     }
 
     public function cronRunner(): CronRunner

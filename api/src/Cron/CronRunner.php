@@ -16,7 +16,8 @@ use PDO;
 final class CronRunner
 {
     private const LOCK_NAME = 'consultdesk_cron';
-    private const BATCH_SIZE = 25;
+    /** Small, so a slow mail server cannot leave many claimed jobs stranded past the time budget. */
+    private const BATCH_SIZE = 3;
 
     public function __construct(
         private readonly PDO $pdo,

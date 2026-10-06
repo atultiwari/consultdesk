@@ -45,12 +45,24 @@ final class BookingPresenter
             'hold_expires_at' => $pending ? $booking->holdExpiresAt?->format(self::ISO) : null,
             'utr' => $booking->utr,
             'meet_url' => $status === BookingStatus::Confirmed ? $booking->meetUrl : null,
-            'payment' => $pending && $booking->paymentMethod === PaymentMethod::Upi ? [
-                'method' => 'upi',
-                ...ManualUpi::instructions($booking)->toArray(),
-                'can_submit_utr' => $status === BookingStatus::Held,
-                'utr_single_use' => true,
-            ] : null,
+            'payment' => $pending && $booking->paymentMethod === PaymentMethod::Upi ? self::upi($booking, $status) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function upi(BookingView $booking, BookingStatus $status): array
+    {
+        $available = $booking->upiVpa !== null && $booking->upiVpa !== '';
+
+        return [
+            'method' => 'upi',
+            // If the provider removed their UPI ID after booking, a customer who already paid can still send the UTR.
+            'available' => $available,
+            ...($available ? ManualUpi::instructions($booking)->toArray() : []),
+            'can_submit_utr' => $status === BookingStatus::Held,
+            'utr_single_use' => true,
         ];
     }
 }

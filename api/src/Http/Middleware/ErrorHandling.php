@@ -13,6 +13,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Slim\Exception\HttpException;
 use Slim\Exception\HttpMethodNotAllowedException;
 use Slim\Exception\HttpNotFoundException;
 use Throwable;
@@ -33,6 +34,7 @@ final class ErrorHandling implements MiddlewareInterface
         'booking_not_found' => 404,
         'service_not_bookable' => 404,
         'hold_expired' => 410,
+        'too_many_open_bookings' => 409,
     ];
 
     public function __construct(
@@ -57,8 +59,11 @@ final class ErrorHandling implements MiddlewareInterface
             return $response;
         } catch (HttpNotFoundException) {
             return JsonResponse::error($this->responses->createResponse(), 'not_found', 'Not found.', 404);
-        } catch (HttpMethodNotAllowedException) {
-            return JsonResponse::error($this->responses->createResponse(), 'method_not_allowed', 'Method not allowed.', 405);
+        } catch (HttpMethodNotAllowedException $e) {
+            return JsonResponse::error($this->responses->createResponse(), 'method_not_allowed', 'Method not allowed.', 405)
+                ->withHeader('Allow', implode(', ', $e->getAllowedMethods()));
+        } catch (HttpException $e) {
+            return JsonResponse::error($this->responses->createResponse(), 'http_error', $e->getTitle(), $e->getCode());
         } catch (Throwable $e) {
             error_log(sprintf('[consultdesk] %s %s: %s', $request->getMethod(), $request->getUri()->getPath(), (string) $e));
             $message = $this->debug ? $e->getMessage() : 'Something went wrong. Please try again.';

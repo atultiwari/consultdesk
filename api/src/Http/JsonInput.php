@@ -22,7 +22,10 @@ final class JsonInput
             throw new ApiException(415, 'unsupported_media_type', 'Send the request body as application/json.');
         }
 
-        $raw = (string) $request->getBody();
+        if ((int) $request->getHeaderLine('Content-Length') > self::MAX_BYTES) {
+            throw new ApiException(413, 'payload_too_large', 'The request body is too large.');
+        }
+        $raw = $request->getBody()->read(self::MAX_BYTES + 1);
         if (strlen($raw) > self::MAX_BYTES) {
             throw new ApiException(413, 'payload_too_large', 'The request body is too large.');
         }

@@ -73,11 +73,14 @@ final class ProviderActions
         $to = $query->date('to', required: false)
             ?? (new DateTimeImmutable($from))->modify(sprintf('+%d days', self::DEFAULT_RANGE_DAYS - 1))->format('Y-m-d');
         $query->assertValid();
+        if ($to < $from) {
+            throw new ValidationFailed(['to' => 'Must be on or after the start date.']);
+        }
 
         try {
             $slots = $this->slots->find($provider->id, $service->id, $service->durationMinutes, $from, $to);
-        } catch (InvalidArgumentException $e) {
-            throw new ValidationFailed(['to' => sprintf('%s At most %d days at a time.', $e->getMessage(), SlotRequest::MAX_RANGE_DAYS)]);
+        } catch (InvalidArgumentException) {
+            throw new ValidationFailed(['to' => sprintf('Ask for at most %d days at a time.', SlotRequest::MAX_RANGE_DAYS)]);
         }
 
         return JsonResponse::success($response, [

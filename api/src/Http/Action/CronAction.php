@@ -23,7 +23,8 @@ final class CronAction
 
     public function __invoke(Request $request, Response $response): Response
     {
-        $key = $request->getQueryParams()['key'] ?? '';
+        // Prefer the header: query strings end up in access logs.
+        $key = $request->getHeaderLine('X-Cron-Key') !== '' ? $request->getHeaderLine('X-Cron-Key') : ($request->getQueryParams()['key'] ?? '');
         if (!is_string($key) || !hash_equals($this->cronKey, $key)) {
             throw ApiException::forbidden();
         }

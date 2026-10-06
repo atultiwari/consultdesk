@@ -132,6 +132,17 @@ final class PdoBookingRepository implements BookingRepository
         return array_map(static fn(array $r): Interval => self::interval($r), $rows);
     }
 
+    public function countOpenForEmail(string $email, DateTimeImmutable $now): int
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM bookings
+             WHERE customer_email = :email AND status IN ('held', 'awaiting_verification') AND hold_expires_at > :now",
+        );
+        $statement->execute(['email' => $email, 'now' => $now->format(self::SQL_DATETIME)]);
+
+        return (int) $statement->fetchColumn();
+    }
+
     public function insert(NewBooking $booking): int
     {
         $created = $booking->createdAt->format(self::SQL_DATETIME);

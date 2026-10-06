@@ -97,6 +97,20 @@ final class Input
         return $value;
     }
 
+    /**
+     * A person's name: no links, markup or control characters, so it cannot carry a phishing
+     * message into emails sent to whatever address was entered.
+     */
+    public function personName(string $field, int $max = 120): ?string
+    {
+        $value = $this->string($field, true, $max);
+        if ($value !== null && preg_match('#://|www\.|[<>]|[\x00-\x1F\x7F]#i', $value) === 1) {
+            return $this->fail($field, 'Enter just your name.');
+        }
+
+        return $value;
+    }
+
     public function phone(string $field, bool $required = true): ?string
     {
         $value = $this->string($field, $required, 20);

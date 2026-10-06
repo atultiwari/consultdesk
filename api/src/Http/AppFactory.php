@@ -36,13 +36,14 @@ final class AppFactory
         $app->group('/api', static function (RouteCollectorProxy $api) use ($services): void {
             $api->get('/health', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface => JsonResponse::success($response, ['status' => 'ok']));
 
-            $limit = static fn(string $bucket, int $max, int $window): RateLimit => new RateLimit(static fn() => $services->rateLimiter(), $bucket, $max, $window);
+            $limit = static fn(string $bucket, int $max, int $window): RateLimit => new RateLimit(static fn() => $services->rateLimiter(), $bucket, $max, $window, $services->clientIp());
             $providers = static fn(): ProviderActions => new ProviderActions($services->catalog(), $services->slotFinder(), $services->clock(), $services->config->appUrl);
             $bookings = static fn(): BookingActions => new BookingActions(
                 $services->catalog(),
                 $services->bookingService(),
                 $services->bookingViews(),
                 $services->clock(),
+                $services->rateLimiter(),
                 $services->config->appUrl,
             );
 

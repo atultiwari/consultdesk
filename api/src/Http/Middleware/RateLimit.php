@@ -23,11 +23,12 @@ final class RateLimit implements MiddlewareInterface
         private readonly string $bucket,
         private readonly int $limit,
         private readonly int $windowSeconds,
+        private readonly ClientIp $clientIp,
     ) {}
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $retryAfter = ($this->limiter)()->hit($this->bucket, ClientIp::of($request), $this->limit, $this->windowSeconds);
+        $retryAfter = ($this->limiter)()->hit($this->bucket, $this->clientIp->of($request), $this->limit, $this->windowSeconds);
         if ($retryAfter !== null) {
             throw new ApiException(429, 'rate_limited', 'Too many requests. Please wait a little and try again.', ['Retry-After' => (string) $retryAfter]);
         }

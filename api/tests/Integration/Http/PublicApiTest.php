@@ -218,6 +218,72 @@ final class PublicApiTest extends ApiTestCase
         self::assertSame([405, 'method_not_allowed'], $this->errorOf('DELETE', '/api/providers'));
     }
 
+    public function testStatusPageStillWorksIfTheProviderRemovesTheirUpiId(): void
+    {
+        [, $created] = $this->call('POST', '/api/bookings', $this->booking());
+        $this->pdo->exec("UPDATE providers SET upi_vpa = NULL WHERE id = {$this->providerId}");
+
+        [$status, $body] = $this->call('GET', "/api/bookings/{$created['data']['ref']}?t={$created['data']['token']}");
+
+        self::assertSame(200, $status);
+        self::assertFalse($body['data']['payment']['available']);
+        self::assertTrue($body['data']['payment']['can_submit_utr'], 'a customer who already paid can still send the UTR');
+        self::assertArrayNotHasKey('upi_uri', $body['data']['payment']);
+    }
+
+    public function testSlotRangeErrorsPointAtTheRightField(): void
+    {
+        [, $inverted] = $this->call('GET', '/api/providers/demo/services/thesis/slots?from=2026-10-10&to=2026-10-08');
+        self::assertSame(['to'], array_keys($inverted['error']['fields']));
+        self::assertStringContainsString('on or after', $inverted['error']['fields']['to']);
+
+        [, $long] = $this->call('GET', '/api/providers/demo/services/thesis/slots?from=2026-10-01&to=2027-01-01');
+        self::assertStringContainsString('62 days', $long['error']['fields']['to']);
+    }
+
+    public function testCustomerNamesCannotCarryLinksOrMarkup(): void
+    {
+        foreach (['Visit https://phish.example', 'www.phish.example', 'Asha <b>', "Asha\u{0007}"] as $name) {
+            [$status, $body] = $this->call('POST', '/api/bookings', $this->booking(['customer' => ['name' => $name, 'email' => 'asha@example.test', 'phone' => '+910000000000']]));
+            self::assertSame(422, $status, $name);
+            self::assertArrayHasKey('customer.name', $body['error']['fields'], $name);
+        }
+    }
+
+    public function testBookingsAreAlsoRateLimitedPerEmailAddress(): void
+    {
+        $starts = ['2026-10-07T04:30:00Z', '2026-10-07T06:30:00Z', '2026-10-08T04:30:00Z', '2026-10-08T06:30:00Z', '2026-10-09T04:30:00Z', '2026-10-09T06:30:00Z'];
+        $statuses = [];
+        foreach ($starts as $i => $start) {
+            [$statuses[]] = $this->call('POST', '/api/bookings', $this->booking(['start' => $start, 'customer' => [
+                'name' => 'Victim Placeholder', 'email' => 'Victim@Example.test', 'phone' => '+910000000000',
+            ]]), ip: "198.51.100.{$i}");
+        }
+
+        self::assertSame([201, 201, 201, 409, 409, 429], $statuses, 'three open holds per email, then the per-email limit');
+    }
+
+    public function testRejectsOversizedBodiesBeforeReadingThem(): void
+    {
+        [$status] = $this->call('POST', '/api/bookings', $this->booking(), headers: ['Content-Length' => (string) (1024 * 1024)]);
+
+        self::assertSame(413, $status);
+    }
+
+    public function testMethodNotAllowedListsTheAllowedMethods(): void
+    {
+        [, , $response] = $this->call('DELETE', '/api/providers');
+
+        self::assertSame('GET', $response->getHeaderLine('Allow'));
+    }
+
+    public function testCronKeyCanBeSentAsAHeader(): void
+    {
+        [$status] = $this->call('GET', '/api/cron', headers: ['X-Cron-Key' => self::CRON_KEY]);
+
+        self::assertSame(200, $status);
+    }
+
     public function testCronRequiresTheKeyAndRunsTheQueue(): void
     {
         [, $created] = $this->call('POST', '/api/bookings', $this->booking());

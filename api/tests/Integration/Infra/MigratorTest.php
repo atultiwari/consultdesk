@@ -29,8 +29,8 @@ final class MigratorTest extends IntegrationTestCase
         self::dropAllTables($this->pdo);
         $migrator = new Migrator($this->pdo, self::MIGRATIONS_DIR, new FrozenClock('2026-10-05T00:00Z'));
 
-        self::assertSame(['001_init', '002_notifications_and_rate_limits'], $migrator->pending());
-        self::assertSame(['001_init', '002_notifications_and_rate_limits'], $migrator->migrate());
+        self::assertSame(['001_init', '002_notifications_and_rate_limits', '003_customer_email_index'], $migrator->pending());
+        self::assertSame(['001_init', '002_notifications_and_rate_limits', '003_customer_email_index'], $migrator->migrate());
         self::assertSame([], $migrator->pending());
         self::assertSame([], $migrator->migrate(), 'a second run is a no-op');
 

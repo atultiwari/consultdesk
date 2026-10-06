@@ -16,6 +16,7 @@ with the same names. Never commit real values.
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL / MariaDB database |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_ENCRYPTION`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail (see below) |
 | `MAIL_FROM`, `MAIL_FROM_NAME` | Sender address and name on booking emails |
+| `TRUSTED_PROXIES`, `TRUSTED_PROXY_HEADER` | Only if the site sits behind a proxy such as Cloudflare: the proxy's IP ranges (comma-separated CIDRs) and the header carrying the visitor's IP (e.g. `CF-Connecting-IP`). Leave empty otherwise; rate limits then use the connecting IP. |
 
 ## Outgoing email (Phase 2)
 
@@ -39,5 +40,7 @@ One scheduled task expires lapsed holds and sends queued emails. Without it, no 
    `php /home/<your-user>/domains/<your-domain>/public_html/api/bin/cron.php`
 3. Schedule: every minute (`* * * * *`).
 
-If a host can only call a URL, use `https://<your-site>/api/cron?key=<CRON_KEY>` instead. The CLI form
-is preferred because the key never appears in access logs.
+If a host can only call a URL, call `https://<your-site>/api/cron` with the header `X-Cron-Key: <CRON_KEY>`
+(or, as a last resort, `?key=<CRON_KEY>`). The CLI form is preferred because the key never appears in logs.
+
+The local-development `APP_KEY` and `CRON_KEY` from `docker-compose.yml` are refused on any `https://` site.
