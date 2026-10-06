@@ -35,6 +35,9 @@ final class ErrorHandling implements MiddlewareInterface
         'service_not_bookable' => 404,
         'hold_expired' => 410,
         'too_many_open_bookings' => 409,
+        'invalid_credentials' => 401,
+        'too_many_attempts' => 429,
+        'invalid_reset_link' => 400,
     ];
 
     public function __construct(

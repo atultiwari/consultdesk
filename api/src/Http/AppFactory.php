@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace ConsultDesk\Http;
 
 use ConsultDesk\Bootstrap\AppServices;
+use ConsultDesk\Http\Action\AdminAuthActions;
 use ConsultDesk\Http\Action\BookingActions;
 use ConsultDesk\Http\Action\CronAction;
 use ConsultDesk\Http\Action\GoogleCallbackAction;
 use ConsultDesk\Http\Action\ProviderActions;
 use ConsultDesk\Http\Action\TelegramWebhookAction;
+use ConsultDesk\Http\Middleware\AdminAuth;
 use ConsultDesk\Http\Middleware\ErrorHandling;
 use ConsultDesk\Http\Middleware\RateLimit;
 use ConsultDesk\Http\Middleware\SecurityHeaders;
@@ -61,6 +63,25 @@ final class AppFactory
             $api->post('/webhooks/telegram', static fn($rq, $rs) => (new TelegramWebhookAction($services->telegramBot(), $services->config->telegram?->webhookSecret))($rq, $rs))->add($limit('telegram', 600, self::MINUTE));
 
             $api->get('/google/callback', static fn($rq, $rs) => (new GoogleCallbackAction($services->googleOAuth()))($rq, $rs))->add($limit('google', 30, self::MINUTE));
+
+            $auth = static fn(): AdminAuthActions => new AdminAuthActions(
+                $services->config->adminPath,
+                $services->authService(),
+                $services->passwordResets(),
+                $services->adminCookie(),
+                $services->clientIp(),
+            );
+            $api->get('/admin/entry/{path}', static fn($rq, $rs, array $a) => $auth()->entry($rq, $rs, $a))->add($limit('admin-entry', 30, self::MINUTE));
+            $api->post('/admin/login', static fn($rq, $rs) => $auth()->login($rq, $rs))->add($limit('admin-login', 30, self::MINUTE));
+            $api->post('/admin/password/forgot', static fn($rq, $rs) => $auth()->forgot($rq, $rs))->add($limit('admin-forgot', 5, self::HOUR));
+            $api->post('/admin/password/reset', static fn($rq, $rs) => $auth()->reset($rq, $rs))->add($limit('admin-reset', 10, self::HOUR));
+
+            $api->group('/admin', static function (RouteCollectorProxy $admin) use ($services, $auth): void {
+                $admin->get('/me', static fn($rq, $rs) => $auth()->me($rq, $rs));
+                $admin->post('/logout', static fn($rq, $rs) => $auth()->logout($rq, $rs));
+                $admin->post('/logout-all', static fn($rq, $rs) => $auth()->logoutAll($rq, $rs));
+                AdminRoutes::register($admin, $services);
+            })->add(new AdminAuth(static fn() => $services->sessions(), $services->adminCookie()))->add($limit('admin', 600, self::MINUTE));
 
             $api->get('/cron', static fn($rq, $rs) => (new CronAction($services->cronRunner(), $services->config->cronKey))($rq, $rs))->add($limit('cron', 30, self::MINUTE));
         });

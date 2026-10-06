@@ -13,6 +13,8 @@ services:
       # No default on purpose: generate a local key into .env (see README), never commit one.
       APP_KEY: ${APP_KEY:?Set APP_KEY in .env - see README "Local development"}
       CRON_KEY: ${CRON_KEY:-local-dev-cron-key-not-secret-0000}
+      # The admin panel lives at http://localhost:5173/<ADMIN_PATH>. Pick your own in production.
+      ADMIN_PATH: ${ADMIN_PATH:-desk-local-dev}
       MAIL_FROM: bookings@example.test
       MAIL_FROM_NAME: ConsultDesk (local)
       SMTP_ENCRYPTION: none

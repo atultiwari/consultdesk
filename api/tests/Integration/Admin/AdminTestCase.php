@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ConsultDesk\Tests\Integration\Admin;
+
+use ConsultDesk\Tests\Integration\Http\ApiTestCase;
+use ConsultDesk\Tests\Integration\Support\Fixtures;
+
+/**
+ * Admin API tests: sign in through the real endpoints and keep the session cookie and CSRF token.
+ */
+abstract class AdminTestCase extends ApiTestCase
+{
+    /** A throwaway password made fresh for each test, so none is written down in the code. */
+    protected string $password = '';
+
+    protected string $cookie = '';
+    protected string $csrf = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->password = self::throwawayPassword();
+    }
+
+    protected static function throwawayPassword(): string
+    {
+        return bin2hex(random_bytes(12));
+    }
+
+    /**
+     * @return array{int, array<string, mixed>, \Psr\Http\Message\ResponseInterface}
+     */
+    protected function resetWith(string $token, string $newPassword): array
+    {
+        return $this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $token, 'password' => $newPassword]);
+    }
+
+    protected function createUser(string $email, string $role = 'owner', ?int $providerId = null): int
+    {
+        $id = Fixtures::user($this->pdo, $role, $providerId, $email);
+        $statement = $this->pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+        $statement->execute([password_hash($this->password, PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]), $id]);
+
+        return $id;
+    }
+
+    /**
+     * @return array{int, array<string, mixed>, \Psr\Http\Message\ResponseInterface}
+     */
+    protected function login(string $email, ?string $password = null, string $ip = '203.0.113.7'): array
+    {
+        $password ??= $this->password;
+        $result = $this->call('POST', '/api/admin/login', ['path' => self::ADMIN_PATH, 'email' => $email, 'password' => $password], $ip);
+        [$status, $body, $response] = $result;
+        if ($status === 200) {
+            preg_match('/^([^=]+=[^;]+)/', $response->getHeaderLine('Set-Cookie'), $m);
+            $this->cookie = $m[1] ?? '';
+            $this->csrf = (string) ($body['data']['csrf_token'] ?? '');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Calls the admin API as the signed-in user.
+     *
+     * @param array<string, mixed>|null $json
+     *
+     * @return array{int, array<string, mixed>, \Psr\Http\Message\ResponseInterface}
+     */
+    protected function admin(string $method, string $uri, ?array $json = null, bool $withCsrf = true): array
+    {
+        $headers = ['Cookie' => $this->cookie];
+        if ($withCsrf && $method !== 'GET') {
+            $headers['X-CSRF-Token'] = $this->csrf;
+        }
+
+        return $this->call($method, $uri, $json ?? ($method === 'GET' ? null : []), headers: $headers);
+    }
+}

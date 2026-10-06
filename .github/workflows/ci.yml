@@ -114,6 +114,8 @@ jobs:
       SMTP_PORT: '1025'
       SMTP_ENCRYPTION: none
       MAIL_FROM: bookings@example.test
+      ADMIN_PATH: desk-e2e-admin
+      E2E_ADMIN_PATH: desk-e2e-admin
       E2E_PHP: php
     steps:
       - uses: actions/checkout@v4

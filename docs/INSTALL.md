@@ -13,6 +13,7 @@ with the same names. Never commit real values.
 | `APP_URL` | Public address of the booking site, e.g. `https://book.atultiwari.com` |
 | `APP_KEY` | `base64:` followed by 32 random bytes. Encrypts tokens at rest. Generate with `php -r 'echo "base64:".base64_encode(random_bytes(32));'` and **keep a backup**: losing it breaks status links in old emails. |
 | `CRON_KEY` | At least 32 random characters; only needed if the cron is triggered by URL |
+| `ADMIN_PATH` | The secret first part of the admin address, e.g. `desk-7q2x9m4k` for `https://<site>/desk-7q2x9m4k`. 8–64 lowercase letters, digits and dashes, starting with a letter or digit; not `api`, `assets`, `install` or `embed-js`. Leave empty to switch the admin area off. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL / MariaDB database |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_ENCRYPTION`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail (see below) |
 | `MAIL_FROM`, `MAIL_FROM_NAME` | Sender address and name on booking emails |
@@ -143,6 +144,54 @@ forgets the tokens.
 
 Free/busy is fetched per week and cached for 2 minutes; if Google is unreachable, that is remembered
 for a minute and bookings stay open.
+
+## Admin panel (Phase 6)
+
+The admin area is at `https://<your-booking-site>/<ADMIN_PATH>`. Anywhere else, including a wrong
+guess at the path, shows the ordinary "page not found", and the path itself never appears in the
+site's code. Choose something unguessable, and don't link to it from public pages.
+
+### First owner
+
+Create the first account from the server's shell (the installer will do this in Phase 8):
+
+```bash
+php bin/user.php create --email=you@example.com --role=owner --name="Your Name"
+```
+
+It asks for the password twice without showing it (at least 10 characters; a short phrase works
+well). Other commands:
+
+```bash
+php bin/user.php create --email=teacher@example.com --role=provider --provider=<provider-slug>
+php bin/user.php reset-password --email=you@example.com
+php bin/user.php list
+```
+
+`reset-password` also signs that person out everywhere.
+
+### Who can do what
+
+- **Owner** and **admin**: every provider and booking, adding providers, closing the whole
+  organisation for a holiday. (Owners also get Users, Branding and Payments in Phase 6b.)
+- **Provider**: their own profile, UPI details, booking rules, sessions, weekly hours, blocked times
+  and bookings, and nothing else.
+
+### Signing in
+
+- A sign-in lasts 8 hours of inactivity and 30 days at most. "Sign out everywhere" ends every
+  session for that account.
+- After 5 wrong passwords in 15 minutes from one address, that address must wait out the 15 minutes.
+  After 20 wrong passwords for one account from anywhere, the account pauses too, except from
+  addresses where it has signed in before, so a stranger cannot lock the owner out.
+  `php bin/user.php reset-password` lifts a pause straight away.
+- "Forgot your password?" emails a link that works once, for 30 minutes; a newer link replaces older
+  ones, and an account gets at most three an hour. It needs outgoing email and the cron (above).
+  Asking for a link never says, or takes longer to say, whether the address has an account.
+- The admin area needs `APP_URL` to start with `https://` (plain HTTP is allowed only for
+  `localhost` and `*.test` while developing).
+- Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
+  their old and new values.
 
 ## Putting booking on another site (Phase 5)
 
