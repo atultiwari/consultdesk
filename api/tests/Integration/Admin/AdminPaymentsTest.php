@@ -82,6 +82,25 @@ final class AdminPaymentsTest extends AdminTestCase
         self::assertSame([409, 'links_open'], $this->codeOf($this->admin('DELETE', '/api/admin/payments/razorpay')));
     }
 
+    public function testOnlinePaymentCanBeOfferedOnEveryEligibleSessionAtOnce(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $paid = Fixtures::service($this->pdo, $this->demo, ['slug' => 'paid', 'payment_methods' => '["upi"]']);
+        $already = Fixtures::service($this->pdo, $this->demo, ['slug' => 'already', 'payment_methods' => '["upi","razorpay_link"]']);
+        $free = Fixtures::service($this->pdo, $this->demo, ['slug' => 'free', 'price_minor' => 0, 'payment_methods' => '["free"]']);
+        $approval = Fixtures::service($this->pdo, $this->demo, ['slug' => 'approval', 'payment_methods' => '["upi"]', 'requires_approval' => 1]);
+
+        [$status, $body] = $this->admin('POST', '/api/admin/payments/razorpay/offer-everywhere');
+
+        self::assertSame([200, 1], [$status, $body['data']['sessions_updated']]);
+        $methods = fn(int $id): array => json_decode((string) (self::column($this->pdo, 'SELECT payment_methods FROM services WHERE id = :id', ['id' => $id])[0] ?? '[]'), true);
+        self::assertSame(['upi', 'razorpay_link'], $methods($paid));
+        self::assertSame(['upi', 'razorpay_link'], $methods($already));
+        self::assertSame(['free'], $methods($free));
+        self::assertSame(['upi'], $methods($approval), 'paying online would skip the approval');
+    }
+
     public function testATeacherCanHaveTheirOwnRazorpayAccount(): void
     {
         $this->createUser('owner@example.test');

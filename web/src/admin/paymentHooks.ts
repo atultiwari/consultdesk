@@ -95,3 +95,18 @@ export function useRemoveProviderKeys() {
     onSuccess: () => client.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useOfferEverywhere() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      adminFetch<{ sessions_updated: number }>('/payments/razorpay/offer-everywhere', {
+        method: 'POST',
+      }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['admin', 'services'] }),
+        client.invalidateQueries({ queryKey: ['provider'] }),
+      ]),
+  });
+}

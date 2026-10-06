@@ -32,6 +32,8 @@ export function ServicesPanel({ providerId }: { providerId: number }) {
                 {s.duration_min} min ·{' '}
                 {s.price_minor > 0 ? formatMoney(s.price_minor, s.currency) : 'Free'} ·{' '}
                 {s.questions.length} {s.questions.length === 1 ? 'question' : 'questions'}
+                {s.price_minor > 0 &&
+                  ` · ${s.payment_methods.map((m) => (m === 'upi' ? 'UPI' : m === 'razorpay_link' ? 'Online' : m)).join(' + ')}`}
               </span>
             </span>
             {s.requires_approval && <Badge tone="accent">Needs approval</Badge>}

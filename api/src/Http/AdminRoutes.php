@@ -75,6 +75,7 @@ final class AdminRoutes
             $services->razorpayApi(),
             new ProviderSettings($pdo()),
             $services->auditLog(),
+            $pdo(),
             $services->config->appUrl,
         );
         $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog());
@@ -132,6 +133,7 @@ final class AdminRoutes
         $admin->put('/payments/razorpay', static fn($rq, $rs) => $payments()->saveOrgKeys($rq, $rs));
         $admin->delete('/payments/razorpay', static fn($rq, $rs) => $payments()->removeOrgKeys($rq, $rs));
         $admin->post('/payments/razorpay/check', static fn($rq, $rs) => $payments()->check($rq, $rs));
+        $admin->post('/payments/razorpay/offer-everywhere', static fn($rq, $rs) => $payments()->offerEverywhere($rq, $rs));
         $admin->post('/payments/razorpay/webhook-secret', static fn($rq, $rs) => $payments()->newWebhookSecret($rq, $rs));
         $admin->put("/providers/{$id}/razorpay", static fn($rq, $rs, array $a) => $payments()->saveProviderKeys($rq, $rs, $a));
         $admin->post("/providers/{$id}/razorpay/check", static fn($rq, $rs, array $a) => $payments()->checkProviderKeys($rq, $rs, $a));
