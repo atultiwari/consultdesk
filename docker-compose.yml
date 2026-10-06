@@ -8,6 +8,13 @@ services:
       - ./api:/var/www/api
     environment:
       APP_DEBUG: "1"
+      # Throwaway local-dev values. Real installs get these from config.php (Phase 8 installer).
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      APP_KEY: ${APP_KEY:-base64:bG9jYWwtZGV2LW9ubHkta2V5LW5vdC1zZWNyZXQhISE=}
+      CRON_KEY: ${CRON_KEY:-local-dev-cron-key-not-secret-0000}
+      MAIL_FROM: bookings@example.test
+      MAIL_FROM_NAME: ConsultDesk (local)
+      SMTP_ENCRYPTION: none
       DB_HOST: db
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:-consultdesk}

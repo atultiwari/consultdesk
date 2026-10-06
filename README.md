@@ -2,7 +2,7 @@
 
 ConsultDesk is a self-hosted app for booking consultations with doctors, teachers and mentors. It's built to run on ordinary shared hosting with just PHP and MySQL. Each provider's calendar syncs with Google Calendar, and one installation can hold several providers. Bookings can be paid by manual UPI, confirmed through a Telegram bot or the admin panel, or through Razorpay Payment Links. A secret admin panel manages availability, blocked times, services and rules.
 
-**Status:** Phase 1 (domain core) done: schema and migrator, slot engine, booking state machine and a concurrency-safe `hold()`. No HTTP endpoints or UI yet.
+**Status:** Phase 2 (public API and manual UPI) done: booking API, UPI flow with UTR submission, email notifications through an outbox, and cron. No UI yet (Phase 5).
 
 - Build plan: [docs/PLAN.md](docs/PLAN.md)
 - Kick-off prompt for a new Claude Code session: [START_PROMPT.md](START_PROMPT.md)
@@ -27,6 +27,19 @@ docker compose up -d --build  # API on :8080, MariaDB on :3307, Mailpit UI on :8
 docker compose exec api composer install
 ```
 
+Create the schema and some placeholder data (a `demo` provider with the §8 services):
+
+```bash
+docker compose exec api composer migrate
+docker compose exec api php bin/seed-dev.php
+```
+
+Try it: `curl http://localhost:8080/api/providers/demo`. Emails land in Mailpit at http://localhost:8025 after the cron runs:
+
+```bash
+docker compose exec api php bin/cron.php
+```
+
 Then start the frontend (proxies `/api` to `:8080`):
 
 ```bash
@@ -44,6 +57,8 @@ Run inside the container (PHP 8.1, pcov for coverage) with `docker compose exec 
 | `composer test:coverage` | Tests + text and Clover coverage (needs pcov — use the container) |
 | `composer coverage:check` | Fails if line coverage < 80 % overall or < 90 % in `src/Domain/` |
 | `composer migrate` / `composer migrate:status` | Apply / list pending migrations (reads `DB_*` env vars) |
+| `php bin/cron.php` | Expire lapsed holds, send queued emails, prune rate limits (run every minute in production) |
+| `php bin/seed-dev.php` | Local only: demo provider, weekly hours and service templates |
 | `composer stan` | PHPStan level 8 |
 | `composer cs` / `composer cs:fix` | Check / fix code style |
 

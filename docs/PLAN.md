@@ -62,7 +62,7 @@ So it is built as an **independent, installable product**, not as code inside th
 | DB | **MySQL 8 / MariaDB 10.4+**, InnoDB, utf8mb4 | Available on every shared host |
 | HTTP clients | Guzzle; Google Calendar, Razorpay and Telegram called **over plain REST**, not `google/apiclient` (about 100 MB) | Keeps the zip small |
 | Mail | PHPMailer over the host's SMTP | Hostinger includes mailboxes |
-| Validation | `respect/validation`, with request DTOs | Validates at the boundary |
+| Validation | A small in-house typed validator (`Http\Validation\Input`) plus request DTOs | Validates at the boundary; no extra dependency, clean PHPStan, our own messages (changed from `respect/validation` in Phase 2) |
 | Frontend | **React 19 + TypeScript + Vite**, React Router (history mode; `.htaccess` rewrites to `index.html`), TanStack Query, React Hook Form + zod | |
 | UI primitives | **Radix UI** headless primitives (Dialog, Popover, Select, Tabs, Toast) with **our own CSS** (CSS variables, no Tailwind default look) | Accessible without the template aesthetic |
 | Dates | `@date-fns/tz` (frontend); PHP `DateTimeImmutable` + `IntlDateFormatter` (API) | Handles timezones and DST |
@@ -109,14 +109,14 @@ consultdesk/
 - `settings`: key/value JSON. Holds org name, branding (logo, accent colours, fonts), default timezone, the admin slug, SMTP settings and the cron key.
 - `users`: `id`, `email`, `password_hash` (argon2id), `role` (owner | admin | provider), `provider_id` (nullable), `last_login_at`.
 - `providers`: `slug`, `name`, `title`, `bio`, `photo_path`, `timezone`, `active`, `sort_order`.
-  - Contact: `whatsapp`, `telegram_chat_id`.
+  - Contact: `whatsapp`, `telegram_chat_id`, `notify_email` (provider-side emails; the owner gets a copy, or gets them alone when this is empty).
   - UPI: `upi_vpa`, `upi_payee_name`.
   - Booking rules: `min_notice_min`, `horizon_days`, `buffer_before`, `buffer_after`, `slot_interval`, `max_per_day`. All are editable per provider in the admin panel (Rules).
 - `services`: `provider_id`, `slug`, `title`, `tagline`, `description`, `audience`, `duration_min` (1–1440), `price_minor`, `currency`, `requires_approval`, `payment_methods` (JSON), `questions` (JSON schema: text, textarea, select, url, checkbox, required), `active`, `sort_order`.
 - `availability_rules`: `provider_id`, `weekday` (ISO: 1 = Monday … 7 = Sunday), `start_time`, `end_time`, and an optional `service_id`. If a service has its own rules, **only those apply** to it; otherwise the provider's general rules apply.
 - `blocked_periods`: `provider_id` (nullable means an org-wide holiday), `start_at`, `end_at`, `all_day`, `reason`.
 - `bookings`:
-  - Identity: `ref` (e.g. `CD-7F3K`), `public_token_hash`, `provider_id`, `service_id`, `start_at`/`end_at` (UTC).
+  - Identity: `ref` (e.g. `CD-7F3K`), `public_token_hash` (lookups), `public_token_enc` (sodium-encrypted copy so every email can carry the status link), `provider_id`, `service_id`, `start_at`/`end_at` (UTC).
   - Customer: name, email, phone and timezone, plus `answers` (JSON).
   - Payment: `amount_minor`, `currency`, `payment_method` (upi | razorpay_link | free), `utr`, `gateway_ref`, `gateway_payment_id`.
   - Calendar: `gcal_event_id`, `meet_url`.
@@ -124,7 +124,7 @@ consultdesk/
 - `payment_gateways`: org-level Razorpay keys (encrypted), with optional per-provider override.
 - `payment_events`: raw webhook payload; `event_id` is UNIQUE so duplicates are ignored.
 - `oauth_tokens`: Google refresh token per provider, encrypted with sodium using a key from `config.php`.
-- Housekeeping: `outbox_jobs`, `login_attempts`, `sessions`, `audit_log`, `migrations`.
+- Housekeeping: `outbox_jobs`, `login_attempts`, `sessions`, `audit_log`, `rate_limits` (fixed-window counters keyed by an HMAC of the client IP), `migrations`.
 
 **Preventing double bookings without Postgres exclusion constraints:**
 1. `BookingService::hold()` opens a transaction and runs `SELECT … FROM providers WHERE id=? FOR UPDATE`, which serialises bookings per provider.
@@ -154,6 +154,8 @@ consultdesk/
 2. **Book.** Pick a service, then a date and slot, then fill the intake form, then pay.
    - Spam protection: a honeypot field and an IP rate limit. Cloudflare Turnstile is optional.
    - The status page lives at `/b/{ref}?t={token}`, and that link is also emailed.
+   - Public API (Phase 2): `GET /api/providers`, `GET /api/providers/{slug}`, `GET /api/providers/{slug}/services/{service}/slots?from&to`, `POST /api/bookings`, `GET /api/bookings/{ref}?t=`, `POST /api/bookings/{ref}/utr`. POST bodies must be `application/json`. Free services without approval are confirmed straight away.
+   - Emails: each booking event fans out into one outbox job per email (customer, or staff = provider `notify_email` + owners). Emails are rendered at send time; an event that is stale when cron runs (e.g. "held" after the customer already paid) sends nothing.
 3. **Manual UPI.**
    - The UI shows the amount, a `upi://pay?pa&pn&am&cu=INR&tn={ref}` deep link on mobile and a QR code on desktop, using the provider's own VPA.
    - The customer submits the **12-digit UTR** (validated), and can optionally tap **"Send screenshot on WhatsApp"**, which opens `wa.me/<provider whatsapp>?text=<prefilled ref, amount, slot>`.
@@ -276,7 +278,7 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 - CSRF on every state-changing admin route.
 - CSP headers in the shipped `.htaccess`.
 - `/install` locks itself once installation is done.
-- Public status pages are reachable only with the token, and `public_token` is stored as a hash.
+- Public status pages are reachable only with the token. The token is looked up by hash and kept otherwise only encrypted (`public_token_enc`); unknown ref and wrong token return the same 404.
 - Uploads (provider photos only) are checked by MIME, re-encoded with GD, and stored outside executable paths.
 
 ## 11. Verification
