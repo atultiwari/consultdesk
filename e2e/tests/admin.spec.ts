@@ -20,15 +20,15 @@ async function signIn(page: Page): Promise<void> {
 
 /** A UPI booking with a submitted UTR, created through the public API. */
 async function bookingAwaitingVerification(page: Page): Promise<string> {
-  const slots = await page.request.get('/api/providers/demo/services/research-guidance/slots');
+  const slots = await page.request.get('/api/providers/demo/services/code-review/slots');
   const { data } = (await slots.json()) as {
     data: { slots: { start: string }[] };
   };
-  const start = data.slots.at(-1 - (Date.now() % 5))?.start ?? '';
+  const start = data.slots.at(-3 - (Date.now() % 5))?.start ?? '';
   const created = await page.request.post('/api/bookings', {
     data: {
       provider: 'demo',
-      service: 'research-guidance',
+      service: 'code-review',
       start,
       payment_method: 'upi',
       customer: {
@@ -37,9 +37,8 @@ async function bookingAwaitingVerification(page: Page): Promise<string> {
         phone: '+910000000000',
       },
       answers: {
-        role: 'Researcher',
-        goal: 'A sanity check of my analysis plan.',
-        stage: 'Analysis',
+        repo_link: 'https://example.test/placeholder-repo',
+        task: 'Classifies placeholder images.',
         no_patient_data: true,
       },
     },
