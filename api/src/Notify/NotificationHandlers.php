@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Notify;
 
+use ConsultDesk\Calendar\CalendarServices;
+use ConsultDesk\Calendar\GoogleCalendar;
+use ConsultDesk\Calendar\GoogleCreateEventHandler;
+use ConsultDesk\Calendar\GoogleDeleteEventHandler;
+use ConsultDesk\Calendar\GoogleEventHandler;
 use ConsultDesk\Domain\Booking\BookingEvent;
 use ConsultDesk\Domain\Booking\BookingViewRepository;
 use ConsultDesk\Infra\Clock;
@@ -33,6 +38,7 @@ final class NotificationHandlers
         string $appUrl,
         ?TelegramServices $telegram = null,
         ?Clock $clock = null,
+        ?CalendarServices $calendar = null,
     ): array {
         $handlers = [BookingEventHandler::EMAIL_JOB => new BookingEmailHandler($views, $emails, $mailer, $crypto, $appUrl)];
         if ($telegram !== null) {
@@ -40,11 +46,21 @@ final class NotificationHandlers
             $handlers[TelegramEventHandler::RESOLVE_JOB] = new TelegramResolveHandler($views, $telegram);
         }
 
+        if ($calendar !== null) {
+            $handlers[GoogleEventHandler::CREATE_JOB] = new GoogleCreateEventHandler($views, $calendar->calendar, $calendar->links);
+            $handlers[GoogleEventHandler::DELETE_JOB] = new GoogleDeleteEventHandler($views, $calendar->calendar, $calendar->links);
+            $handlers[GoogleCalendar::DISCONNECTED_JOB] = $calendar->disconnected;
+        }
+
         foreach (BookingEvent::cases() as $event) {
-            $email = new BookingEventHandler($event, $views, $outbox);
-            $handlers[$event->value] = $telegram === null
-                ? $email
-                : new CompositeJobHandler([$email, new TelegramEventHandler($event, $views, $outbox, $telegram->directory)]);
+            $fanOut = [new BookingEventHandler($event, $views, $outbox, $clock)];
+            if ($telegram !== null) {
+                $fanOut[] = new TelegramEventHandler($event, $views, $outbox, $telegram->directory);
+            }
+            if ($calendar !== null) {
+                $fanOut[] = new GoogleEventHandler($event, $views, $outbox);
+            }
+            $handlers[$event->value] = count($fanOut) === 1 ? $fanOut[0] : new CompositeJobHandler($fanOut);
         }
 
         return $handlers;

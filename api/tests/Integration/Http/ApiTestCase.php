@@ -10,6 +10,7 @@ use ConsultDesk\Infra\Config;
 use ConsultDesk\Infra\FrozenClock;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
 use ConsultDesk\Tests\Support\ArrayMailer;
+use ConsultDesk\Tests\Support\FakeGoogleApi;
 use ConsultDesk\Tests\Support\FakeTelegramApi;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -23,6 +24,7 @@ abstract class ApiTestCase extends IntegrationTestCase
 
     protected ArrayMailer $mailer;
     protected ?FakeTelegramApi $telegram = null;
+    protected ?FakeGoogleApi $google = null;
     private string $now = self::NOW;
 
     protected function setUp(): void
@@ -50,7 +52,7 @@ abstract class ApiTestCase extends IntegrationTestCase
             ...$this->extraEnv(),
         ]);
 
-        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram);
+        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram, googleApi: $this->google);
     }
 
     /**

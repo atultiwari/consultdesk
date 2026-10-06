@@ -43,8 +43,18 @@ final class SlotFinder
             now: $now,
             blocked: $this->bookings->blockedPeriods($providerId, $range),
             bookings: $this->bookings->blockingIntervals($providerId, $range, $now),
-            busy: $this->busy->busy($providerId, $range),
+            busy: $this->busyIn($providerId, $range, $now, $provider->rules),
         ));
+    }
+
+    /**
+     * @return list<Interval>
+     */
+    private function busyIn(int $providerId, Interval $range, DateTimeImmutable $now, BookingRules $rules): array
+    {
+        $window = BusyWindow::clip($range, $now, $rules);
+
+        return $window === null ? [] : $this->busy->busy($providerId, $window);
     }
 
     /**

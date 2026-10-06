@@ -16,4 +16,9 @@ interface BookingViewRepository
      * @return list<string>
      */
     public function staffEmails(BookingView $booking): array;
+
+    /**
+     * @return list<string>
+     */
+    public function staffEmailsForProvider(int $providerId): array;
 }

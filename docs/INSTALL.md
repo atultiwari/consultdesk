@@ -17,6 +17,7 @@ with the same names. Never commit real values.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_ENCRYPTION`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail (see below) |
 | `MAIL_FROM`, `MAIL_FROM_NAME` | Sender address and name on booking emails |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME` | Optional Telegram bot (see below). Leave the token empty to turn Telegram off. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google Calendar integration (see below). Leave empty to turn it off. |
 | `TRUSTED_PROXIES`, `TRUSTED_PROXY_HEADER` | Only if the site sits behind a proxy such as Cloudflare: the proxy's IP ranges (comma-separated CIDRs) and the header carrying the visitor's IP (e.g. `CF-Connecting-IP`). Leave empty otherwise; rate limits then use the connecting IP. |
 
 ## Outgoing email (Phase 2)
@@ -90,3 +91,55 @@ don't forward them). Open it on the phone that should receive alerts and tap **S
 
 Alerts and buttons work only in a **private chat** with the bot, not in groups. Sending `/stop` to the
 bot unlinks that chat.
+
+## Google Calendar (Phase 4, optional)
+
+Each provider can connect their own Google account so that their calendar blocks clashing slots, and
+confirmed bookings appear on it with a Google Meet link and an invite to the customer. The site needs
+one Google Cloud "OAuth client"; every provider then connects their own account to it.
+
+### 1. Create the OAuth client (about 10 minutes, once per site)
+
+1. Go to <https://console.cloud.google.com/>, sign in, and create a project (e.g. `ConsultDesk`).
+2. **APIs & Services → Library**: search for **Google Calendar API** and click **Enable**.
+3. **APIs & Services → OAuth consent screen** (called "Google Auth Platform" in newer consoles):
+   - User type **External**. App name, support email and developer email as you like.
+   - **Data access / Scopes → Add or remove scopes**, add:
+     `.../auth/calendar.events`, `.../auth/calendar.freebusy`, `.../auth/calendar.calendarlist.readonly`,
+     plus `openid` and `.../auth/userinfo.email`.
+   - **Audience / Publishing status: click "Publish app" → In production.** In "Testing" mode Google
+     expires the connection after 7 days. An unverified app works for up to 100 accounts; providers
+     will see a "Google hasn't verified this app" screen and choose **Advanced → Go to … (unsafe)**,
+     which is expected for a private installation.
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type **Web application**.
+   - **Authorised redirect URI**: `https://<your-booking-site>/api/google/callback`
+     (exactly `APP_URL` + `/api/google/callback`).
+5. Copy the **Client ID** and **Client secret** into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+### 2. Connect each provider
+
+```bash
+php api/bin/google.php connect <provider-slug> <provider's-google-email>
+```
+
+This prints a Google link that works once, for 30 minutes, and **only for that Google account**:
+anyone else who opens it is refused. Send it to the provider; they sign in, tick all the calendar
+permissions and allow. The page then says "Google Calendar connected".
+
+To move a provider to a different Google account, add `--replace` (the old access is revoked).
+
+By default only the provider's primary calendar blocks time and receives events. To change that:
+
+```bash
+php api/bin/google.php calendars <provider-slug>          # list calendar ids
+php api/bin/google.php set-calendars <provider-slug> --busy=<id>,<id> --target=<id>
+php api/bin/google.php status <provider-slug>
+```
+
+If a provider removes the app's access in their Google account, bookings keep working (without the
+clash check), staff get one email, and `connect` must be run again. `disconnect` revokes access and
+forgets the tokens.
+
+Free/busy is fetched per week and cached for 2 minutes; if Google is unreachable, that is remembered
+for a minute and bookings stay open.
