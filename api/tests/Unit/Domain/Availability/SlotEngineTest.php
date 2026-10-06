@@ -187,6 +187,33 @@ final class SlotEngineTest extends TestCase
         self::assertSame(['2026-03-29T00:00Z', '2026-03-29T01:00Z', '2026-03-29T02:00Z'], $this->starts($slots));
     }
 
+    public function testWindowEntirelyInsideTheSpringForwardGapIsSkipped(): void
+    {
+        // 01:00–02:00 does not exist in London on 2026-03-29; other days still work.
+        $slots = $this->slots(
+            weeklyRules: [new WeeklyRule(7, '01:00', '01:45'), new WeeklyRule(6, '01:00', '01:45')],
+            rules: $this->rules(interval: 15),
+            timezone: 'Europe/London',
+            from: '2026-03-28',
+            to: '2026-03-29',
+            now: '2026-03-01T00:00Z',
+            duration: 30,
+        );
+
+        self::assertSame(['2026-03-28T01:00Z', '2026-03-28T01:15Z'], $this->starts($slots));
+    }
+
+    public function testWindowStartingInTheGapStartsAtTheClockChange(): void
+    {
+        // New York jumps from 02:00 EST to 03:00 EDT (07:00Z) on 2027-03-14.
+        $gapOnly = [new WeeklyRule(7, '02:00', '03:00')];
+        $straddling = [new WeeklyRule(7, '02:30', '04:00')];
+        $args = ['timezone' => 'America/New_York', 'from' => '2027-03-14', 'to' => '2027-03-14', 'now' => '2027-03-01T00:00Z'];
+
+        self::assertSame([], $this->slots(...['weeklyRules' => $gapOnly, ...$args]));
+        self::assertSame(['2027-03-14T07:00Z'], $this->starts($this->slots(...['weeklyRules' => $straddling, ...$args])));
+    }
+
     public function testResultsAreSortedAcrossDays(): void
     {
         $slots = $this->slots(

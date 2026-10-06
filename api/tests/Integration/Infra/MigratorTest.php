@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Tests\Integration\Infra;
 
+use ConsultDesk\Infra\Db;
 use ConsultDesk\Infra\FrozenClock;
 use ConsultDesk\Infra\Migrator;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
@@ -70,6 +71,22 @@ final class MigratorTest extends IntegrationTestCase
             self::assertStringContainsString('001_broken', $e->getMessage());
         }
         self::assertSame(['001_broken'], $migrator->pending());
+    }
+
+    public function testRefusesToRunWhileAnotherRunHoldsTheLock(): void
+    {
+        $config = self::config();
+        self::assertNotNull($config);
+        $other = Db::connect($config)->pdo();
+        self::assertSame(['1'], self::column($other, "SELECT GET_LOCK('consultdesk_migrate', 0)"));
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('already running');
+            (new Migrator($this->pdo, self::MIGRATIONS_DIR, new FrozenClock('2026-10-05T00:00Z'), lockTimeoutSeconds: 0))->migrate();
+        } finally {
+            self::column($other, "SELECT RELEASE_LOCK('consultdesk_migrate')");
+        }
     }
 
     public function testMissingDirectoryIsReported(): void

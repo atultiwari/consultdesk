@@ -28,10 +28,13 @@ final class SqlSplitter
                 $current .= substr($sql, $i, $end - $i + 1);
                 $i = $end;
             } elseif (($char === '-' && $next === '-') || $char === '#') {
+                // Keep the newline so the tokens either side of the comment stay apart.
                 $i = self::lineEnd($sql, $i);
+                $current .= "\n";
             } elseif ($char === '/' && $next === '*') {
                 $close = strpos($sql, '*/', $i + 2);
                 $i = $close === false ? $length : $close + 1;
+                $current .= ' ';
             } elseif ($char === ';') {
                 $statements[] = $current;
                 $current = '';

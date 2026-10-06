@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ConsultDesk\Domain\Booking;
 
 use ConsultDesk\Domain\Availability\Interval;
+use ConsultDesk\Domain\Availability\SlotEngine;
+use ConsultDesk\Domain\Availability\SlotRequest;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Db;
 use DateTimeImmutable;
@@ -13,9 +15,12 @@ use RuntimeException;
 /**
  * Creates and moves bookings through their lifecycle (docs/PLAN.md §5).
  *
- * Every write locks the provider or booking row first, so concurrent requests for overlapping
- * slots are serialised per provider and exactly one can win. Side effects (calendar, email,
- * Telegram) are not done here; later phases add them through the outbox.
+ * Every write locks the provider or booking row first and reads the clock after the lock, so
+ * concurrent requests are serialised and decisions use the current time. Side effects (calendar,
+ * email, Telegram) are not done here; later phases add them through the outbox.
+ *
+ * Free services that do not require approval are held and then confirmed straight away by the
+ * caller (Phase 2); only services that require approval wait in `held` for a provider.
  */
 final class BookingService
 {
@@ -26,21 +31,23 @@ final class BookingService
         private readonly BookingRepository $bookings,
         private readonly Clock $clock,
         private readonly RefGenerator $refs,
+        private readonly SlotEngine $slotEngine = new SlotEngine(),
     ) {}
 
     /**
      * Reserves a slot while the customer pays or awaits approval.
      *
-     * Callers should first offer the slot via SlotEngine; this re-checks, under the provider lock,
-     * everything that can change between page load and submit: notice, horizon, overlaps and the daily cap.
+     * Under the provider lock, the requested start must be a slot SlotEngine offers right now:
+     * inside the weekly hours, on the slot grid, outside blocked periods, within notice and horizon,
+     * clear of other bookings by the gap and under the daily cap.
      *
      * @throws ServiceNotBookable|PaymentMethodNotAllowed|SlotUnavailable|DailyLimitReached
      */
     public function hold(HoldRequest $request): HeldBooking
     {
         return $this->db->transaction(function () use ($request): HeldBooking {
-            $now = $this->clock->now();
             $provider = $this->bookings->lockActiveProvider($request->providerId) ?? throw new ServiceNotBookable();
+            $now = $this->clock->now();
             $service = $this->bookings->findActiveService($request->serviceId);
             if ($service === null || $service->providerId !== $provider->id) {
                 throw new ServiceNotBookable();
@@ -48,11 +55,11 @@ final class BookingService
             $this->assertPaymentMethod($service, $request->paymentMethod);
 
             $slot = new Interval($request->start, $request->start->modify(sprintf('+%d minutes', $service->durationMinutes)));
-            $this->assertBookable($provider, $slot, $now);
+            $this->assertOffered($provider, $service, $slot, $now);
 
             $token = $this->refs->token();
-            $holdExpiresAt = $now->modify(sprintf('+%d minutes', HoldPolicy::holdMinutes($request->paymentMethod)));
-            $booking = new NewBooking(
+            $holdExpiresAt = min($now->modify(sprintf('+%d minutes', HoldPolicy::holdMinutes($request->paymentMethod))), $slot->start);
+            [$id, $ref] = $this->insertWithUniqueRef(new NewBooking(
                 $this->refs->next(),
                 RandomRefGenerator::hashToken($token),
                 $provider->id,
@@ -65,8 +72,7 @@ final class BookingService
                 $request->paymentMethod,
                 $holdExpiresAt,
                 $now,
-            );
-            [$id, $ref] = $this->insertWithUniqueRef($booking);
+            ));
 
             $this->bookings->audit(Actor::customer(), 'booking.held', $id, [
                 'ref' => $ref,
@@ -79,7 +85,8 @@ final class BookingService
     }
 
     /**
-     * Records the customer's UPI reference and gives the provider a day to verify it.
+     * Records the customer's UPI reference and gives the provider up to a day to verify it,
+     * but never past the start of the session.
      *
      * @throws InvalidUtr|BookingNotFound|PaymentMethodNotAllowed|HoldExpired|InvalidTransition|DuplicateUtr
      */
@@ -88,15 +95,15 @@ final class BookingService
         $validUtr = new Utr($utr);
 
         $this->db->transaction(function () use ($bookingId, $validUtr): void {
-            $now = $this->clock->now();
             $booking = $this->lockBooking($bookingId);
+            $now = $this->clock->now();
             if ($booking->paymentMethod !== PaymentMethod::Upi) {
                 throw new PaymentMethodNotAllowed();
             }
             $this->assertHoldLive($booking, $now);
             StatusMachine::assertTransition($booking->status, BookingStatus::AwaitingVerification, $booking->paymentMethod);
 
-            $verifyBy = $now->modify(sprintf('+%d minutes', HoldPolicy::VERIFICATION_WINDOW_MINUTES));
+            $verifyBy = min($now->modify(sprintf('+%d minutes', HoldPolicy::VERIFICATION_WINDOW_MINUTES)), $booking->startAt);
             $this->bookings->markAwaitingVerification($bookingId, $validUtr, $verifyBy, $now);
             $this->bookings->audit(Actor::customer(), 'booking.utr_submitted', $bookingId, ['utr' => $validUtr->value], $now);
         });
@@ -108,8 +115,8 @@ final class BookingService
     public function confirm(int $bookingId, Actor $actor): void
     {
         $this->db->transaction(function () use ($bookingId, $actor): void {
-            $now = $this->clock->now();
             $booking = $this->lockBooking($bookingId);
+            $now = $this->clock->now();
             StatusMachine::assertTransition($booking->status, BookingStatus::Confirmed, $booking->paymentMethod);
             // A lapsed hold may already have been rebooked by someone else.
             $this->assertHoldLive($booking, $now);
@@ -129,14 +136,20 @@ final class BookingService
         $this->changeStatus($bookingId, BookingStatus::Cancelled, $actor);
     }
 
+    /**
+     * @throws SessionNotStarted
+     */
     public function complete(int $bookingId, Actor $actor): void
     {
-        $this->changeStatus($bookingId, BookingStatus::Completed, $actor);
+        $this->changeStatus($bookingId, BookingStatus::Completed, $actor, afterStartOnly: true);
     }
 
+    /**
+     * @throws SessionNotStarted
+     */
     public function markNoShow(int $bookingId, Actor $actor): void
     {
-        $this->changeStatus($bookingId, BookingStatus::NoShow, $actor);
+        $this->changeStatus($bookingId, BookingStatus::NoShow, $actor, afterStartOnly: true);
     }
 
     /**
@@ -158,12 +171,15 @@ final class BookingService
         });
     }
 
-    private function changeStatus(int $bookingId, BookingStatus $to, Actor $actor): void
+    private function changeStatus(int $bookingId, BookingStatus $to, Actor $actor, bool $afterStartOnly = false): void
     {
-        $this->db->transaction(function () use ($bookingId, $to, $actor): void {
-            $now = $this->clock->now();
+        $this->db->transaction(function () use ($bookingId, $to, $actor, $afterStartOnly): void {
             $booking = $this->lockBooking($bookingId);
+            $now = $this->clock->now();
             StatusMachine::assertTransition($booking->status, $to, $booking->paymentMethod);
+            if ($afterStartOnly && $now < $booking->startAt) {
+                throw new SessionNotStarted();
+            }
 
             $this->bookings->setStatus($bookingId, $to, $now);
             $this->bookings->audit($actor, 'booking.' . $to->value, $bookingId, [], $now);
@@ -181,27 +197,53 @@ final class BookingService
         }
     }
 
-    private function assertBookable(ProviderRecord $provider, Interval $slot, DateTimeImmutable $now): void
+    /**
+     * Runs SlotEngine for the slot's local day with fresh data and requires the exact start.
+     */
+    private function assertOffered(ProviderRecord $provider, ServiceRecord $service, Interval $slot, DateTimeImmutable $now): void
     {
-        $rules = $provider->rules;
-        $earliest = $now->modify(sprintf('+%d minutes', $rules->minNoticeMinutes));
-        $latest = $now->modify(sprintf('+%d days', $rules->horizonDays));
-        if ($slot->start < $earliest || $slot->start > $latest) {
-            throw new SlotUnavailable();
+        $localDate = $slot->start->setTimezone($provider->timezone)->format('Y-m-d');
+        $dayStart = new DateTimeImmutable($localDate, $provider->timezone);
+        // A day either side catches neighbours whose gap reaches across midnight.
+        $context = new Interval($dayStart->modify('-1 day'), $dayStart->modify('+2 days'));
+        $bookings = $this->bookings->blockingIntervals($provider->id, $context, $now);
+
+        $maxPerDay = $provider->rules->maxPerDay;
+        if ($maxPerDay !== null && $this->countOnLocalDate($bookings, $provider, $localDate) >= $maxPerDay) {
+            throw new DailyLimitReached();
         }
 
-        $gap = $rules->gapMinutes();
-        if ($this->bookings->countBlockingOverlapping($provider->id, $slot->pad($gap, $gap), $now) > 0) {
-            throw new SlotUnavailable();
-        }
+        $offered = $this->slotEngine->slots(new SlotRequest(
+            timezone: $provider->timezone->getName(),
+            rules: $provider->rules,
+            weeklyRules: $this->bookings->weeklyRules($provider->id),
+            serviceId: $service->id,
+            durationMinutes: $service->durationMinutes,
+            fromDate: $localDate,
+            toDate: $localDate,
+            now: $now,
+            blocked: $this->bookings->blockedPeriods($provider->id, $context),
+            bookings: $bookings,
+        ));
 
-        if ($rules->maxPerDay !== null) {
-            $localDay = new DateTimeImmutable($slot->start->setTimezone($provider->timezone)->format('Y-m-d'), $provider->timezone);
-            $day = new Interval($localDay, $localDay->modify('+1 day'));
-            if ($this->bookings->countBlockingStarting($provider->id, $day, $now) >= $rules->maxPerDay) {
-                throw new DailyLimitReached();
+        foreach ($offered as $candidate) {
+            if ($candidate->start == $slot->start) {
+                return;
             }
         }
+
+        throw new SlotUnavailable();
+    }
+
+    /**
+     * @param list<Interval> $bookings
+     */
+    private function countOnLocalDate(array $bookings, ProviderRecord $provider, string $localDate): int
+    {
+        return count(array_filter(
+            $bookings,
+            static fn(Interval $b): bool => $b->start->setTimezone($provider->timezone)->format('Y-m-d') === $localDate,
+        ));
     }
 
     /**

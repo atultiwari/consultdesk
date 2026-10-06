@@ -13,6 +13,7 @@ final class BookingRecord
         public readonly BookingStatus $status,
         public readonly PaymentMethod $paymentMethod,
         public readonly ?DateTimeImmutable $holdExpiresAt,
+        public readonly DateTimeImmutable $startAt,
     ) {}
 
     /**

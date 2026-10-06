@@ -112,7 +112,7 @@ consultdesk/
   - Contact: `whatsapp`, `telegram_chat_id`.
   - UPI: `upi_vpa`, `upi_payee_name`.
   - Booking rules: `min_notice_min`, `horizon_days`, `buffer_before`, `buffer_after`, `slot_interval`, `max_per_day`. All are editable per provider in the admin panel (Rules).
-- `services`: `provider_id`, `slug`, `title`, `tagline`, `description`, `audience`, `duration_min`, `price_minor`, `currency`, `requires_approval`, `payment_methods` (JSON), `questions` (JSON schema: text, textarea, select, url, checkbox, required), `active`, `sort_order`.
+- `services`: `provider_id`, `slug`, `title`, `tagline`, `description`, `audience`, `duration_min` (1–1440), `price_minor`, `currency`, `requires_approval`, `payment_methods` (JSON), `questions` (JSON schema: text, textarea, select, url, checkbox, required), `active`, `sort_order`.
 - `availability_rules`: `provider_id`, `weekday` (ISO: 1 = Monday … 7 = Sunday), `start_time`, `end_time`, and an optional `service_id`. If a service has its own rules, **only those apply** to it; otherwise the provider's general rules apply.
 - `blocked_periods`: `provider_id` (nullable means an org-wide holiday), `start_at`, `end_at`, `all_day`, `reason`.
 - `bookings`:
@@ -128,14 +128,17 @@ consultdesk/
 
 **Preventing double bookings without Postgres exclusion constraints:**
 1. `BookingService::hold()` opens a transaction and runs `SELECT … FROM providers WHERE id=? FOR UPDATE`, which serialises bookings per provider.
-2. It re-checks notice, horizon, the daily cap and overlaps against `confirmed` bookings and `held` / `awaiting_verification` bookings whose hold has not lapsed (gap included, see §8), then inserts.
-3. Integration tests run two concurrent connections to prove it.
+2. Still under the lock, it reloads the weekly rules, blocked periods and blocking bookings (`confirmed`, plus `held` / `awaiting_verification` whose hold has not lapsed) and requires `SlotEngine` to offer that exact start. That covers weekly hours, the slot grid, blocked periods, notice, horizon, the gap (§8) and the daily cap. Then it inserts.
+3. Integration tests race separate PHP processes (same slot, overlapping slots, and the daily cap) to prove it.
+4. Connections use READ COMMITTED and strict `sql_mode`; transactions are retried on deadlock or lock-wait timeout.
 
 **Status machine:**
 - UPI: `held → awaiting_verification` (UTR submitted; the hold is extended to 24 h) `→ confirmed | rejected`. If nobody verifies within 24 h it becomes `expired` and the slot is released.
 - Razorpay Payment Links: `held → confirmed` (webhook) `| expired`.
 - Free services that require approval: `held → confirmed | rejected`, held for up to 24 h.
-- A booking whose hold has lapsed cannot be confirmed (the slot may already be rebooked).
+- A booking whose hold has lapsed cannot be confirmed (the slot may already be rebooked). Holds and the UPI verification window never run past the session start.
+- `completed` and `no_show` can only be set once the session has started.
+- A UTR can be used for only one booking, ever (also after expiry or rejection), to stop one payment covering two bookings.
 - Admin actions after booking: `cancelled`, `completed`, `no_show`, `rescheduled`.
 - Cron expires stale holds.
 

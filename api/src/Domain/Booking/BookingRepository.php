@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ConsultDesk\Domain\Booking;
 
 use ConsultDesk\Domain\Availability\Interval;
+use ConsultDesk\Domain\Availability\WeeklyRule;
 use DateTimeImmutable;
 
 /**
@@ -23,14 +24,19 @@ interface BookingRepository
     public function findActiveService(int $serviceId): ?ServiceRecord;
 
     /**
-     * Blocking bookings that overlap $range.
+     * @return list<Interval> the provider's blocking bookings that overlap $range
      */
-    public function countBlockingOverlapping(int $providerId, Interval $range, DateTimeImmutable $now): int;
+    public function blockingIntervals(int $providerId, Interval $range, DateTimeImmutable $now): array;
 
     /**
-     * Blocking bookings that start inside $range.
+     * @return list<WeeklyRule> all of the provider's weekly rules, general and service-specific
      */
-    public function countBlockingStarting(int $providerId, Interval $range, DateTimeImmutable $now): int;
+    public function weeklyRules(int $providerId): array;
+
+    /**
+     * @return list<Interval> provider-specific and organisation-wide blocked periods overlapping $range
+     */
+    public function blockedPeriods(int $providerId, Interval $range): array;
 
     /**
      * @throws RefCollision when the ref is already taken

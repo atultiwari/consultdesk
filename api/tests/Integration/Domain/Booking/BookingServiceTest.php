@@ -21,6 +21,7 @@ use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
 use ConsultDesk\Domain\Booking\RefGenerator;
 use ConsultDesk\Domain\Booking\ServiceNotBookable;
+use ConsultDesk\Domain\Booking\SessionNotStarted;
 use ConsultDesk\Domain\Booking\SlotUnavailable;
 use ConsultDesk\Infra\FrozenClock;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
@@ -104,8 +105,8 @@ final class BookingServiceTest extends IntegrationTestCase
         $this->service()->hold($this->request('10:00'));
 
         $this->assertHoldFails(DailyLimitReached::class, '15:00');
-        // 23:00 IST on the 6th is 17:30 UTC on the 6th: a different local day from the first booking.
-        self::assertInstanceOf(HeldBooking::class, $this->service()->hold($this->request('23:00', '2026-10-06')));
+        // 22:00 IST on the 6th is 16:30 UTC on the 6th: a different local day from the first booking.
+        self::assertInstanceOf(HeldBooking::class, $this->service()->hold($this->request('22:00', '2026-10-06')));
     }
 
     public function testRejectsSlotsInsideTheNoticeOrBeyondTheHorizonOrInThePast(): void
@@ -255,8 +256,12 @@ final class BookingServiceTest extends IntegrationTestCase
         foreach ([$toComplete, $toNoShow, $toCancel] as $booking) {
             $service->confirm($booking->id, Actor::system());
         }
-        $service->complete($toComplete->id, Actor::system());
-        $service->markNoShow($toNoShow->id, Actor::system());
+        $this->assertThrows(SessionNotStarted::class, fn() => $service->complete($toComplete->id, Actor::system()));
+        $this->assertThrows(SessionNotStarted::class, fn() => $service->markNoShow($toNoShow->id, Actor::system()));
+
+        $afterSessions = $this->service('2026-10-08T12:00Z');
+        $afterSessions->complete($toComplete->id, Actor::system());
+        $afterSessions->markNoShow($toNoShow->id, Actor::system());
         $service->cancel($toCancel->id, Actor::customer());
 
         self::assertSame('rejected', $this->booking($toReject->id)['status']);
@@ -289,6 +294,57 @@ final class BookingServiceTest extends IntegrationTestCase
         $fresh = $this->service('2026-10-06T00:00Z')->hold($this->request('17:00', '2026-10-08'));
         self::assertSame(0, $this->service('2026-10-06T00:59Z')->expireStale());
         self::assertSame('held', $this->booking($fresh->id)['status']);
+    }
+
+    public function testRejectsTimesOutsideTheWeeklyHoursOrOffTheSlotGrid(): void
+    {
+        $provider = Fixtures::provider($this->pdo, openAllWeek: false);
+        $service = Fixtures::service($this->pdo, $provider);
+        Fixtures::availability($this->pdo, $provider, 3, '09:00', '17:00'); // Wednesdays only
+
+        $hold = fn(string $time, string $date = '2026-10-07') => $this->service()->hold(
+            $this->request($time, $date, providerId: $provider, serviceId: $service),
+        );
+
+        $this->assertThrows(SlotUnavailable::class, fn() => $hold('08:30'));
+        $this->assertThrows(SlotUnavailable::class, fn() => $hold('16:30')); // would end after 17:00
+        $this->assertThrows(SlotUnavailable::class, fn() => $hold('10:07')); // not on the 5-minute grid
+        $this->assertThrows(SlotUnavailable::class, fn() => $hold('10:00', '2026-10-08')); // Thursday
+        self::assertInstanceOf(HeldBooking::class, $hold('16:00'));
+    }
+
+    public function testServiceRulesReplaceTheProvidersGeneralHours(): void
+    {
+        $workshop = Fixtures::service($this->pdo, $this->providerId);
+        Fixtures::availability($this->pdo, $this->providerId, 3, '15:00', '16:00', $workshop);
+
+        $this->assertHoldFails(SlotUnavailable::class, '10:00', serviceId: $workshop);
+        self::assertInstanceOf(HeldBooking::class, $this->service()->hold($this->request('15:00', serviceId: $workshop)));
+        self::assertInstanceOf(HeldBooking::class, $this->service()->hold($this->request('10:00')), 'other services keep general hours');
+    }
+
+    public function testBlockedPeriodsForTheProviderOrTheWholeOrganisationAreNotBookable(): void
+    {
+        Fixtures::blocked($this->pdo, $this->providerId, '2026-10-07 04:00:00', '2026-10-07 06:00:00');
+        Fixtures::blocked($this->pdo, null, '2026-10-08 00:00:00', '2026-10-09 00:00:00');
+        Fixtures::blocked($this->pdo, Fixtures::provider($this->pdo), '2026-10-07 08:00:00', '2026-10-07 10:00:00');
+
+        $this->assertHoldFails(SlotUnavailable::class, '10:00');
+        $this->assertHoldFails(SlotUnavailable::class, '11:00', '2026-10-08');
+        self::assertInstanceOf(HeldBooking::class, $this->service()->hold($this->request('14:00')), "another provider's block does not apply");
+    }
+
+    public function testHoldsNeverOutlastTheStartOfTheSession(): void
+    {
+        $this->pdo->exec("UPDATE providers SET min_notice_min = 0 WHERE id = {$this->providerId}");
+        $soon = $this->service()->hold($this->request('06:00', '2026-10-05')); // 00:30 UTC, 30 minutes away
+        $later = $this->service()->hold($this->request('12:00', '2026-10-05')); // 06:30 UTC
+
+        self::assertSame('2026-10-05T00:30:00+00:00', $soon->holdExpiresAt->format(DATE_ATOM));
+
+        $this->service()->submitUtr($later->id, '412345678901');
+        self::assertSame('2026-10-05 06:30:00', $this->booking($later->id)['hold_expires_at'], 'verification window ends at the start');
+        $this->assertThrows(HoldExpired::class, fn() => $this->service('2026-10-05T06:30Z')->confirm($later->id, Actor::system()));
     }
 
     private function service(string $now = self::NOW, ?RefGenerator $refs = null): BookingService

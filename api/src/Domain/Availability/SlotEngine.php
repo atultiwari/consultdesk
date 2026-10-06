@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ConsultDesk\Domain\Availability;
 
 use DateTimeImmutable;
+use DateTimeZone;
 
 /**
  * Pure slot calculator (docs/PLAN.md §6.1). No I/O, no clock: everything comes in through SlotRequest.
@@ -19,6 +20,8 @@ use DateTimeImmutable;
  */
 final class SlotEngine
 {
+    private const DAY_SECONDS = 86_400;
+
     /**
      * @return list<Interval> open slots in UTC, sorted by start
      */
@@ -74,16 +77,35 @@ final class SlotEngine
         $windows = [];
 
         foreach ($rules as $rule) {
-            if ($rule->weekday === $weekday) {
-                // Built from local wall-clock times, so DST shifts land correctly in UTC.
-                $windows[] = new Interval(
-                    new DateTimeImmutable("{$date} {$rule->startTime}", $day->getTimezone()),
-                    new DateTimeImmutable("{$date} {$rule->endTime}", $day->getTimezone()),
-                );
+            if ($rule->weekday !== $weekday) {
+                continue;
+            }
+            // Built from local wall-clock times, so DST shifts land correctly in UTC.
+            $start = $this->localInstant($date, $rule->startTime, $day->getTimezone());
+            $end = $this->localInstant($date, $rule->endTime, $day->getTimezone());
+            if ($end > $start) {
+                $windows[] = new Interval($start, $end);
             }
         }
 
         return Interval::merge($windows);
+    }
+
+    /**
+     * Resolves a local wall-clock time. A time that does not exist because the clocks sprang
+     * forward resolves to the instant of the change, so windows inside the gap become empty.
+     */
+    private function localInstant(string $date, string $time, DateTimeZone $timezone): DateTimeImmutable
+    {
+        $instant = new DateTimeImmutable("{$date} {$time}", $timezone);
+        if ($instant->format('H:i') === $time) {
+            return $instant;
+        }
+
+        $transitions = $timezone->getTransitions($instant->getTimestamp() - self::DAY_SECONDS, $instant->getTimestamp());
+        $change = $transitions === [] ? null : end($transitions);
+
+        return $change === null ? $instant : (new DateTimeImmutable())->setTimestamp($change['ts'])->setTimezone($timezone);
     }
 
     /**

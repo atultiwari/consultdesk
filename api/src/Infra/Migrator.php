@@ -17,11 +17,13 @@ use RuntimeException;
 final class Migrator
 {
     private const FILE_PATTERN = '/^\d{3}_[a-z0-9_]+\.sql$/';
+    private const LOCK_NAME = 'consultdesk_migrate';
 
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $directory,
         private readonly Clock $clock,
+        private readonly int $lockTimeoutSeconds = 10,
     ) {}
 
     /**
@@ -42,13 +44,34 @@ final class Migrator
      */
     public function migrate(): array
     {
-        $applied = [];
-        foreach ($this->pending() as $version) {
-            $this->apply($version);
-            $applied[] = $version;
-        }
+        $this->acquireLock();
+        try {
+            $applied = [];
+            foreach ($this->pending() as $version) {
+                $this->apply($version);
+                $applied[] = $version;
+            }
 
-        return $applied;
+            return $applied;
+        } finally {
+            $release = $this->pdo->prepare('SELECT RELEASE_LOCK(:name)');
+            $release->execute(['name' => self::LOCK_NAME]);
+            $release->closeCursor();
+        }
+    }
+
+    /**
+     * A named server lock stops two runs (e.g. a double-clicked "Run database updates") overlapping.
+     */
+    private function acquireLock(): void
+    {
+        $statement = $this->pdo->prepare('SELECT GET_LOCK(:name, :timeout)');
+        $statement->execute(['name' => self::LOCK_NAME, 'timeout' => $this->lockTimeoutSeconds]);
+        $acquired = (int) $statement->fetchColumn();
+        $statement->closeCursor();
+        if ($acquired !== 1) {
+            throw new RuntimeException('Another database update is already running. Try again in a moment.');
+        }
     }
 
     private function apply(string $version): void

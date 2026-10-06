@@ -6,6 +6,7 @@ namespace ConsultDesk\Domain\Booking;
 
 use ConsultDesk\Domain\Availability\BookingRules;
 use ConsultDesk\Domain\Availability\Interval;
+use ConsultDesk\Domain\Availability\WeeklyRule;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -71,26 +72,54 @@ final class PdoBookingRepository implements BookingRepository
         );
     }
 
-    public function countBlockingOverlapping(int $providerId, Interval $range, DateTimeImmutable $now): int
+    public function blockingIntervals(int $providerId, Interval $range, DateTimeImmutable $now): array
     {
-        return $this->count(
-            'SELECT COUNT(*) FROM bookings
-             WHERE provider_id = :provider AND start_at < :range_end AND end_at > :range_start AND ' . self::BLOCKING,
-            $providerId,
-            $range,
-            $now,
+        // Sessions are at most a day long (chk_services_duration), so the lower bound on start_at
+        // keeps this an index range scan instead of reading the provider's whole history.
+        $rows = $this->fetchAll(
+            'SELECT start_at, end_at FROM bookings
+             WHERE provider_id = :provider AND start_at >= :lower_bound AND start_at < :range_end
+               AND end_at > :range_start AND ' . self::BLOCKING . ' ORDER BY start_at',
+            [
+                'provider' => $providerId,
+                'lower_bound' => $range->start->modify('-1 day')->format(self::SQL_DATETIME),
+                'range_end' => $range->end->format(self::SQL_DATETIME),
+                'range_start' => $range->start->format(self::SQL_DATETIME),
+                'now' => $now->format(self::SQL_DATETIME),
+            ],
         );
+
+        return array_map(static fn(array $r): Interval => self::interval($r), $rows);
     }
 
-    public function countBlockingStarting(int $providerId, Interval $range, DateTimeImmutable $now): int
+    public function weeklyRules(int $providerId): array
     {
-        return $this->count(
-            'SELECT COUNT(*) FROM bookings
-             WHERE provider_id = :provider AND start_at >= :range_start AND start_at < :range_end AND ' . self::BLOCKING,
-            $providerId,
-            $range,
-            $now,
+        $rows = $this->fetchAll(
+            'SELECT weekday, start_time, end_time, service_id FROM availability_rules WHERE provider_id = :provider',
+            ['provider' => $providerId],
         );
+
+        return array_map(static fn(array $r): WeeklyRule => new WeeklyRule(
+            (int) $r['weekday'],
+            (string) $r['start_time'],
+            (string) $r['end_time'],
+            $r['service_id'] === null ? null : (int) $r['service_id'],
+        ), $rows);
+    }
+
+    public function blockedPeriods(int $providerId, Interval $range): array
+    {
+        $rows = $this->fetchAll(
+            'SELECT start_at, end_at FROM blocked_periods
+             WHERE (provider_id = :provider OR provider_id IS NULL) AND start_at < :range_end AND end_at > :range_start',
+            [
+                'provider' => $providerId,
+                'range_end' => $range->end->format(self::SQL_DATETIME),
+                'range_start' => $range->start->format(self::SQL_DATETIME),
+            ],
+        );
+
+        return array_map(static fn(array $r): Interval => self::interval($r), $rows);
     }
 
     public function insert(NewBooking $booking): int
@@ -140,7 +169,7 @@ final class PdoBookingRepository implements BookingRepository
     public function lockBooking(int $bookingId): ?BookingRecord
     {
         $row = $this->fetchOne(
-            'SELECT id, status, payment_method, hold_expires_at FROM bookings WHERE id = :id FOR UPDATE',
+            'SELECT id, status, payment_method, hold_expires_at, start_at FROM bookings WHERE id = :id FOR UPDATE',
             ['id' => $bookingId],
         );
         if ($row === null) {
@@ -152,6 +181,7 @@ final class PdoBookingRepository implements BookingRepository
             BookingStatus::from((string) $row['status']),
             PaymentMethod::from((string) $row['payment_method']),
             $row['hold_expires_at'] === null ? null : self::utc((string) $row['hold_expires_at']),
+            self::utc((string) $row['start_at']),
         );
     }
 
@@ -231,17 +261,25 @@ final class PdoBookingRepository implements BookingRepository
         ]);
     }
 
-    private function count(string $sql, int $providerId, Interval $range, DateTimeImmutable $now): int
+    /**
+     * @param array<string, scalar|null> $params
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function fetchAll(string $sql, array $params): array
     {
         $statement = $this->pdo->prepare($sql);
-        $statement->execute([
-            'provider' => $providerId,
-            'range_start' => $range->start->format(self::SQL_DATETIME),
-            'range_end' => $range->end->format(self::SQL_DATETIME),
-            'now' => $now->format(self::SQL_DATETIME),
-        ]);
+        $statement->execute($params);
 
-        return (int) $statement->fetchColumn();
+        return array_values(array_filter($statement->fetchAll(PDO::FETCH_ASSOC), 'is_array'));
+    }
+
+    /**
+     * @param array<string, mixed> $row with start_at and end_at
+     */
+    private static function interval(array $row): Interval
+    {
+        return new Interval(self::utc((string) $row['start_at']), self::utc((string) $row['end_at']));
     }
 
     /**
@@ -260,7 +298,9 @@ final class PdoBookingRepository implements BookingRepository
 
     private static function isDuplicateKey(PDOException $e, string $key): bool
     {
-        return ($e->errorInfo[1] ?? null) === self::MYSQL_DUPLICATE_KEY && str_contains($e->getMessage(), $key);
+        return ($e->errorInfo[0] ?? null) === '23000'
+            && ($e->errorInfo[1] ?? null) === self::MYSQL_DUPLICATE_KEY
+            && str_contains($e->getMessage(), $key);
     }
 
     private static function utc(string $value): DateTimeImmutable

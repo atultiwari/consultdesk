@@ -1,13 +1,14 @@
 -- ConsultDesk initial schema (docs/PLAN.md §5).
 -- Targets MySQL 8.0.16+ and MariaDB 10.4+. All DATETIME values are UTC; the app sets time_zone = '+00:00'.
+-- Tables use IF NOT EXISTS so a run that failed part-way can simply be re-run.
 
-CREATE TABLE settings (
+CREATE TABLE IF NOT EXISTS settings (
     `key` VARCHAR(100) NOT NULL PRIMARY KEY,
     `value` JSON NOT NULL,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE providers (
+CREATE TABLE IF NOT EXISTS providers (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(64) NOT NULL,
     name VARCHAR(120) NOT NULL,
@@ -34,7 +35,7 @@ CREATE TABLE providers (
     KEY idx_providers_active_sort (active, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(254) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -47,7 +48,7 @@ CREATE TABLE users (
     CONSTRAINT fk_users_provider FOREIGN KEY (provider_id) REFERENCES providers (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE services (
+CREATE TABLE IF NOT EXISTS services (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     provider_id BIGINT UNSIGNED NOT NULL,
     slug VARCHAR(64) NOT NULL,
@@ -67,12 +68,12 @@ CREATE TABLE services (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_services_provider_slug (provider_id, slug),
     CONSTRAINT fk_services_provider FOREIGN KEY (provider_id) REFERENCES providers (id) ON DELETE CASCADE,
-    CONSTRAINT chk_services_duration CHECK (duration_min > 0)
+    CONSTRAINT chk_services_duration CHECK (duration_min BETWEEN 1 AND 1440)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Weekly windows in the provider's local time. weekday is ISO-8601: 1 = Monday … 7 = Sunday.
 -- Rules with a service_id replace the provider's general rules for that service.
-CREATE TABLE availability_rules (
+CREATE TABLE IF NOT EXISTS availability_rules (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     provider_id BIGINT UNSIGNED NOT NULL,
     service_id BIGINT UNSIGNED NULL,
@@ -87,7 +88,7 @@ CREATE TABLE availability_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- provider_id NULL means an organisation-wide closure (e.g. a public holiday).
-CREATE TABLE blocked_periods (
+CREATE TABLE IF NOT EXISTS blocked_periods (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     provider_id BIGINT UNSIGNED NULL,
     start_at DATETIME NOT NULL,
@@ -100,7 +101,7 @@ CREATE TABLE blocked_periods (
     CONSTRAINT chk_blocked_range CHECK (end_at > start_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     ref VARCHAR(16) NOT NULL,
     public_token_hash CHAR(64) NOT NULL,
@@ -144,7 +145,7 @@ CREATE TABLE bookings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Gateway credentials, encrypted with sodium. provider_id NULL is the organisation default.
-CREATE TABLE payment_gateways (
+CREATE TABLE IF NOT EXISTS payment_gateways (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     provider_id BIGINT UNSIGNED NULL,
     gateway VARCHAR(32) NOT NULL,
@@ -160,7 +161,7 @@ CREATE TABLE payment_gateways (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Raw webhook deliveries. The unique key makes repeated deliveries a no-op.
-CREATE TABLE payment_events (
+CREATE TABLE IF NOT EXISTS payment_events (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     gateway VARCHAR(32) NOT NULL,
     event_id VARCHAR(100) NOT NULL,
@@ -171,7 +172,7 @@ CREATE TABLE payment_events (
     UNIQUE KEY uq_payment_events_gateway_event (gateway, event_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE oauth_tokens (
+CREATE TABLE IF NOT EXISTS oauth_tokens (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     provider_id BIGINT UNSIGNED NOT NULL,
     oauth_provider VARCHAR(32) NOT NULL DEFAULT 'google',
@@ -189,7 +190,7 @@ CREATE TABLE oauth_tokens (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Side effects (calendar, email, Telegram) retried by cron.
-CREATE TABLE outbox_jobs (
+CREATE TABLE IF NOT EXISTS outbox_jobs (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     type VARCHAR(64) NOT NULL,
     payload JSON NOT NULL,
@@ -204,7 +205,7 @@ CREATE TABLE outbox_jobs (
     KEY idx_outbox_status_available (status, available_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE login_attempts (
+CREATE TABLE IF NOT EXISTS login_attempts (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     ip VARBINARY(16) NOT NULL,
     email VARCHAR(254) NULL,
@@ -215,7 +216,7 @@ CREATE TABLE login_attempts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- id is a SHA-256 of the session cookie value; the raw value is never stored.
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id CHAR(64) NOT NULL PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     csrf_token_hash CHAR(64) NOT NULL,
@@ -229,7 +230,7 @@ CREATE TABLE sessions (
     CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     actor_type ENUM('user', 'system', 'telegram', 'webhook', 'customer') NOT NULL,
     actor_id BIGINT UNSIGNED NULL,

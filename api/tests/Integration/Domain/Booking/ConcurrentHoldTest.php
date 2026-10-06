@@ -41,6 +41,19 @@ final class ConcurrentHoldTest extends IntegrationTestCase
         self::assertSame(1, $this->activeBookings($providerId));
     }
 
+    public function testTheDailyLimitHoldsUnderConcurrency(): void
+    {
+        // Eight non-overlapping slots on the same local day, but only one booking allowed per day.
+        $providerId = Fixtures::provider($this->pdo, ['max_per_day' => 1]);
+        $serviceId = Fixtures::service($this->pdo, $providerId);
+        $starts = array_map(static fn(int $h): string => sprintf('2026-10-07T%02d:30:00Z', $h), range(0, 14, 2));
+
+        $results = $this->race($providerId, $serviceId, $starts);
+
+        $this->assertExactlyOneWinner($results, 'DailyLimitReached');
+        self::assertSame(1, $this->activeBookings($providerId));
+    }
+
     /**
      * @param list<string> $starts
      *
@@ -75,13 +88,13 @@ final class ConcurrentHoldTest extends IntegrationTestCase
     /**
      * @param list<string> $results
      */
-    private function assertExactlyOneWinner(array $results): void
+    private function assertExactlyOneWinner(array $results, string $loserError = 'SlotUnavailable'): void
     {
         $winners = array_filter($results, static fn(string $r): bool => str_starts_with($r, 'ok '));
-        $losers = array_filter($results, static fn(string $r): bool => str_starts_with($r, 'SlotUnavailable'));
+        $losers = array_filter($results, static fn(string $r): bool => str_starts_with($r, $loserError));
 
         self::assertCount(1, $winners, 'Results: ' . implode(' | ', $results));
-        self::assertCount(count($results) - 1, $losers, 'Every other worker should get SlotUnavailable: ' . implode(' | ', $results));
+        self::assertCount(count($results) - 1, $losers, "Every other worker should get {$loserError}: " . implode(' | ', $results));
     }
 
     private function activeBookings(int $providerId): int
