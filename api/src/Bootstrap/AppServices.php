@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Bootstrap;
 
+use ConsultDesk\Admin\AdminUsers;
+use ConsultDesk\Admin\AuthService;
+use ConsultDesk\Admin\LoginThrottle;
+use ConsultDesk\Admin\PasswordResetEmailHandler;
+use ConsultDesk\Admin\PasswordResets;
+use ConsultDesk\Admin\Passwords;
+use ConsultDesk\Admin\Sessions;
 use ConsultDesk\Calendar\CalendarLinks;
 use ConsultDesk\Calendar\CalendarServices;
 use ConsultDesk\Calendar\GoogleApi;
@@ -24,7 +31,9 @@ use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\PdoBookingViews;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
 use ConsultDesk\Domain\Catalog\PdoCatalog;
+use ConsultDesk\Http\AdminCookie;
 use ConsultDesk\Http\ClientIp;
+use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Config;
 use ConsultDesk\Infra\Crypto;
@@ -133,15 +142,55 @@ final class AppServices
             $this->clock,
             $this->calendarServices(),
         );
+        if ($this->config->adminPath !== null) {
+            $handlers[PasswordResets::EMAIL_JOB] = new PasswordResetEmailHandler(
+                $this->pdo(),
+                $this->mailer(),
+                $this->crypto(),
+                $this->config->appUrl,
+                $this->config->adminPath,
+            );
+        }
         $cache = new GoogleBusyCache($this->pdo(), $this->clock);
+        $sessions = $this->sessions();
 
         return new CronRunner(
             $this->pdo(),
             $this->bookingService(),
             new OutboxWorker($this->outbox(), $handlers),
             $this->rateLimiter(),
-            [static fn(): int => $cache->prune(), fn(): int => $this->googleOAuth()?->prune() ?? 0],
+            [static fn(): int => $cache->prune(), fn(): int => $this->googleOAuth()?->prune() ?? 0, static fn(): int => $sessions->prune()],
         );
+    }
+
+    public function auditLog(): AuditLog
+    {
+        return new AuditLog($this->pdo(), $this->clock);
+    }
+
+    public function adminUsers(): AdminUsers
+    {
+        return new AdminUsers($this->pdo(), $this->clock);
+    }
+
+    public function sessions(): Sessions
+    {
+        return new Sessions($this->pdo(), $this->clock, $this->adminUsers(), $this->config->appKey);
+    }
+
+    public function adminCookie(): AdminCookie
+    {
+        return new AdminCookie(str_starts_with($this->config->appUrl, 'https://'));
+    }
+
+    public function authService(): AuthService
+    {
+        return new AuthService($this->adminUsers(), new Passwords(), $this->sessions(), new LoginThrottle($this->pdo(), $this->clock), $this->auditLog());
+    }
+
+    public function passwordResets(): PasswordResets
+    {
+        return new PasswordResets($this->db(), $this->adminUsers(), new Passwords(), $this->sessions(), $this->outbox(), $this->crypto(), $this->auditLog(), $this->clock);
     }
 
     public function telegramServices(): ?TelegramServices

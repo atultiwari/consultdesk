@@ -21,6 +21,7 @@ abstract class ApiTestCase extends IntegrationTestCase
     protected const NOW = '2026-10-05T00:00Z';
     protected const APP_URL = 'https://book.example.test';
     protected const CRON_KEY = 'cron-key-placeholder-0123456789abcdef';
+    protected const ADMIN_PATH = 'desk-7q2x-placeholder';
 
     protected ArrayMailer $mailer;
     protected ?FakeTelegramApi $telegram = null;
@@ -49,6 +50,7 @@ abstract class ApiTestCase extends IntegrationTestCase
             'DB_USER' => 'unused',
             'SMTP_HOST' => 'unused',
             'MAIL_FROM' => 'bookings@example.test',
+            'ADMIN_PATH' => self::ADMIN_PATH,
             ...$this->extraEnv(),
         ]);
 

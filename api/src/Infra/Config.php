@@ -35,6 +35,8 @@ final class Config
         public readonly ?string $trustedProxyHeader = null,
         public readonly ?TelegramConfig $telegram = null,
         public readonly ?GoogleConfig $google = null,
+        /** The secret first path segment of the admin area; null turns the admin area off. */
+        public readonly ?string $adminPath = null,
     ) {}
 
     /**
@@ -108,6 +110,20 @@ final class Config
             trustedProxyHeader: ($v['TRUSTED_PROXY_HEADER'] ?? '') === '' ? null : $v['TRUSTED_PROXY_HEADER'],
             telegram: TelegramConfig::fromValues($v),
             google: GoogleConfig::fromValues($v, $appUrl),
+            adminPath: self::adminPath($v['ADMIN_PATH'] ?? ''),
         );
+    }
+
+    private static function adminPath(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^[a-z0-9][a-z0-9-]{7,63}$/', $value) !== 1 || in_array($value, ['api', 'embed-js', 'install', 'assets'], true)) {
+            throw new InvalidArgumentException('ADMIN_PATH must be 8–64 lowercase letters, digits or "-", and hard to guess.');
+        }
+
+        return $value;
     }
 }
