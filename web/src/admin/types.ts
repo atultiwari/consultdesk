@@ -55,6 +55,7 @@ export type BookingDetail = BookingRow & {
   answers: { id: string; label: string; value: unknown }[];
   meet_url: string | null;
   confirmed_at: string | null;
+  gateway_payment_id?: string | null;
   history: HistoryEntry[];
   actions: BookingAction[];
 };
@@ -175,4 +176,24 @@ export type SystemSnapshot = {
   migrations_pending: string[];
   cron: { last_run_at: string | null; healthy: boolean };
   outbox: { pending: number; failed: number; last_error: string | null };
+};
+
+export type PaymentSettings = {
+  methods: { upi_enabled: boolean; razorpay_enabled: boolean };
+  razorpay: {
+    configured: boolean;
+    mode: 'test' | 'live' | null;
+    key_id: string | null;
+    has_webhook_secret: boolean;
+    webhook_url: string;
+    live_allowed: boolean;
+    /** Only in the answer that made it: shown once, to paste into Razorpay. */
+    webhook_secret?: string;
+  };
+  overrides: {
+    provider_id: number;
+    provider_name: string;
+    key_id: string;
+    has_webhook_secret: boolean;
+  }[];
 };

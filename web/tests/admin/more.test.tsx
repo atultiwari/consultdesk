@@ -175,6 +175,24 @@ describe('blocked times for staff', () => {
 });
 
 describe('booking detail variants', () => {
+  it('shows the Razorpay payment and when it needs refunding', async () => {
+    mockApi({
+      ...signedIn(),
+      'GET /api/admin/bookings/11': ok({
+        ...detail,
+        payment_method: 'razorpay_link',
+        utr: null,
+        status: 'expired',
+        gateway_payment_id: 'pay_placeholder1',
+        actions: [],
+      }),
+    });
+    renderAt(`${ADMIN}/bookings/11`);
+
+    expect(await screen.findByText('pay_placeholder1')).toBeInTheDocument();
+    expect(screen.getByText(/refund it from the Razorpay Dashboard/)).toBeInTheDocument();
+  });
+
   it('shows ticked boxes, the call link, the customer’s own time and Telegram actions', async () => {
     mockApi({
       ...signedIn(),

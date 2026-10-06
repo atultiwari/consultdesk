@@ -1386,3 +1386,43 @@
   font-family: var(--font-display);
   font-size: 1.6rem;
 }
+
+/* ---------- Phase 7: payments ---------- */
+.section-title {
+  margin: 2rem 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.copy-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.copy-field__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.copy-field__value {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.webhook-setup {
+  padding: 1rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-sm);
+}
+
+.refund-note {
+  color: var(--danger);
+  font-weight: 600;
+}

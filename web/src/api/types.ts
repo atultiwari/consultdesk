@@ -95,8 +95,17 @@ export type BookingView = {
   hold_expires_at: string | null;
   utr: string | null;
   meet_url: string | null;
-  payment: UpiPayment | null;
+  payment: UpiPayment | RazorpayPayment | null;
 };
+
+export type RazorpayPayment = {
+  method: 'razorpay_link';
+  /** Razorpay's page for this booking; null until made (e.g. if Razorpay was briefly unreachable). */
+  pay_url: string | null;
+  amount_display: string;
+};
+
+export type RazorpayReturn = { ref: string; status: BookingState };
 
 export type CreatedBooking = {
   ref: string;

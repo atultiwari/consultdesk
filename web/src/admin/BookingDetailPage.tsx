@@ -41,6 +41,23 @@ function Facts({ booking }: { booking: BookingDetail }) {
         <dd>
           {booking.amount_minor > 0 ? formatMoney(booking.amount_minor, booking.currency) : 'Free'}
           {booking.payment_method === 'upi' && <span className="cell-sub">by UPI</span>}
+          {booking.payment_method === 'razorpay_link' && (
+            <span className="cell-sub">
+              online with Razorpay
+              {booking.gateway_payment_id && (
+                <>
+                  {' '}
+                  · payment <span className="mono">{booking.gateway_payment_id}</span>
+                </>
+              )}
+            </span>
+          )}
+          {booking.gateway_payment_id &&
+            ['cancelled', 'expired', 'rejected'].includes(booking.status) && (
+              <span className="cell-sub refund-note">
+                Paid but not going ahead: refund it from the Razorpay Dashboard.
+              </span>
+            )}
           {booking.utr && (
             <span className="cell-sub">
               UTR <span className="mono">{booking.utr}</span>
