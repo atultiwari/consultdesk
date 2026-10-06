@@ -14,9 +14,8 @@ final class Config
 {
     private const APP_KEY_PREFIX = 'base64:';
     private const MIN_CRON_KEY_LENGTH = 32;
-    /** The throwaway values in docker-compose.yml; a public site must never run with them. */
+    /** The throwaway value in docker-compose.yml; a public site must never run with it. */
     private const LOCAL_DEV_SECRETS = [
-        'APP_KEY' => 'base64:bG9jYWwtZGV2LW9ubHkta2V5LW5vdC1zZWNyZXQhISE=',
         'CRON_KEY' => 'local-dev-cron-key-not-secret-0000',
     ];
 

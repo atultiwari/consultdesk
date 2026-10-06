@@ -43,4 +43,4 @@ One scheduled task expires lapsed holds and sends queued emails. Without it, no 
 If a host can only call a URL, call `https://<your-site>/api/cron` with the header `X-Cron-Key: <CRON_KEY>`
 (or, as a last resort, `?key=<CRON_KEY>`). The CLI form is preferred because the key never appears in logs.
 
-The local-development `APP_KEY` and `CRON_KEY` from `docker-compose.yml` are refused on any `https://` site.
+The local-development `CRON_KEY` from `docker-compose.yml` is refused on any `https://` site. There is no committed `APP_KEY`: every install generates its own.

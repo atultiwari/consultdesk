@@ -23,6 +23,7 @@ Prerequisites: Docker Desktop, Node 22+, and (optionally) PHP 8.1+ with Composer
 
 ```bash
 cp .env.example .env          # throwaway local-dev values
+php -r 'echo "APP_KEY=base64:".base64_encode(random_bytes(32)).PHP_EOL;' >> .env   # local encryption key
 docker compose up -d --build  # API on :8080, MariaDB on :3307, Mailpit UI on :8025
 docker compose exec api composer install
 ```

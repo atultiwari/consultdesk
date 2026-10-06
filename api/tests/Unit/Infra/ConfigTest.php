@@ -62,7 +62,7 @@ final class ConfigTest extends TestCase
 
     public function testRefusesTheCommittedLocalDevSecretsOnAnHttpsSite(): void
     {
-        $dev = ['APP_KEY' => 'base64:bG9jYWwtZGV2LW9ubHkta2V5LW5vdC1zZWNyZXQhISE=', 'CRON_KEY' => 'local-dev-cron-key-not-secret-0000'];
+        $dev = ['CRON_KEY' => 'local-dev-cron-key-not-secret-0000'];
         foreach ($dev as $key => $value) {
             try {
                 Config::load('/nonexistent/config.php', array_merge(self::env(), [$key => $value]));
