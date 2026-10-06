@@ -46,6 +46,11 @@
             "@cs",
             "@stan"
         ],
-        "coverage:check": "php bin/coverage-check.php coverage/clover.xml 80"
+        "coverage:check": [
+            "php bin/coverage-check.php coverage/clover.xml 80",
+            "php bin/coverage-check.php coverage/clover.xml 90 src/Domain/"
+        ],
+        "migrate": "php bin/migrate.php",
+        "migrate:status": "php bin/migrate.php --status"
     }
 }
