@@ -87,6 +87,9 @@ final class AdminProviderActions
             $input->reject('slug', 'Another provider already uses this address.');
         }
         $input->assertValid();
+        if ((bool) ($values['active'] ?? false) && !(bool) ($before['active'] ?? false) && $this->setup?->isSingle() === true && $this->setup->activeProviders() > 0) {
+            throw new ApiException(409, 'single_teacher_site', 'This site is set up for one teacher. Switch it to several teachers first (owner: Set up your site).');
+        }
 
         $this->providers->update($id, $values);
         if ($values !== []) {
@@ -105,7 +108,7 @@ final class AdminProviderActions
      *
      * @return array<string, array{from: mixed, to: scalar|null}>
      */
-    private static function tracedChanges(array $before, array $values): array
+    public static function tracedChanges(array $before, array $values): array
     {
         $changes = [];
         foreach (array_intersect_key($values, array_flip(self::TRACED)) as $field => $value) {

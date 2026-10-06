@@ -275,12 +275,31 @@ function TemplateCard({
   );
 }
 
+/** Blank or nonsense numbers would otherwise reach the server as 0 (free) or the template's value. */
+function choiceProblem(c: Choice): string | null {
+  const price = Number(c.price);
+  const duration = Number(c.duration);
+  if (c.price.trim() === '' || !Number.isFinite(price) || price < 0)
+    return 'Enter a price (0 for free)';
+  if (c.duration.trim() === '' || !Number.isInteger(duration) || duration < 5)
+    return 'Enter a length of at least 5 minutes';
+  return null;
+}
+
 function SessionsStep({ state, onDone }: { state: SetupState; onDone: () => void }) {
   const add = useAddStarterSessions();
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const picked = Object.entries(choices);
+  const [problem, setProblem] = useState<string | null>(null);
   const errors = fieldErrors(add.error);
-  const submit = () =>
+  const submit = () => {
+    const invalid = picked.find(([, c]) => choiceProblem(c) !== null);
+    setProblem(
+      invalid
+        ? `${choiceProblem(invalid[1])} for “${invalid[1].title.trim() || 'this session'}”.`
+        : null,
+    );
+    if (invalid) return;
     add.mutate(
       picked.map(([key, c]) => ({
         key,
@@ -290,6 +309,7 @@ function SessionsStep({ state, onDone }: { state: SetupState; onDone: () => void
       })),
       { onSuccess: onDone },
     );
+  };
 
   return (
     <div className="stack">
@@ -321,6 +341,11 @@ function SessionsStep({ state, onDone }: { state: SetupState; onDone: () => void
           </div>
         </section>
       ))}
+      {problem !== null && (
+        <Notice tone="danger" live>
+          {problem}
+        </Notice>
+      )}
       {add.isError && (
         <Notice tone="danger" live>
           {Object.values(errors)[0] ?? add.error.message}

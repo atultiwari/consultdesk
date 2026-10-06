@@ -109,6 +109,25 @@ describe('site setup wizard', () => {
     expect(await screen.findByRole('button', { name: 'Finish' })).toBeInTheDocument();
   });
 
+  it('asks for a price instead of quietly making a session free', async () => {
+    const state = { ...fresh, mode: 'multi', provider: demoProvider };
+    const calls = mockApi({
+      ...signedIn(),
+      'GET /api/admin/setup': ok(state),
+      'POST /api/admin/setup/sessions': ok(state),
+    });
+    const user = userEvent.setup();
+    renderAt(`${ADMIN}/setup?step=sessions`);
+
+    const oneToOne = await screen.findByRole('group', { name: 'One-to-one session' });
+    await user.click(within(oneToOne).getByRole('checkbox', { name: /Offer this/ }));
+    await user.clear(within(oneToOne).getByLabelText('Price (₹)'));
+    await user.click(screen.getByRole('button', { name: 'Add 1 session' }));
+
+    expect(await screen.findByText(/Enter a price .* for “One-to-one session”/)).toBeInTheDocument();
+    expect(calls.some((c) => c.path === '/api/admin/setup/sessions')).toBe(false);
+  });
+
   it('reminds the owner to finish setting up', async () => {
     mockApi({
       ...signedIn(),

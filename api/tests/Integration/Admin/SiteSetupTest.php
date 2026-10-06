@@ -84,6 +84,65 @@ final class SiteSetupTest extends AdminTestCase
         self::assertSame([409, 'several_teachers'], $this->codeOf($this->admin('PUT', '/api/admin/setup/mode', ['mode' => 'single'])));
     }
 
+    public function testAnExistingSiteWithSeveralTeachersIsNeverOverwritten(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('POST', '/api/admin/providers', ['slug' => 'first', 'name' => 'First Teacher', 'timezone' => 'Asia/Kolkata', 'upi_vpa' => 'first.placeholder@okaxis']);
+        $this->admin('POST', '/api/admin/providers', ['slug' => 'second', 'name' => 'Second Teacher', 'timezone' => 'Asia/Kolkata']);
+
+        self::assertNull($this->admin('GET', '/api/admin/setup')[1]['data']['provider'], 'no guessing which teacher the wizard is about');
+        $this->admin('POST', '/api/admin/setup/teacher', ['name' => 'New Teacher', 'timezone' => 'Asia/Kolkata']);
+
+        self::assertSame(['First Teacher', 'first.placeholder@okaxis'], [
+            self::column($this->pdo, 'SELECT name FROM providers WHERE slug = :s', ['s' => 'first'])[0],
+            self::column($this->pdo, 'SELECT upi_vpa FROM providers WHERE slug = :s', ['s' => 'first'])[0],
+        ]);
+        self::assertSame(['3'], self::column($this->pdo, 'SELECT COUNT(*) FROM providers'));
+    }
+
+    public function testASoleExistingTeacherIsAdoptedAndChangesToMoneyDetailsAreTraced(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('POST', '/api/admin/providers', ['slug' => 'only', 'name' => 'Only Teacher', 'timezone' => 'Asia/Kolkata', 'upi_vpa' => 'old.placeholder@okaxis']);
+
+        [, $state] = $this->admin('GET', '/api/admin/setup');
+        self::assertSame('only', $state['data']['provider']['slug']);
+        $this->admin('POST', '/api/admin/setup/teacher', ['name' => 'Only Teacher', 'timezone' => 'Asia/Kolkata', 'upi_vpa' => 'new.placeholder@okaxis']);
+
+        $details = self::column($this->pdo, "SELECT data FROM audit_log WHERE action = 'admin.setup_teacher_saved'")[0];
+        self::assertSame(['from' => 'old.placeholder@okaxis', 'to' => 'new.placeholder@okaxis'], json_decode((string) $details, true)['changes']['upi_vpa']);
+    }
+
+    public function testAddingTheSameStarterSessionTwiceAddsItOnce(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('PUT', '/api/admin/setup/mode', ['mode' => 'single']);
+        [, $state] = $this->admin('POST', '/api/admin/setup/teacher', ['name' => 'Only Teacher', 'timezone' => 'Asia/Kolkata']);
+        $key = $state['data']['template_sets'][0]['templates'][1]['key'];
+
+        $this->admin('POST', '/api/admin/setup/sessions', ['sessions' => [['key' => $key]]]);
+        $this->admin('POST', '/api/admin/setup/sessions', ['sessions' => [['key' => $key], ['key' => $key]]]);
+
+        self::assertSame(['1'], self::column($this->pdo, 'SELECT COUNT(*) FROM services'));
+    }
+
+    public function testAOneTeacherSiteCannotShowASecondTeacherAndAlwaysOpensOnItsOwn(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('PUT', '/api/admin/setup/mode', ['mode' => 'multi']);
+        $this->admin('POST', '/api/admin/setup/teacher', ['name' => 'Zed Teacher', 'timezone' => 'Asia/Kolkata']);
+        [, $hidden] = $this->admin('POST', '/api/admin/providers', ['slug' => 'aaa-hidden', 'name' => 'Hidden Teacher', 'timezone' => 'Asia/Kolkata', 'sort_order' => -1]);
+        $this->admin('PATCH', '/api/admin/providers/' . $hidden['data']['id'], ['active' => false]);
+        self::assertSame(200, $this->admin('PUT', '/api/admin/setup/mode', ['mode' => 'single'])[0]);
+
+        self::assertSame([409, 'single_teacher_site'], $this->codeOf($this->admin('PATCH', '/api/admin/providers/' . $hidden['data']['id'], ['active' => true])));
+        self::assertSame('zed-teacher', $this->call('GET', '/api/site')[1]['data']['single_provider']);
+    }
+
     public function testOnlyOwnersSetUpTheSite(): void
     {
         $this->createUser('admin@example.test', 'admin');

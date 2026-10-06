@@ -39,14 +39,19 @@ final class ProviderActions
 
     public function site(Request $request, Response $response): Response
     {
-        $providers = $this->catalog->activeProviders();
-        $single = $this->setup?->isSingle() === true;
+        $slugs = [];
+        foreach ($this->catalog->activeProviders() as $provider) {
+            $slugs[$provider->id] = $provider->slug;
+        }
+        $ids = array_keys($slugs);
+        // A one-teacher site (or a site with only one teacher so far) goes straight to their page.
+        $single = $this->setup?->isSingle() === true ? $this->setup->singleProviderId($ids) : null;
+        $single ??= count($ids) === 1 ? $ids[0] : null;
 
         return JsonResponse::success($response, [
             ...$this->catalog->siteSettings()->toArray(),
             'mode' => $this->setup?->stored()['mode'],
-            // A one-teacher site (or a site with only one teacher so far) goes straight to their page.
-            'single_provider' => ($single || count($providers) === 1) && $providers !== [] ? $providers[0]->slug : null,
+            'single_provider' => $single === null ? null : $slugs[$single],
         ]);
     }
 

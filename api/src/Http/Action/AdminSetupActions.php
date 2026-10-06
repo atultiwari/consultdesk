@@ -70,8 +70,10 @@ final class AdminSetupActions
         }
         $input->assertValid();
 
-        $id = $this->setup->saveTeacher($values);
-        $this->audit->record(Actor::user($owner->id), 'admin.setup_teacher_saved', 'provider', $id);
+        ['id' => $id, 'before' => $before] = $this->setup->saveTeacher($values);
+        $this->audit->record(Actor::user($owner->id), 'admin.setup_teacher_saved', 'provider', $id, [
+            'changes' => AdminProviderActions::tracedChanges($before, $values),
+        ]);
 
         return JsonResponse::success($response, $this->state());
     }
