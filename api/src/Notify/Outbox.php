@@ -24,8 +24,7 @@ final class Outbox
     public function __construct(
         private readonly PDO $pdo,
         private readonly Clock $clock,
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $payload

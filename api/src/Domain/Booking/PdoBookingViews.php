@@ -13,7 +13,7 @@ final class PdoBookingViews implements BookingViewRepository
 {
     private const SELECT = 'SELECT b.id, b.ref, b.status, b.payment_method, b.start_at, b.end_at,
             b.customer_name, b.customer_email, b.customer_phone, b.customer_timezone, b.answers,
-            b.amount_minor, b.currency, b.utr, b.hold_expires_at, b.public_token_enc, b.meet_url,
+            b.amount_minor, b.currency, b.utr, b.hold_expires_at, b.public_token_enc, b.public_token_hash, b.meet_url,
             p.id AS provider_id, p.slug AS provider_slug, p.name AS provider_name, p.timezone AS provider_timezone,
             p.whatsapp, p.notify_email, p.upi_vpa, p.upi_payee_name,
             s.id AS service_id, s.title AS service_title, s.requires_approval
@@ -21,9 +21,7 @@ final class PdoBookingViews implements BookingViewRepository
         JOIN providers p ON p.id = b.provider_id
         JOIN services s ON s.id = b.service_id';
 
-    public function __construct(private readonly PDO $pdo)
-    {
-    }
+    public function __construct(private readonly PDO $pdo) {}
 
     public function findById(int $bookingId): ?BookingView
     {
@@ -82,6 +80,7 @@ final class PdoBookingViews implements BookingViewRepository
             utr: self::nullable($r['utr']),
             holdExpiresAt: $r['hold_expires_at'] === null ? null : self::utc((string) $r['hold_expires_at']),
             publicTokenEnc: self::nullable($r['public_token_enc']),
+            publicTokenHash: (string) $r['public_token_hash'],
             providerId: (int) $r['provider_id'],
             providerSlug: (string) $r['provider_slug'],
             providerName: (string) $r['provider_name'],

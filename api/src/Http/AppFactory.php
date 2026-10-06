@@ -4,25 +4,57 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Http;
 
+use ConsultDesk\Bootstrap\AppServices;
+use ConsultDesk\Http\Action\BookingActions;
+use ConsultDesk\Http\Action\CronAction;
+use ConsultDesk\Http\Action\ProviderActions;
+use ConsultDesk\Http\Middleware\ErrorHandling;
+use ConsultDesk\Http\Middleware\RateLimit;
+use ConsultDesk\Http\Middleware\SecurityHeaders;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Factory\AppFactory as SlimAppFactory;
+use Slim\Routing\RouteCollectorProxy;
 
 final class AppFactory
 {
+    private const MINUTE = 60;
+    private const HOUR = 3600;
+
     /**
      * @return App<ContainerInterface|null>
      */
-    public static function create(bool $displayErrorDetails = false, bool $logErrors = true): App
+    public static function create(AppServices $services): App
     {
         $app = SlimAppFactory::create();
         $app->addRoutingMiddleware();
-        $app->addErrorMiddleware($displayErrorDetails, $logErrors, $logErrors);
+        $app->add(new ErrorHandling($app->getResponseFactory(), $services->config->debug));
+        $app->add(new SecurityHeaders());
 
-        $app->get('/api/health', static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
-            return JsonResponse::success($response, ['status' => 'ok']);
+        $app->group('/api', static function (RouteCollectorProxy $api) use ($services): void {
+            $api->get('/health', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface => JsonResponse::success($response, ['status' => 'ok']));
+
+            $limit = static fn(string $bucket, int $max, int $window): RateLimit => new RateLimit(static fn() => $services->rateLimiter(), $bucket, $max, $window);
+            $providers = static fn(): ProviderActions => new ProviderActions($services->catalog(), $services->slotFinder(), $services->clock(), $services->config->appUrl);
+            $bookings = static fn(): BookingActions => new BookingActions(
+                $services->catalog(),
+                $services->bookingService(),
+                $services->bookingViews(),
+                $services->clock(),
+                $services->config->appUrl,
+            );
+
+            $api->get('/providers', static fn($rq, $rs) => $providers()->list($rq, $rs))->add($limit('read', 120, self::MINUTE));
+            $api->get('/providers/{provider}', static fn($rq, $rs, array $a) => $providers()->show($rq, $rs, $a))->add($limit('read', 120, self::MINUTE));
+            $api->get('/providers/{provider}/services/{service}/slots', static fn($rq, $rs, array $a) => $providers()->slots($rq, $rs, $a))->add($limit('read', 120, self::MINUTE));
+
+            $api->post('/bookings', static fn($rq, $rs) => $bookings()->create($rq, $rs))->add($limit('book', 10, self::HOUR));
+            $api->get('/bookings/{ref}', static fn($rq, $rs, array $a) => $bookings()->show($rq, $rs, $a))->add($limit('status', 60, self::MINUTE));
+            $api->post('/bookings/{ref}/utr', static fn($rq, $rs, array $a) => $bookings()->submitUtr($rq, $rs, $a))->add($limit('utr', 10, self::HOUR));
+
+            $api->get('/cron', static fn($rq, $rs) => (new CronAction($services->cronRunner(), $services->config->cronKey))($rq, $rs))->add($limit('cron', 30, self::MINUTE));
         });
 
         return $app;

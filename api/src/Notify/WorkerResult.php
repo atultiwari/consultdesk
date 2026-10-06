@@ -9,6 +9,5 @@ final class WorkerResult
     public function __construct(
         public readonly int $succeeded,
         public readonly int $failed,
-    ) {
-    }
+    ) {}
 }

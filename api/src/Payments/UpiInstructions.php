@@ -13,8 +13,7 @@ final class UpiInstructions
         public readonly string $amountDisplay,
         public readonly string $uri,
         public readonly ?string $whatsappUrl,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, string|null>

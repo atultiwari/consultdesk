@@ -14,8 +14,7 @@ final class OutboxWorker
     public function __construct(
         private readonly Outbox $outbox,
         private readonly array $handlers,
-    ) {
-    }
+    ) {}
 
     public function run(int $limit): WorkerResult
     {

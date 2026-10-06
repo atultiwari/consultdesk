@@ -21,6 +21,11 @@ interface BookingRepository
      */
     public function lockActiveProvider(int $providerId): ?ProviderRecord;
 
+    /**
+     * Same as lockActiveProvider() without the lock, for read-only use such as listing slots.
+     */
+    public function findActiveProvider(int $providerId): ?ProviderRecord;
+
     public function findActiveService(int $serviceId): ?ServiceRecord;
 
     /**

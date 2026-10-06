@@ -25,8 +25,7 @@ final class BookingEventHandler implements JobHandler
         private readonly BookingEvent $event,
         private readonly BookingViewRepository $views,
         private readonly Outbox $outbox,
-    ) {
-    }
+    ) {}
 
     public function handle(array $payload): void
     {

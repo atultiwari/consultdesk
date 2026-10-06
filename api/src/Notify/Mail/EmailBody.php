@@ -14,9 +14,7 @@ final class EmailBody
     /**
      * @param list<array{string, mixed}> $blocks
      */
-    public function __construct(private readonly array $blocks = [])
-    {
-    }
+    public function __construct(private readonly array $blocks = []) {}
 
     public function heading(string $text): self
     {
@@ -56,7 +54,7 @@ final class EmailBody
         foreach ($this->blocks as [$type, $value]) {
             $parts[] = match ($type) {
                 'details' => implode("\n", array_map(
-                    static fn (string $label, string $v): string => "{$label}: {$v}",
+                    static fn(string $label, string $v): string => "{$label}: {$v}",
                     array_keys(self::rows($value)),
                     self::rows($value),
                 )),

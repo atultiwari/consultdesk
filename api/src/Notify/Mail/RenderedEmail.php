@@ -10,6 +10,5 @@ final class RenderedEmail
         public readonly string $subject,
         public readonly string $text,
         public readonly string $html,
-    ) {
-    }
+    ) {}
 }

@@ -7,7 +7,6 @@ namespace ConsultDesk\Tests\Integration\Notify;
 use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Domain\Booking\BookingService;
 use ConsultDesk\Domain\Booking\Customer;
-use ConsultDesk\Domain\Booking\HeldBooking;
 use ConsultDesk\Domain\Booking\HoldRequest;
 use ConsultDesk\Domain\Booking\PaymentMethod;
 use ConsultDesk\Domain\Booking\PdoBookingRepository;

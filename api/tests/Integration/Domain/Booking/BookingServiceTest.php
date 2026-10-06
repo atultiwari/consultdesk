@@ -464,10 +464,10 @@ final class BookingServiceTest extends IntegrationTestCase
         $statement = $this->pdo->prepare('SELECT type, payload FROM outbox_jobs ORDER BY id');
         $statement->execute();
 
-        return array_map(
-            static fn (array $r): array => [(string) $r['type'], json_decode((string) $r['payload'], true)],
+        return array_values(array_map(
+            static fn(array $r): array => [(string) $r['type'], json_decode((string) $r['payload'], true)],
             $statement->fetchAll(\PDO::FETCH_ASSOC),
-        );
+        ));
     }
 
     /**

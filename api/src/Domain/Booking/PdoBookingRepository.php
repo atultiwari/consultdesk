@@ -22,9 +22,19 @@ final class PdoBookingRepository implements BookingRepository
 
     public function lockActiveProvider(int $providerId): ?ProviderRecord
     {
+        return $this->provider($providerId, ' FOR UPDATE');
+    }
+
+    public function findActiveProvider(int $providerId): ?ProviderRecord
+    {
+        return $this->provider($providerId, '');
+    }
+
+    private function provider(int $providerId, string $lock): ?ProviderRecord
+    {
         $row = $this->fetchOne(
             'SELECT id, timezone, min_notice_min, horizon_days, buffer_before, buffer_after, slot_interval, max_per_day
-             FROM providers WHERE id = :id AND active = 1 FOR UPDATE',
+             FROM providers WHERE id = :id AND active = 1' . $lock,
             ['id' => $providerId],
         );
         if ($row === null) {

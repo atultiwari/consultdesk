@@ -17,8 +17,7 @@ final class PhpMailerMailer implements Mailer
     public function __construct(
         private readonly MailConfig $config,
         private readonly int $timeoutSeconds = 20,
-    ) {
-    }
+    ) {}
 
     public function send(EmailMessage $message): void
     {

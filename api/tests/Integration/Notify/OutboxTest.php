@@ -22,11 +22,11 @@ final class OutboxTest extends IntegrationTestCase
 
         $claimed = $outbox->claimDue(10);
 
-        self::assertSame(['a', 'b'], array_map(static fn ($j) => $j->type, $claimed));
+        self::assertSame(['a', 'b'], array_map(static fn($j) => $j->type, $claimed));
         self::assertSame(['n' => 1], $claimed[0]->payload);
         self::assertSame(1, $claimed[0]->attempts);
         self::assertSame([], $outbox->claimDue(10), 'running jobs are not claimed twice');
-        self::assertSame(['later'], array_map(static fn ($j) => $j->type, $this->outbox('2026-10-05T00:05Z')->claimDue(10)));
+        self::assertSame(['later'], array_map(static fn($j) => $j->type, $this->outbox('2026-10-05T00:05Z')->claimDue(10)));
     }
 
     public function testDedupeKeyKeepsOnlyTheFirstJob(): void
@@ -84,20 +84,18 @@ final class OutboxTest extends IntegrationTestCase
         $outbox->enqueue('ok', ['x' => 1]);
         $outbox->enqueue('boom', []);
         $outbox->enqueue('unknown', []);
-        $seen = [];
-        $worker = new OutboxWorker($outbox, [
-            'ok' => new class ($seen) implements JobHandler {
-                /** @param list<array<string, mixed>> $seen */
-                public function __construct(private array &$seen)
-                {
-                }
+        $recorder = new class implements JobHandler {
+            /** @var list<array<string, mixed>> */
+            public array $seen = [];
 
-                public function handle(array $payload): void
-                {
-                    $this->seen[] = $payload;
-                }
-            },
-            'boom' => new class () implements JobHandler {
+            public function handle(array $payload): void
+            {
+                $this->seen[] = $payload;
+            }
+        };
+        $worker = new OutboxWorker($outbox, [
+            'ok' => $recorder,
+            'boom' => new class implements JobHandler {
                 public function handle(array $payload): void
                 {
                     throw new RuntimeException('SMTP refused');
@@ -107,11 +105,11 @@ final class OutboxTest extends IntegrationTestCase
 
         $result = $worker->run(10);
 
-        self::assertSame([['x' => 1]], $seen);
+        self::assertSame([['x' => 1]], $recorder->seen);
         self::assertSame(1, $result->succeeded);
         self::assertSame(2, $result->failed);
         self::assertSame(['done', 'pending', 'failed'], array_map(
-            fn (string $type): string => (string) $this->rowByType($type)['status'],
+            fn(string $type): string => (string) $this->rowByType($type)['status'],
             ['ok', 'boom', 'unknown'],
         ));
         self::assertSame('SMTP refused', $this->rowByType('boom')['last_error']);

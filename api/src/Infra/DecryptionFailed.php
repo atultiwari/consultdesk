@@ -6,6 +6,4 @@ namespace ConsultDesk\Infra;
 
 use RuntimeException;
 
-final class DecryptionFailed extends RuntimeException
-{
-}
+final class DecryptionFailed extends RuntimeException {}

@@ -25,8 +25,7 @@ final class BookingEmailHandler implements JobHandler
         private readonly Mailer $mailer,
         private readonly Crypto $crypto,
         private readonly string $appUrl,
-    ) {
-    }
+    ) {}
 
     public function handle(array $payload): void
     {

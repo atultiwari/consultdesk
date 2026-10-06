@@ -24,8 +24,7 @@ final class Config
         public readonly bool $debug,
         public readonly DbConfig $db,
         public readonly MailConfig $mail,
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, string> $env

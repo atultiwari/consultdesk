@@ -36,6 +36,7 @@ final class BookingViews
             'utr' => null,
             'holdExpiresAt' => new DateTimeImmutable('2026-10-05T01:00Z'),
             'publicTokenEnc' => null,
+            'publicTokenHash' => hash('sha256', 'placeholder-token'),
             'providerId' => 3,
             'providerSlug' => 'demo',
             'providerName' => 'Dr. Demo Provider',

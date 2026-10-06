@@ -9,9 +9,7 @@ use ConsultDesk\Domain\Booking\BookingEvents;
 
 final class OutboxBookingEvents implements BookingEvents
 {
-    public function __construct(private readonly Outbox $outbox)
-    {
-    }
+    public function __construct(private readonly Outbox $outbox) {}
 
     public function record(BookingEvent $event, int $bookingId): void
     {

@@ -14,6 +14,5 @@ final class OutboxJob
         public readonly string $type,
         public readonly array $payload,
         public readonly int $attempts,
-    ) {
-    }
+    ) {}
 }

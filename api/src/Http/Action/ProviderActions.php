@@ -1,0 +1,98 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ConsultDesk\Http\Action;
+
+use ConsultDesk\Domain\Availability\SlotFinder;
+use ConsultDesk\Domain\Availability\SlotRequest;
+use ConsultDesk\Domain\Catalog\CatalogRepository;
+use ConsultDesk\Domain\Catalog\ProviderProfile;
+use ConsultDesk\Domain\Catalog\ServiceOffering;
+use ConsultDesk\Http\ApiException;
+use ConsultDesk\Http\BookingPresenter;
+use ConsultDesk\Http\JsonResponse;
+use ConsultDesk\Http\Validation\Input;
+use ConsultDesk\Http\Validation\ValidationFailed;
+use ConsultDesk\Infra\Clock;
+use DateTimeImmutable;
+use DateTimeZone;
+use InvalidArgumentException;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+
+/**
+ * Read-only public catalog: providers, their services and open slots.
+ */
+final class ProviderActions
+{
+    private const DEFAULT_RANGE_DAYS = 14;
+
+    public function __construct(
+        private readonly CatalogRepository $catalog,
+        private readonly SlotFinder $slots,
+        private readonly Clock $clock,
+        private readonly string $appUrl,
+    ) {}
+
+    public function list(Request $request, Response $response): Response
+    {
+        return JsonResponse::success($response, array_map(
+            fn(ProviderProfile $p): array => $p->toPublicArray($this->appUrl),
+            $this->catalog->activeProviders(),
+        ));
+    }
+
+    /**
+     * @param array<string, string> $args
+     */
+    public function show(Request $request, Response $response, array $args): Response
+    {
+        $provider = $this->provider($args['provider'] ?? '');
+
+        return JsonResponse::success($response, [
+            'provider' => $provider->toPublicArray($this->appUrl),
+            'services' => array_map(
+                static fn(ServiceOffering $s): array => $s->toPublicArray($provider),
+                $this->catalog->activeServices($provider->id),
+            ),
+        ]);
+    }
+
+    /**
+     * @param array<string, string> $args
+     */
+    public function slots(Request $request, Response $response, array $args): Response
+    {
+        $provider = $this->provider($args['provider'] ?? '');
+        $service = $this->catalog->activeService($provider->id, $args['service'] ?? '') ?? throw ApiException::notFound();
+
+        $query = new Input($request->getQueryParams());
+        $timezone = new DateTimeZone($provider->timezone);
+        $from = $query->date('from', required: false) ?? $this->clock->now()->setTimezone($timezone)->format('Y-m-d');
+        $to = $query->date('to', required: false)
+            ?? (new DateTimeImmutable($from))->modify(sprintf('+%d days', self::DEFAULT_RANGE_DAYS - 1))->format('Y-m-d');
+        $query->assertValid();
+
+        try {
+            $slots = $this->slots->find($provider->id, $service->id, $service->durationMinutes, $from, $to);
+        } catch (InvalidArgumentException $e) {
+            throw new ValidationFailed(['to' => sprintf('%s At most %d days at a time.', $e->getMessage(), SlotRequest::MAX_RANGE_DAYS)]);
+        }
+
+        return JsonResponse::success($response, [
+            'timezone' => $provider->timezone,
+            'from' => $from,
+            'to' => $to,
+            'slots' => array_map(static fn($s): array => [
+                'start' => $s->start->format(BookingPresenter::ISO),
+                'end' => $s->end->format(BookingPresenter::ISO),
+            ], $slots),
+        ]);
+    }
+
+    private function provider(string $slug): ProviderProfile
+    {
+        return $this->catalog->activeProvider($slug) ?? throw ApiException::notFound();
+    }
+}

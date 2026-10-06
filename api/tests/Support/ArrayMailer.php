@@ -16,9 +16,7 @@ final class ArrayMailer implements Mailer
     /** @var list<EmailMessage> */
     public array $sent = [];
 
-    public function __construct(private int $failNext = 0)
-    {
-    }
+    public function __construct(private int $failNext = 0) {}
 
     public function send(EmailMessage $message): void
     {
@@ -34,6 +32,6 @@ final class ArrayMailer implements Mailer
      */
     public function subjects(): array
     {
-        return array_map(static fn (EmailMessage $m): string => $m->subject, $this->sent);
+        return array_map(static fn(EmailMessage $m): string => $m->subject, $this->sent);
     }
 }

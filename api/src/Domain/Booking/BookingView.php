@@ -32,6 +32,7 @@ final class BookingView
         public readonly ?string $utr,
         public readonly ?DateTimeImmutable $holdExpiresAt,
         public readonly ?string $publicTokenEnc,
+        public readonly string $publicTokenHash,
         public readonly int $providerId,
         public readonly string $providerSlug,
         public readonly string $providerName,
@@ -44,7 +45,24 @@ final class BookingView
         public readonly string $serviceTitle,
         public readonly bool $requiresApproval,
         public readonly ?string $meetUrl,
-    ) {
+    ) {}
+
+    /**
+     * Constant-time check of a status-page token against the stored hash.
+     */
+    public function tokenMatches(string $token): bool
+    {
+        return $token !== '' && hash_equals($this->publicTokenHash, RandomRefGenerator::hashToken($token));
+    }
+
+    /**
+     * A pending booking whose hold has run out, even if cron has not marked it expired yet.
+     */
+    public function holdLapsed(DateTimeImmutable $now): bool
+    {
+        return in_array($this->status, [BookingStatus::Held, BookingStatus::AwaitingVerification], true)
+            && $this->holdExpiresAt !== null
+            && $this->holdExpiresAt <= $now;
     }
 
     /**
