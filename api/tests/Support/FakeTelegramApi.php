@@ -51,8 +51,18 @@ final class FakeTelegramApi implements TelegramApi
 
     public function setWebhook(string $url, string $secret): void {}
 
+    /** @var list<array{string, array<string, mixed>}> generic calls made */
+    public array $calls = [];
+    /** @var list<list<array<string, mixed>>> what successive getUpdates calls return */
+    public array $updates = [];
+
     public function call(string $method, array $params = []): array
     {
+        $this->calls[] = [$method, $params];
+        if ($method === 'getUpdates') {
+            return array_shift($this->updates) ?? [];
+        }
+
         return [];
     }
 

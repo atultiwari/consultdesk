@@ -94,6 +94,18 @@ don't forward them). Open it on the phone that should receive alerts and tap **S
 Alerts and buttons work only in a **private chat** with the bot, not in groups. Sending `/stop` to the
 bot unlinks that chat.
 
+### Trying the bot on your own computer
+
+Telegram can't reach `localhost`, so instead of the webhook, let ConsultDesk fetch the bot's
+messages itself (this also keeps cron running, which is what sends the alerts):
+
+```bash
+docker compose exec api php bin/telegram.php poll
+```
+
+Leave it running and use the bot as normal; Ctrl+C stops it. It removes the webhook, so on a live
+site run `php bin/telegram.php set-webhook` again afterwards.
+
 ## Google Calendar (Phase 4, optional)
 
 Each provider can connect their own Google account so that their calendar blocks clashing slots, and

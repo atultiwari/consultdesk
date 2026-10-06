@@ -41,7 +41,7 @@ interface TelegramApi
      *
      * @param array<string, mixed> $params
      *
-     * @return array<string, mixed>
+     * @return array<array-key, mixed> the "result" field (an object, or a list for getUpdates)
      *
      * @throws TelegramApiError
      */
