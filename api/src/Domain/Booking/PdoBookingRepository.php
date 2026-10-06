@@ -127,17 +127,18 @@ final class PdoBookingRepository implements BookingRepository
         $created = $booking->createdAt->format(self::SQL_DATETIME);
         try {
             $this->pdo->prepare(
-                'INSERT INTO bookings (ref, public_token_hash, provider_id, service_id, start_at, end_at,
+                'INSERT INTO bookings (ref, public_token_hash, public_token_enc, provider_id, service_id, start_at, end_at,
                     customer_name, customer_email, customer_phone, customer_timezone, answers,
                     amount_minor, currency, payment_method, status, hold_expires_at,
                     status_changed_at, created_at, updated_at)
-                 VALUES (:ref, :token_hash, :provider, :service, :start_at, :end_at,
+                 VALUES (:ref, :token_hash, :token_enc, :provider, :service, :start_at, :end_at,
                     :name, :email, :phone, :timezone, :answers,
                     :amount, :currency, :method, :status, :hold_expires_at,
                     :status_changed_at, :created_at, :updated_at)',
             )->execute([
                 'ref' => $booking->ref,
                 'token_hash' => $booking->publicTokenHash,
+                'token_enc' => $booking->publicTokenEnc,
                 'provider' => $booking->providerId,
                 'service' => $booking->serviceId,
                 'start_at' => $booking->slot->start->format(self::SQL_DATETIME),

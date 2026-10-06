@@ -23,7 +23,10 @@ use ConsultDesk\Domain\Booking\RefGenerator;
 use ConsultDesk\Domain\Booking\ServiceNotBookable;
 use ConsultDesk\Domain\Booking\SessionNotStarted;
 use ConsultDesk\Domain\Booking\SlotUnavailable;
+use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\FrozenClock;
+use ConsultDesk\Notify\Outbox;
+use ConsultDesk\Notify\OutboxBookingEvents;
 use ConsultDesk\Tests\Integration\IntegrationTestCase;
 use ConsultDesk\Tests\Integration\Support\Fixtures;
 use ConsultDesk\Tests\Integration\Support\SequenceRefs;
@@ -67,6 +70,31 @@ final class BookingServiceTest extends IntegrationTestCase
         self::assertSame(['goal' => 'Thesis feedback'], json_decode((string) $row['answers'], true));
         self::assertSame('Asha Placeholder', $row['customer_name']);
         self::assertSame(['booking.held'], $this->auditActions($held->id));
+        self::assertSame($held->publicToken, self::crypto()->decrypt((string) $row['public_token_enc']));
+        self::assertSame([['booking.held', ['booking_id' => $held->id]]], $this->outboxJobs());
+    }
+
+    public function testEveryStatusChangeQueuesAnEventInTheSameTransaction(): void
+    {
+        $service = $this->service();
+        $upi = $service->hold($this->request('10:00'));
+        $service->submitUtr($upi->id, '412345678901');
+        $service->confirm($upi->id, Actor::system());
+        $service->cancel($upi->id, Actor::system());
+        $toExpire = $service->hold($this->request('14:00'));
+        $this->service('2026-10-05T01:00Z')->expireStale();
+
+        self::assertSame(
+            ['booking.held', 'booking.utr_submitted', 'booking.confirmed', 'booking.cancelled', 'booking.held', 'booking.expired'],
+            array_column($this->outboxJobs(), 0),
+        );
+        self::assertSame(['booking_id' => $toExpire->id], $this->outboxJobs()[5][1]);
+
+        try {
+            $service->hold($this->request('10:00', '2026-10-08', serviceId: 999_999));
+        } catch (ServiceNotBookable) {
+        }
+        self::assertCount(6, $this->outboxJobs(), 'a failed hold queues nothing');
     }
 
     public function testRejectsASecondHoldOnTheSameSlot(): void
@@ -349,12 +377,21 @@ final class BookingServiceTest extends IntegrationTestCase
 
     private function service(string $now = self::NOW, ?RefGenerator $refs = null): BookingService
     {
+        $clock = new FrozenClock($now);
+
         return new BookingService(
             $this->database,
             new PdoBookingRepository($this->pdo),
-            new FrozenClock($now),
+            $clock,
             $refs ?? new RandomRefGenerator(),
+            new OutboxBookingEvents(new Outbox($this->pdo, $clock)),
+            self::crypto(),
         );
+    }
+
+    private static function crypto(): Crypto
+    {
+        return new Crypto(str_repeat('t', SODIUM_CRYPTO_SECRETBOX_KEYBYTES));
     }
 
     /**
@@ -417,6 +454,20 @@ final class BookingServiceTest extends IntegrationTestCase
         self::assertIsArray($row);
 
         return $row;
+    }
+
+    /**
+     * @return list<array{string, mixed}>
+     */
+    private function outboxJobs(): array
+    {
+        $statement = $this->pdo->prepare('SELECT type, payload FROM outbox_jobs ORDER BY id');
+        $statement->execute();
+
+        return array_map(
+            static fn (array $r): array => [(string) $r['type'], json_decode((string) $r['payload'], true)],
+            $statement->fetchAll(\PDO::FETCH_ASSOC),
+        );
     }
 
     /**

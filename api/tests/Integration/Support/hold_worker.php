@@ -14,9 +14,12 @@ use ConsultDesk\Domain\Booking\HoldRequest;
 use ConsultDesk\Domain\Booking\PaymentMethod;
 use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
+use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
 use ConsultDesk\Infra\DbConfig;
 use ConsultDesk\Infra\FrozenClock;
+use ConsultDesk\Notify\Outbox;
+use ConsultDesk\Notify\OutboxBookingEvents;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
@@ -28,7 +31,15 @@ if (count($args) !== 5) {
 [, $providerId, $serviceId, $startIso, $goAt] = array_map('strval', $args);
 
 $db = Db::connect(DbConfig::fromEnv(getenv(), 'DB_TEST_NAME'));
-$service = new BookingService($db, new PdoBookingRepository($db->pdo()), new FrozenClock('2026-10-05T00:00Z'), new RandomRefGenerator());
+$clock = new FrozenClock('2026-10-05T00:00Z');
+$service = new BookingService(
+    $db,
+    new PdoBookingRepository($db->pdo()),
+    $clock,
+    new RandomRefGenerator(),
+    new OutboxBookingEvents(new Outbox($db->pdo(), $clock)),
+    new Crypto(str_repeat('t', SODIUM_CRYPTO_SECRETBOX_KEYBYTES)),
+);
 $request = new HoldRequest(
     providerId: (int) $providerId,
     serviceId: (int) $serviceId,

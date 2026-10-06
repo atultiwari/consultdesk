@@ -8,6 +8,7 @@ use ConsultDesk\Domain\Availability\Interval;
 use ConsultDesk\Domain\Availability\SlotEngine;
 use ConsultDesk\Domain\Availability\SlotRequest;
 use ConsultDesk\Infra\Clock;
+use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
 use DateTimeImmutable;
 use RuntimeException;
@@ -31,6 +32,8 @@ final class BookingService
         private readonly BookingRepository $bookings,
         private readonly Clock $clock,
         private readonly RefGenerator $refs,
+        private readonly BookingEvents $events,
+        private readonly Crypto $crypto,
         private readonly SlotEngine $slotEngine = new SlotEngine(),
     ) {}
 
@@ -62,6 +65,7 @@ final class BookingService
             [$id, $ref] = $this->insertWithUniqueRef(new NewBooking(
                 $this->refs->next(),
                 RandomRefGenerator::hashToken($token),
+                $this->crypto->encrypt($token),
                 $provider->id,
                 $service->id,
                 $slot,
@@ -79,6 +83,7 @@ final class BookingService
                 'start_at' => $slot->start->format(DATE_ATOM),
                 'payment_method' => $request->paymentMethod->value,
             ], $now);
+            $this->events->record(BookingEvent::Held, $id);
 
             return new HeldBooking($id, $ref, $token, $holdExpiresAt);
         });
@@ -106,6 +111,7 @@ final class BookingService
             $verifyBy = min($now->modify(sprintf('+%d minutes', HoldPolicy::VERIFICATION_WINDOW_MINUTES)), $booking->startAt);
             $this->bookings->markAwaitingVerification($bookingId, $validUtr, $verifyBy, $now);
             $this->bookings->audit(Actor::customer(), 'booking.utr_submitted', $bookingId, ['utr' => $validUtr->value], $now);
+            $this->events->record(BookingEvent::UtrSubmitted, $bookingId);
         });
     }
 
@@ -123,6 +129,7 @@ final class BookingService
 
             $this->bookings->markConfirmed($bookingId, $actor->type === ActorType::User ? $actor->id : null, $now);
             $this->bookings->audit($actor, 'booking.confirmed', $bookingId, [], $now);
+            $this->events->record(BookingEvent::Confirmed, $bookingId);
         });
     }
 
@@ -165,6 +172,7 @@ final class BookingService
             foreach ($ids as $id) {
                 $this->bookings->setStatus($id, BookingStatus::Expired, $now);
                 $this->bookings->audit(Actor::system(), 'booking.expired', $id, [], $now);
+                $this->events->record(BookingEvent::Expired, $id);
             }
 
             return count($ids);
@@ -183,6 +191,10 @@ final class BookingService
 
             $this->bookings->setStatus($bookingId, $to, $now);
             $this->bookings->audit($actor, 'booking.' . $to->value, $bookingId, [], $now);
+            $event = BookingEvent::tryFrom('booking.' . $to->value);
+            if ($event !== null) {
+                $this->events->record($event, $bookingId);
+            }
         });
     }
 

@@ -15,6 +15,7 @@ final class NewBooking
     public function __construct(
         public readonly string $ref,
         public readonly string $publicTokenHash,
+        public readonly string $publicTokenEnc,
         public readonly int $providerId,
         public readonly int $serviceId,
         public readonly Interval $slot,
@@ -32,6 +33,7 @@ final class NewBooking
         return new self(
             $ref,
             $this->publicTokenHash,
+            $this->publicTokenEnc,
             $this->providerId,
             $this->serviceId,
             $this->slot,
