@@ -123,7 +123,8 @@ consultdesk/
   - Lifecycle: `status`, `hold_expires_at`, `confirmed_by`, timestamps.
 - `payment_gateways`: org-level Razorpay keys (encrypted), with optional per-provider override.
 - `payment_events`: raw webhook payload; `event_id` is UNIQUE so duplicates are ignored.
-- `oauth_tokens`: Google refresh token per provider, encrypted with sodium using a key from `config.php`.
+- `oauth_tokens`: Google refresh token per provider, encrypted with sodium using a key from `config.php`, plus the calendars that block availability (default: primary only), the calendar events go to, and a `status` (active | broken).
+- Google support tables: `google_oauth_states` (one-time, 30-minute OAuth state with an encrypted PKCE verifier) and `google_busy_cache` (free/busy answers kept 2 minutes).
 - Telegram: `telegram_link_codes` (one-time, hashed, 24 h codes for `t.me/<bot>?start=<code>`) and `telegram_messages` (alerts that still carry buttons, so they can be updated when a booking is settled anywhere).
 - Housekeeping: `outbox_jobs`, `login_attempts`, `sessions`, `audit_log`, `rate_limits` (fixed-window counters keyed by an HMAC of the client IP), `migrations`.
 
@@ -148,7 +149,7 @@ consultdesk/
 1. **Slots.** `SlotEngine` is pure and heavily unit-tested. Given a provider and service, it starts from the weekly rules for the date range and removes:
    - blocked periods (provider-specific and org-wide),
    - existing bookings, keeping the gap from §8 on both sides,
-   - **Google free/busy** times across that provider's chosen calendars, cached for 2 minutes,
+   - **Google free/busy** times across that provider's chosen calendars, cached for 2 minutes. If Google cannot be reached or access was revoked, booking stays open (only the provider's own bookings block time) and staff are emailed once when access is revoked,
    - anything inside the minimum-notice window, beyond the horizon, or on days already at `max_per_day`.
 
    Slots are returned in UTC and shown in the **visitor's timezone**, auto-detected and changeable.
@@ -186,8 +187,10 @@ consultdesk/
    - Sends a confirmation email (PHPMailer) and posts to Telegram.
    - Writes the audit log.
 
+   With Google connected, the customer's confirmation email waits about 2 minutes so it carries the Meet link. The event id is derived from the booking, so a retried calendar job never creates a duplicate.
+
    Rejecting or cancelling a booking deletes the calendar event and frees the slot. Side effects go through the **outbox**, so a Google or SMTP failure is retried by cron rather than losing the booking.
-6. **Google OAuth per provider.** In their own panel, each provider clicks **"Connect Google Calendar"** and chooses which calendars block their availability and which calendar receives events.
+6. **Google OAuth per provider.** In their own panel, each provider clicks **"Connect Google Calendar"** and chooses which calendars block their availability and which calendar receives events. (Until the admin panel exists: `php bin/google.php connect|status|calendars|set-calendars|disconnect <slug>`.) The flow uses PKCE, a one-time 30-minute state and the narrowest scopes: `calendar.events`, `calendar.freebusy`, `calendar.calendarlist.readonly`, `openid email`. A partial grant is revoked and refused.
    - The installation needs one Google Cloud OAuth client, set up with a step-by-step guide in INSTALL.md.
    - The app **must be published to "In production"**, because in "Testing" mode refresh tokens expire after 7 days. An unverified app works for up to 100 users, with a warning screen.
 7. **Admin.**

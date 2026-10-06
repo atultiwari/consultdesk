@@ -16,10 +16,12 @@ final class PdoBookingViews implements BookingViewRepository
             b.amount_minor, b.currency, b.utr, b.hold_expires_at, b.public_token_enc, b.public_token_hash, b.meet_url,
             p.id AS provider_id, p.slug AS provider_slug, p.name AS provider_name, p.timezone AS provider_timezone,
             p.whatsapp, p.notify_email, p.upi_vpa, p.upi_payee_name,
-            s.id AS service_id, s.title AS service_title, s.requires_approval
+            s.id AS service_id, s.title AS service_title, s.requires_approval,
+            b.gcal_event_id, (o.status = \'active\') AS calendar_connected
         FROM bookings b
         JOIN providers p ON p.id = b.provider_id
-        JOIN services s ON s.id = b.service_id';
+        JOIN services s ON s.id = b.service_id
+        LEFT JOIN oauth_tokens o ON o.provider_id = b.provider_id AND o.oauth_provider = \'google\'';
 
     public function __construct(private readonly PDO $pdo) {}
 
@@ -35,11 +37,28 @@ final class PdoBookingViews implements BookingViewRepository
 
     public function staffEmails(BookingView $booking): array
     {
+        return $this->staffEmailsFor($booking->providerNotifyEmail);
+    }
+
+    public function staffEmailsForProvider(int $providerId): array
+    {
+        $statement = $this->pdo->prepare('SELECT notify_email FROM providers WHERE id = :id');
+        $statement->execute(['id' => $providerId]);
+        $notify = $statement->fetchColumn();
+
+        return $this->staffEmailsFor(is_string($notify) ? $notify : null);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function staffEmailsFor(?string $notifyEmail): array
+    {
         $statement = $this->pdo->prepare("SELECT email FROM users WHERE role = 'owner' ORDER BY id");
         $statement->execute();
 
         $emails = [];
-        foreach ([$booking->providerNotifyEmail, ...$statement->fetchAll(PDO::FETCH_COLUMN)] as $email) {
+        foreach ([$notifyEmail, ...$statement->fetchAll(PDO::FETCH_COLUMN)] as $email) {
             if (is_string($email) && $email !== '') {
                 $emails[strtolower($email)] ??= $email;
             }
@@ -93,6 +112,8 @@ final class PdoBookingViews implements BookingViewRepository
             serviceTitle: (string) $r['service_title'],
             requiresApproval: (bool) $r['requires_approval'],
             meetUrl: self::nullable($r['meet_url']),
+            gcalEventId: self::nullable($r['gcal_event_id']),
+            calendarConnected: (bool) ($r['calendar_connected'] ?? false),
         );
     }
 

@@ -4,7 +4,19 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Bootstrap;
 
+use ConsultDesk\Calendar\CalendarLinks;
+use ConsultDesk\Calendar\CalendarServices;
+use ConsultDesk\Calendar\GoogleApi;
+use ConsultDesk\Calendar\GoogleBusyCache;
+use ConsultDesk\Calendar\GoogleBusyTime;
+use ConsultDesk\Calendar\GoogleCalendar;
+use ConsultDesk\Calendar\GoogleConnections;
+use ConsultDesk\Calendar\GoogleDisconnectedHandler;
+use ConsultDesk\Calendar\GoogleOAuth;
+use ConsultDesk\Calendar\HttpGoogleApi;
+use ConsultDesk\Calendar\NullGoogleApi;
 use ConsultDesk\Cron\CronRunner;
+use ConsultDesk\Domain\Availability\BusyTimeSource;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotFinder;
 use ConsultDesk\Domain\Booking\BookingService;
@@ -52,6 +64,7 @@ final class AppServices
         private readonly Clock $clock = new SystemClock(),
         private ?Mailer $mailer = null,
         private ?TelegramApi $telegramApi = null,
+        private ?GoogleApi $googleApi = null,
     ) {}
 
     public function clock(): Clock
@@ -78,6 +91,7 @@ final class AppServices
             new RandomRefGenerator(),
             new OutboxBookingEvents($this->outbox()),
             $this->crypto(),
+            $this->busyTime(),
         );
     }
 
@@ -93,7 +107,7 @@ final class AppServices
 
     public function slotFinder(): SlotFinder
     {
-        return new SlotFinder(new PdoBookingRepository($this->pdo()), new NoBusyTime(), $this->clock);
+        return new SlotFinder(new PdoBookingRepository($this->pdo()), $this->busyTime(), $this->clock);
     }
 
     public function rateLimiter(): RateLimiter
@@ -111,15 +125,23 @@ final class AppServices
         $handlers = NotificationHandlers::build(
             $this->bookingViews(),
             $this->outbox(),
-            $this->mailer ??= new PhpMailerMailer($this->config->mail),
+            $this->mailer(),
             new BookingEmails(),
             $this->crypto(),
             $this->config->appUrl,
             $this->telegramServices(),
             $this->clock,
+            $this->calendarServices(),
         );
+        $cache = new GoogleBusyCache($this->pdo(), $this->clock);
 
-        return new CronRunner($this->pdo(), $this->bookingService(), new OutboxWorker($this->outbox(), $handlers), $this->rateLimiter());
+        return new CronRunner(
+            $this->pdo(),
+            $this->bookingService(),
+            new OutboxWorker($this->outbox(), $handlers),
+            $this->rateLimiter(),
+            [static fn(): int => $cache->prune()],
+        );
     }
 
     public function telegramServices(): ?TelegramServices
@@ -154,6 +176,72 @@ final class AppServices
     public function linkCodes(): LinkCodes
     {
         return new LinkCodes($this->pdo(), $this->clock);
+    }
+
+    public function googleCalendar(): ?GoogleCalendar
+    {
+        $api = $this->googleApi();
+        if ($api === null) {
+            return null;
+        }
+
+        return new GoogleCalendar($api, $this->googleConnections(), $this->outbox(), $this->clock, $this->config->appKey);
+    }
+
+    public function googleOAuth(): ?GoogleOAuth
+    {
+        $api = $this->googleApi();
+
+        return $api === null ? null : new GoogleOAuth($api, $this->googleConnections(), $this->db(), $this->crypto(), $this->clock);
+    }
+
+    public function googleConnections(): GoogleConnections
+    {
+        return new GoogleConnections($this->pdo(), $this->crypto(), $this->clock);
+    }
+
+    /**
+     * The deterministic Google event id for a booking (see GoogleCalendar::eventIdFor()).
+     */
+    public function calendarEventId(int $bookingId): string
+    {
+        return (new GoogleCalendar(new NullGoogleApi(), $this->googleConnections(), $this->outbox(), $this->clock, $this->config->appKey))->eventIdFor($bookingId);
+    }
+
+    private function calendarServices(): ?CalendarServices
+    {
+        $calendar = $this->googleCalendar();
+        if ($calendar === null) {
+            return null;
+        }
+
+        return new CalendarServices(
+            $calendar,
+            new CalendarLinks($this->pdo(), $this->clock),
+            new GoogleDisconnectedHandler($this->pdo(), $this->bookingViews(), $this->mailer()),
+        );
+    }
+
+    private function busyTime(): BusyTimeSource
+    {
+        $calendar = $this->googleCalendar();
+
+        return $calendar === null ? new NoBusyTime() : new GoogleBusyTime($calendar, new GoogleBusyCache($this->pdo(), $this->clock));
+    }
+
+    private function googleApi(): ?GoogleApi
+    {
+        $google = $this->config->google;
+        if ($google === null) {
+            return null;
+        }
+
+        return $this->googleApi ??= new HttpGoogleApi($google->clientId, $google->clientSecret, $google->redirectUri, new Client());
+    }
+
+    private function mailer(): Mailer
+    {
+        return $this->mailer ??= new PhpMailerMailer($this->config->mail);
     }
 
     private function outbox(): Outbox

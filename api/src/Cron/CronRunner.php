@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Cron;
 
+use Closure;
 use ConsultDesk\Domain\Booking\BookingService;
 use ConsultDesk\Infra\RateLimiter;
 use ConsultDesk\Notify\OutboxWorker;
@@ -24,6 +25,8 @@ final class CronRunner
         private readonly BookingService $bookings,
         private readonly OutboxWorker $worker,
         private readonly RateLimiter $rateLimiter,
+        /** @var list<Closure(): int> extra clean-up tasks, e.g. pruning caches */
+        private readonly array $housekeeping = [],
     ) {}
 
     public function run(float $budgetSeconds = 20.0): CronReport
@@ -42,6 +45,10 @@ final class CronRunner
                 $succeeded += $result->succeeded;
                 $failed += $result->failed;
             } while ($result->succeeded + $result->failed > 0 && microtime(true) < $deadline);
+
+            foreach ($this->housekeeping as $task) {
+                $task();
+            }
 
             return new CronReport(true, $expired, $succeeded, $failed, $this->rateLimiter->prune());
         } finally {

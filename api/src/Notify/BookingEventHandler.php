@@ -9,7 +9,9 @@ use ConsultDesk\Domain\Booking\BookingStatus;
 use ConsultDesk\Domain\Booking\BookingView;
 use ConsultDesk\Domain\Booking\BookingViewRepository;
 use ConsultDesk\Domain\Booking\PaymentMethod;
+use ConsultDesk\Infra\Clock;
 use ConsultDesk\Notify\Mail\EmailTemplate;
+use DateTimeImmutable;
 use RuntimeException;
 
 /**
@@ -20,11 +22,13 @@ use RuntimeException;
 final class BookingEventHandler implements JobHandler
 {
     public const EMAIL_JOB = 'email.booking';
+    private const MEET_LINK_WAIT_SECONDS = 120;
 
     public function __construct(
         private readonly BookingEvent $event,
         private readonly BookingViewRepository $views,
         private readonly Outbox $outbox,
+        private readonly ?Clock $clock = null,
     ) {}
 
     public function handle(array $payload): void
@@ -37,8 +41,22 @@ final class BookingEventHandler implements JobHandler
                 self::EMAIL_JOB,
                 ['booking_id' => $bookingId, 'template' => $template->value],
                 sprintf('%s:%d', $template->value, $bookingId),
+                $this->sendAt($template, $booking),
             );
         }
+    }
+
+    /**
+     * With Google connected, the customer's confirmation waits a little so it can carry the Meet link
+     * created by the calendar job (rendering happens at send time).
+     */
+    private function sendAt(EmailTemplate $template, BookingView $booking): ?DateTimeImmutable
+    {
+        if ($template !== EmailTemplate::CustomerConfirmed || !$booking->calendarConnected || $this->clock === null) {
+            return null;
+        }
+
+        return $this->clock->now()->modify(sprintf('+%d seconds', self::MEET_LINK_WAIT_SECONDS));
     }
 
     /**
