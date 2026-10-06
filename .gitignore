@@ -31,3 +31,6 @@ e2e/screenshots/
 
 # Local Claude Code preview config
 .claude/
+
+# Uploaded images (logo, provider photos)
+api/storage/

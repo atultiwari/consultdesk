@@ -6,6 +6,7 @@ namespace ConsultDesk\Http\Action;
 
 use ConsultDesk\Admin\AdminUser;
 use ConsultDesk\Admin\ProviderSettings;
+use ConsultDesk\Admin\Role;
 use ConsultDesk\Http\ApiException;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -18,6 +19,19 @@ final class AdminScope
     public static function user(Request $request): AdminUser
     {
         return AdminAuthActions::session($request)->user;
+    }
+
+    /**
+     * Organisation settings (users, branding, payments, system) are for owners only.
+     */
+    public static function owner(Request $request): AdminUser
+    {
+        $user = self::user($request);
+        if ($user->role !== Role::Owner) {
+            throw ApiException::forbidden();
+        }
+
+        return $user;
     }
 
     /**

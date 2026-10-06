@@ -22,7 +22,9 @@ use PDO;
 final class PasswordResets
 {
     public const EMAIL_JOB = 'email.password_reset';
+    public const INVITE_JOB = 'email.invite';
     public const TTL_MINUTES = 30;
+    public const INVITE_TTL_HOURS = 48;
     private const MAX_PER_HOUR = 3;
     private const KEEP_HOURS = 24;
     private const SQL = 'Y-m-d H:i:s';
@@ -43,19 +45,45 @@ final class PasswordResets
     }
 
     /**
+     * Queues an invite email for a new user (or a fresh one when the last has expired).
+     */
+    public function invite(int $userId): void
+    {
+        $this->outbox->enqueue(self::INVITE_JOB, ['user_id' => $userId]);
+    }
+
+    /**
      * Called by the email job: a fresh token for this account, or null when there is no such
      * account or it has had enough links this hour. Older unused links stop working.
      */
     public function issue(string $email): ?IssuedReset
     {
         $found = $this->users->findForLogin($email);
-        if ($found === null) {
-            return null;
-        }
-        [$user] = $found;
-        $now = $this->clock->now();
 
-        return $this->db->transaction(function (PDO $pdo) use ($user, $now): ?IssuedReset {
+        return $found === null ? null : $this->issueFor($found[0], 'reset');
+    }
+
+    /**
+     * Called by the invite job: a two-day link for a user who has not chosen a password yet.
+     */
+    public function issueInvite(int $userId): ?IssuedReset
+    {
+        $user = $this->users->find($userId);
+
+        return $user === null || $this->users->hasPassword($userId) ? null : $this->issueFor($user, 'invite');
+    }
+
+    /**
+     * @param 'reset'|'invite' $purpose
+     */
+    private function issueFor(AdminUser $user, string $purpose): ?IssuedReset
+    {
+        $now = $this->clock->now();
+        $expires = $purpose === 'invite'
+            ? $now->modify(sprintf('+%d hours', self::INVITE_TTL_HOURS))
+            : $now->modify(sprintf('+%d minutes', self::TTL_MINUTES));
+
+        return $this->db->transaction(function (PDO $pdo) use ($user, $now, $expires, $purpose): ?IssuedReset {
             $recent = $pdo->prepare('SELECT COUNT(*) FROM password_resets WHERE user_id = :user AND created_at > :since FOR UPDATE');
             $recent->execute(['user' => $user->id, 'since' => $now->modify('-1 hour')->format(self::SQL)]);
             if ((int) $recent->fetchColumn() >= self::MAX_PER_HOUR) {
@@ -65,15 +93,16 @@ final class PasswordResets
             $this->retireOpenLinks($pdo, $user->id);
             $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
             $pdo->prepare(
-                'INSERT INTO password_resets (user_id, token_hash, expires_at, created_at) VALUES (:user, :hash, :expires, :created)',
+                'INSERT INTO password_resets (user_id, token_hash, purpose, expires_at, created_at) VALUES (:user, :hash, :purpose, :expires, :created)',
             )->execute([
                 'user' => $user->id,
                 'hash' => hash('sha256', $token),
-                'expires' => $now->modify(sprintf('+%d minutes', self::TTL_MINUTES))->format(self::SQL),
+                'purpose' => $purpose,
+                'expires' => $expires->format(self::SQL),
                 'created' => $now->format(self::SQL),
             ]);
 
-            return new IssuedReset($user->email, $token);
+            return new IssuedReset($user->email, $token, $user->name);
         });
     }
 
@@ -103,11 +132,24 @@ final class PasswordResets
     }
 
     /**
-     * Cron: forgets links a day after they were made.
+     * Whether a user who has not chosen a password yet still has a live invite link.
+     */
+    public function hasLiveInvite(int $userId): bool
+    {
+        $statement = $this->db->pdo()->prepare(
+            "SELECT COUNT(*) FROM password_resets WHERE user_id = :user AND purpose = 'invite' AND used_at IS NULL AND expires_at > :now",
+        );
+        $statement->execute(['user' => $userId, 'now' => $this->clock->now()->format(self::SQL)]);
+
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    /**
+     * Cron: forgets links a day after they expire.
      */
     public function prune(): int
     {
-        $statement = $this->db->pdo()->prepare('DELETE FROM password_resets WHERE created_at < :before');
+        $statement = $this->db->pdo()->prepare('DELETE FROM password_resets WHERE expires_at < :before');
         $statement->execute(['before' => $this->clock->now()->modify(sprintf('-%d hours', self::KEEP_HOURS))->format(self::SQL)]);
 
         return $statement->rowCount();

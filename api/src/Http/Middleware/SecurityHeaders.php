@@ -26,8 +26,11 @@ final class SecurityHeaders implements MiddlewareInterface
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $response = $handler->handle($request);
+        // Safe defaults; a route that sets its own (e.g. cacheable images) keeps them.
         foreach (self::HEADERS as $name => $value) {
-            $response = $response->withHeader($name, $value);
+            if (!$response->hasHeader($name)) {
+                $response = $response->withHeader($name, $value);
+            }
         }
 
         return $response;

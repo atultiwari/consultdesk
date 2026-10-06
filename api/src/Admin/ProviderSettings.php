@@ -84,6 +84,14 @@ final class ProviderSettings
     }
 
     /**
+     * @param string|null $photoPath e.g. "api/media/<name>.webp", or null for no photo
+     */
+    public function setPhoto(int $id, ?string $photoPath): void
+    {
+        $this->pdo->prepare('UPDATE providers SET photo_path = :path WHERE id = :id')->execute(['path' => $photoPath, 'id' => $id]);
+    }
+
+    /**
      * @param array<string, scalar|null> $values
      *
      * @return array<string, scalar|null>
@@ -116,6 +124,7 @@ final class ProviderSettings
             'name' => (string) $r['name'],
             'title' => $r['title'],
             'bio' => $r['bio'],
+            'photo_url' => $r['photo_path'] === null ? null : '/' . ltrim((string) $r['photo_path'], '/'),
             'timezone' => (string) $r['timezone'],
             'active' => (bool) $r['active'],
             'sort_order' => (int) $r['sort_order'],

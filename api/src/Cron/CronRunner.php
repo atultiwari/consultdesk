@@ -27,6 +27,8 @@ final class CronRunner
         private readonly RateLimiter $rateLimiter,
         /** @var list<Closure(): int> extra clean-up tasks, e.g. pruning caches */
         private readonly array $housekeeping = [],
+        /** @var Closure(): void runs after a completed run, e.g. to record that cron is alive */
+        private readonly ?Closure $afterRun = null,
     ) {}
 
     public function run(float $budgetSeconds = 20.0): CronReport
@@ -48,6 +50,9 @@ final class CronRunner
 
             foreach ($this->housekeeping as $task) {
                 $task();
+            }
+            if ($this->afterRun !== null) {
+                ($this->afterRun)();
             }
 
             return new CronReport(true, $expired, $succeeded, $failed, $this->rateLimiter->prune());

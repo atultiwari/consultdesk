@@ -19,7 +19,7 @@ final class AdminUsers
      */
     public function findForLogin(string $email): ?array
     {
-        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id, password_hash FROM users WHERE email = :email');
+        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id, password_hash FROM users WHERE email = :email AND disabled_at IS NULL');
         $statement->execute(['email' => strtolower(trim($email))]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
@@ -28,7 +28,7 @@ final class AdminUsers
 
     public function find(int $id): ?AdminUser
     {
-        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id FROM users WHERE id = :id');
+        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id FROM users WHERE id = :id AND disabled_at IS NULL');
         $statement->execute(['id' => $id]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
@@ -37,8 +37,8 @@ final class AdminUsers
 
     public function setPasswordHash(int $userId, string $hash): void
     {
-        $this->pdo->prepare('UPDATE users SET password_hash = :hash, updated_at = :now WHERE id = :id')
-            ->execute(['hash' => $hash, 'now' => $this->now(), 'id' => $userId]);
+        $this->pdo->prepare('UPDATE users SET password_hash = :hash, password_set_at = COALESCE(password_set_at, :set), updated_at = :now WHERE id = :id')
+            ->execute(['hash' => $hash, 'set' => $this->now(), 'now' => $this->now(), 'id' => $userId]);
     }
 
     public function recordLogin(int $userId): void
@@ -46,15 +46,20 @@ final class AdminUsers
         $this->pdo->prepare('UPDATE users SET last_login_at = :now WHERE id = :id')->execute(['now' => $this->now(), 'id' => $userId]);
     }
 
-    public function create(string $email, string $passwordHash, Role $role, ?int $providerId, ?string $name = null): int
+    /**
+     * @param string|null $passwordHash null for an invited user, who has no password until they choose one
+     */
+    public function create(string $email, ?string $passwordHash, Role $role, ?int $providerId, ?string $name = null): int
     {
         $this->pdo->prepare(
-            'INSERT INTO users (email, name, password_hash, role, provider_id, created_at, updated_at)
-             VALUES (:email, :name, :hash, :role, :provider, :created, :updated)',
+            'INSERT INTO users (email, name, password_hash, password_set_at, role, provider_id, created_at, updated_at)
+             VALUES (:email, :name, :hash, :set, :role, :provider, :created, :updated)',
         )->execute([
             'email' => strtolower(trim($email)),
             'name' => $name,
-            'hash' => $passwordHash,
+            // An invited user's hash matches no password at all.
+            'hash' => $passwordHash ?? '!invited:' . bin2hex(random_bytes(16)),
+            'set' => $passwordHash === null ? null : $this->now(),
             'role' => $role->value,
             'provider' => $providerId,
             'created' => $this->now(),
@@ -62,6 +67,20 @@ final class AdminUsers
         ]);
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    public function hasPassword(int $userId): bool
+    {
+        $statement = $this->pdo->prepare('SELECT password_set_at IS NOT NULL FROM users WHERE id = :id');
+        $statement->execute(['id' => $userId]);
+
+        return (bool) $statement->fetchColumn();
+    }
+
+    public function setName(int $userId, ?string $name): void
+    {
+        $this->pdo->prepare('UPDATE users SET name = :name, updated_at = :now WHERE id = :id')
+            ->execute(['name' => $name, 'now' => $this->now(), 'id' => $userId]);
     }
 
     private function now(): string
