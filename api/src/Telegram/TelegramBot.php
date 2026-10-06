@@ -19,7 +19,8 @@ use ConsultDesk\Infra\Db;
  */
 final class TelegramBot
 {
-    private const COMMAND = '/^\/(start|stop)(?:@\w+)?(?:\s+(\S+))?\s*$/';
+    private const COMMAND = '/^\/(start|stop)(?:@(\w+))?(?:\s+(\S+))?\s*$/';
+    private const PRIVATE_ONLY = 'Booking actions work only in a private chat with the bot.';
 
     public function __construct(
         private readonly BookingViewRepository $views,
@@ -28,6 +29,7 @@ final class TelegramBot
         private readonly LinkCodes $linkCodes,
         private readonly Db $db,
         private readonly Clock $clock,
+        private readonly ?string $botUsername = null,
     ) {}
 
     /**
@@ -40,7 +42,8 @@ final class TelegramBot
 
         if (is_array($callback)) {
             $this->onButton($callback);
-        } elseif (is_array($message) && is_string($message['text'] ?? null)) {
+        } elseif (is_array($message) && is_string($message['text'] ?? null) && self::isPrivate($message)) {
+            // Linking and unlinking only from private chats: in a group, anyone could use a code.
             $this->onCommand(self::chatId($message), trim($message['text']));
         }
     }
@@ -59,6 +62,14 @@ final class TelegramBot
         $booking = $data === null ? null : $this->views->findById($data->bookingId);
         if ($data === null || $booking === null) {
             $this->answer($callbackId, 'This button is no longer valid.');
+
+            return;
+        }
+
+        // Only a one-to-one chat proves who pressed: in a group, every member sees the buttons.
+        $from = is_array($callback['from'] ?? null) ? ($callback['from']['id'] ?? null) : null;
+        if (!self::isPrivate($message) || (string) $from !== $chat) {
+            $this->answer($callbackId, self::PRIVATE_ONLY);
 
             return;
         }
@@ -111,6 +122,10 @@ final class TelegramBot
         if ($chat === '' || preg_match(self::COMMAND, $text, $m) !== 1) {
             return;
         }
+        $addressedTo = $m[2] ?? '';
+        if ($addressedTo !== '' && $this->botUsername !== null && strcasecmp($addressedTo, $this->botUsername) !== 0) {
+            return; // meant for another bot
+        }
 
         if ($m[1] === 'stop') {
             $removed = $this->telegram->directory->unlink($chat);
@@ -119,7 +134,7 @@ final class TelegramBot
             return;
         }
 
-        $code = $m[2] ?? '';
+        $code = $m[3] ?? '';
         if ($code === '') {
             $this->reply($chat, sprintf(
                 "Hi! This is the booking assistant.\nThis chat's id is <code>%s</code>. Ask the site owner for a link to connect it.",
@@ -199,6 +214,16 @@ final class TelegramBot
         } catch (TelegramApiError $e) {
             error_log('[consultdesk] telegram reply failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     */
+    private static function isPrivate(array $message): bool
+    {
+        $chat = $message['chat'] ?? null;
+
+        return is_array($chat) && ($chat['type'] ?? null) === 'private';
     }
 
     /**

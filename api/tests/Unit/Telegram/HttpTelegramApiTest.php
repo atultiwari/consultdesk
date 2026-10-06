@@ -83,6 +83,28 @@ final class HttpTelegramApiTest extends TestCase
         }
     }
 
+    public function testMarksClientErrorsAsPermanentAndCleansDescriptions(): void
+    {
+        $api = $this->api([
+            new Response(400, [], '{"ok":false,"description":"Bad Request: message to edit not found\u0007"}'),
+            new Response(429, [], '{"ok":false,"description":"Too Many Requests: retry after 5"}'),
+        ]);
+
+        try {
+            $api->editMessage('42', 9, 'x');
+            self::fail('Expected an error.');
+        } catch (TelegramApiError $e) {
+            self::assertTrue($e->permanent);
+            self::assertStringNotContainsString("\u{0007}", $e->getMessage());
+        }
+        try {
+            $api->sendMessage('42', 'x');
+            self::fail('Expected an error.');
+        } catch (TelegramApiError $e) {
+            self::assertFalse($e->permanent, 'rate limits are retried');
+        }
+    }
+
     public function testRegistersTheWebhookWithItsSecret(): void
     {
         $api = $this->api([new Response(200, [], '{"ok":true,"result":true}')]);

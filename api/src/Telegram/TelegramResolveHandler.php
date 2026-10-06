@@ -24,9 +24,23 @@ final class TelegramResolveHandler implements JobHandler
         $bookingId = PayloadReader::int($payload, 'booking_id');
         $booking = $this->views->findById($bookingId) ?? throw new RuntimeException("Booking {$bookingId} not found.");
 
+        $retry = null;
         foreach ($this->telegram->log->forBooking($bookingId) as $message) {
-            $this->telegram->api->editMessage($message['chat'], $message['message'], TelegramText::resolution($booking));
+            try {
+                $this->telegram->api->editMessage($message['chat'], $message['message'], TelegramText::resolution($booking));
+            } catch (TelegramApiError $e) {
+                if (!$e->permanent) {
+                    // Keep it for the retry, but still update every other chat now.
+                    $retry ??= $e;
+
+                    continue;
+                }
+            }
             $this->telegram->log->forget($bookingId, $message['chat'], $message['message']);
+        }
+
+        if ($retry !== null) {
+            throw $retry;
         }
     }
 }

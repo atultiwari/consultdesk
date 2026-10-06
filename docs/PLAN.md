@@ -171,7 +171,7 @@ consultdesk/
    - Confirm is one tap. Reject asks first (**[Yes, reject] [↩ Back]**), because a mistaken reject tells a paying customer their booking failed.
    - The webhook verifies the `X-Telegram-Bot-Api-Secret-Token` header and that the chat may act: the provider's chat, that provider's own user, or an owner or admin. Pressing a button on a booking that was already settled explains what happened and shows the outcome.
    - When a booking is settled anywhere (Telegram, admin panel, expiry), earlier alerts are edited to show the outcome and lose their buttons.
-   - Chats are linked with one-time links (`php bin/telegram.php link provider <slug>`, later from the admin panel) and unlinked with `/stop`.
+   - Chats are linked with one-time links (`php bin/telegram.php link provider <slug>`, later from the admin panel) and unlinked with `/stop`. Linking and button actions work only in **private** chats, and the person pressing must be that chat, because in a group every member sees the buttons. Owner/admin links expire after 15 minutes; provider links after 24 hours.
    - The same confirm action is available in the admin panel.
 4. **Razorpay (VRL) Payment Links.**
    - `POST /v1/payment_links` is called with `reference_id=booking.id`, `expire_by=now+20m`, `callback_url=/b/{ref}?t=…` and `notes.source="consultdesk"`, then the customer is redirected to `short_url`.

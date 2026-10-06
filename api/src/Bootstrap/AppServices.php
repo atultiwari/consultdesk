@@ -147,6 +147,7 @@ final class AppServices
             $this->linkCodes(),
             $this->db(),
             $this->clock,
+            $this->config->telegram?->botUsername,
         );
     }
 

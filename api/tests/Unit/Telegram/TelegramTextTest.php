@@ -31,6 +31,14 @@ final class TelegramTextTest extends TestCase
         self::assertStringNotContainsString('BST', $text, 'staff see the provider\'s timezone');
     }
 
+    public function testApostrophesUseEntitiesTelegramUnderstands(): void
+    {
+        $text = TelegramText::alert(BookingViews::make(['customerName' => "Siobhán O'Brien"]), AlertKind::VerifyPayment);
+
+        self::assertStringContainsString('Siobhán O&#039;Brien', $text);
+        self::assertStringNotContainsString('&apos;', $text);
+    }
+
     public function testApprovalAlertAndRejectPrompt(): void
     {
         $view = BookingViews::make(['paymentMethod' => PaymentMethod::Free, 'amountMinor' => 0, 'requiresApproval' => true]);

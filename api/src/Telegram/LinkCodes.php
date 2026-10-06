@@ -10,11 +10,12 @@ use PDO;
 
 /**
  * One-time codes that link a Telegram chat to a provider or user via t.me/<bot>?start=<code>.
- * Only a hash of each code is stored; codes expire after a day and work once.
+ * Only a hash of each code is stored; codes work once and expire (24 h for providers, 15 min for owner/admin users).
  */
 final class LinkCodes
 {
-    private const TTL_HOURS = 24;
+    /** Provider links may be sent to someone else to open; owner/admin links grant approval rights. */
+    private const TTL_MINUTES = ['provider' => 24 * 60, 'user' => 15];
     private const SQL_DATETIME = 'Y-m-d H:i:s';
     private const CODE_PATTERN = '/^[A-Za-z0-9_-]{16,64}$/';
 
@@ -41,7 +42,7 @@ final class LinkCodes
             'hash' => hash('sha256', $code),
             'type' => $targetType,
             'target' => $targetId,
-            'expires' => $now->modify(sprintf('+%d hours', self::TTL_HOURS))->format(self::SQL_DATETIME),
+            'expires' => $now->modify(sprintf('+%d minutes', self::TTL_MINUTES[$targetType]))->format(self::SQL_DATETIME),
             'created' => $now->format(self::SQL_DATETIME),
         ]);
 
@@ -68,17 +69,20 @@ final class LinkCodes
             return null;
         }
 
+        $isProvider = $row['target_type'] === 'provider';
+        $label = $this->pdo->prepare($isProvider ? 'SELECT name FROM providers WHERE id = :id' : 'SELECT email FROM users WHERE id = :id');
+        $label->execute(['id' => $row['target_id']]);
+        $name = $label->fetchColumn();
+        if (!is_string($name)) {
+            return null; // the provider or user was deleted after the link was made
+        }
+
         $this->pdo->prepare('UPDATE telegram_link_codes SET used_at = :now WHERE code_hash = :hash')
             ->execute(['now' => $now, 'hash' => hash('sha256', $code)]);
-
-        $isProvider = $row['target_type'] === 'provider';
         $table = $isProvider ? 'providers' : 'users';
         $this->pdo->prepare("UPDATE {$table} SET telegram_chat_id = :chat WHERE id = :id")
             ->execute(['chat' => $chatId, 'id' => $row['target_id']]);
 
-        $label = $this->pdo->prepare($isProvider ? 'SELECT name FROM providers WHERE id = :id' : 'SELECT email FROM users WHERE id = :id');
-        $label->execute(['id' => $row['target_id']]);
-
-        return (string) $label->fetchColumn();
+        return $name;
     }
 }

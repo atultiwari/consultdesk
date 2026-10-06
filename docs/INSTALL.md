@@ -84,5 +84,9 @@ php api/bin/telegram.php link provider <provider-slug>   # the provider's own ch
 php api/bin/telegram.php link user <owner-email>         # the owner, as fallback for providers without Telegram
 ```
 
-Each command prints a `https://t.me/<bot>?start=...` link, valid once for 24 hours. Open it on the
-phone that should receive alerts and tap **Start**. Sending `/stop` to the bot unlinks that chat.
+Each command prints a `https://t.me/<bot>?start=...` link that works once: 24 hours for a provider,
+15 minutes for an owner or admin (those links grant approval rights, so open them straight away and
+don't forward them). Open it on the phone that should receive alerts and tap **Start**.
+
+Alerts and buttons work only in a **private chat** with the bot, not in groups. Sending `/stop` to the
+bot unlinks that chat.

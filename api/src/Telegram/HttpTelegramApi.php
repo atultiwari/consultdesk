@@ -80,7 +80,10 @@ final class HttpTelegramApi implements TelegramApi
         }
         if (!is_array($body) || ($body['ok'] ?? false) !== true) {
             $description = is_array($body) && is_string($body['description'] ?? null) ? $body['description'] : 'unknown error';
-            throw new TelegramApiError(sprintf('Telegram %s failed: %s', $method, str_replace($this->token, '***', $description)));
+            $clean = preg_replace('/[\x00-\x1F\x7F]/', '', str_replace($this->token, '***', $description)) ?? '';
+            // 400 and 403 (bad request, bot blocked, chat gone) will fail the same way every time.
+            $permanent = in_array($response->getStatusCode(), [400, 403], true);
+            throw new TelegramApiError(sprintf('Telegram %s failed: %s', $method, mb_substr($clean, 0, 300)), $permanent);
         }
 
         $result = $body['result'] ?? [];

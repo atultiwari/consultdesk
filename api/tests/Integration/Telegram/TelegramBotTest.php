@@ -169,6 +169,86 @@ final class TelegramBotTest extends ApiTestCase
         self::assertSame('pending', $this->scalar("SELECT status FROM outbox_jobs WHERE type = 'telegram.alert'"));
     }
 
+    public function testADeadAlertDoesNotStopTheOthersBeingUpdated(): void
+    {
+        $booking = $this->bookAndPay();
+        $first = $this->telegram()->sent[0]['id'];
+        $this->pdo->exec("INSERT INTO telegram_messages (booking_id, chat_id, message_id, created_at) VALUES ({$booking['id']}, '4040', 1, '2026-10-05 00:00:00')");
+        $this->telegram()->failingEdits = ['4040' => true];
+
+        $this->servicesNow()->bookingService()->confirm($booking['id'], Actor::user($this->adminId));
+        $this->runCron();
+
+        self::assertContains($first, array_column($this->telegram()->edits, 'id'));
+        self::assertSame('0', $this->scalar('SELECT COUNT(*) FROM telegram_messages'), 'the dead message is forgotten too');
+        self::assertSame('done', $this->scalar("SELECT status FROM outbox_jobs WHERE type = 'telegram.resolve'"));
+    }
+
+    public function testAnAlertForAnAlreadySettledBookingIsNotSent(): void
+    {
+        [, $created] = $this->call('POST', '/api/bookings', $this->booking());
+        $ref = $created['data']['ref'];
+        $this->call('POST', "/api/bookings/{$ref}/utr", ['token' => $created['data']['token'], 'utr' => '412345678901']);
+        $this->servicesNow()->bookingService()->confirm($this->bookingId($ref), Actor::user($this->adminId));
+
+        $this->runCron();
+
+        self::assertSame([], $this->telegram()->sent);
+    }
+
+    public function testGroupChatsCannotActOrLink(): void
+    {
+        $booking = $this->bookAndPay();
+        $this->pdo->exec("UPDATE providers SET telegram_chat_id = '-100777' WHERE id = {$this->providerId}");
+
+        $this->press('-100777', 5, "c:v:{$booking['id']}", chatType: 'supergroup', from: '31337');
+        self::assertSame('awaiting_verification', $this->bookingStatus($booking['id']));
+        self::assertStringContainsString('private chat', $this->lastAnswer());
+
+        $code = (new LinkCodes($this->pdo, new FrozenClock(self::NOW)))->create('user', $this->adminId);
+        $this->say('-100888', "/start {$code}", chatType: 'group');
+        self::assertNull($this->scalar("SELECT id FROM users WHERE telegram_chat_id = '-100888'"));
+    }
+
+    public function testThePresserMustBeTheChatItself(): void
+    {
+        $booking = $this->bookAndPay();
+
+        $this->press(self::PROVIDER_CHAT, 5, "c:v:{$booking['id']}", from: '31337');
+
+        self::assertSame('awaiting_verification', $this->bookingStatus($booking['id']));
+    }
+
+    public function testMalformedCallbacksAndOtherBotsCommandsAreIgnored(): void
+    {
+        $this->call('POST', '/api/webhooks/telegram', ['update_id' => 99, 'callback_query' => ['id' => 'cbx', 'data' => 'c:v:1']], headers: ['X-Telegram-Bot-Api-Secret-Token' => self::SECRET]);
+        self::assertStringContainsString('no longer valid', $this->lastAnswer());
+
+        $this->say('7777', '/start@SomeOtherBot');
+        $this->say('7777', '/start@ConsultDeskTestBot');
+        self::assertCount(1, array_filter($this->telegram()->sent, static fn(array $m): bool => $m['chat'] === '7777'));
+    }
+
+    public function testOwnerAndAdminLinkCodesExpireQuickly(): void
+    {
+        $code = (new LinkCodes($this->pdo, new FrozenClock('2026-10-04T23:44Z')))->create('user', $this->adminId);
+
+        $this->say('7777', "/start {$code}");
+
+        self::assertStringContainsString('expired or was already used', $this->lastSent('7777'));
+    }
+
+    public function testCodesForDeletedTargetsDoNotClaimSuccess(): void
+    {
+        $other = Fixtures::provider($this->pdo, ['slug' => 'gone']);
+        $code = (new LinkCodes($this->pdo, new FrozenClock(self::NOW)))->create('provider', $other);
+        $this->pdo->exec("DELETE FROM providers WHERE id = {$other}");
+
+        $this->say('7777', "/start {$code}");
+
+        self::assertStringContainsString('expired or was already used', $this->lastSent('7777'));
+    }
+
     public function testWebhookRequiresTheSecretHeader(): void
     {
         self::assertSame(403, $this->call('POST', '/api/webhooks/telegram', ['update_id' => 1])[0]);
@@ -205,7 +285,7 @@ final class TelegramBotTest extends ApiTestCase
     {
         $this->say(self::PROVIDER_CHAT, '/stop');
 
-        self::assertNull($this->scalar("SELECT telegram_chat_id FROM providers WHERE id = {$this->providerId}") ?: null);
+        self::assertSame('1', $this->scalar("SELECT telegram_chat_id IS NULL FROM providers WHERE id = {$this->providerId}"));
         self::assertStringContainsString('unlinked', strtolower($this->lastSent(self::PROVIDER_CHAT)));
     }
 
@@ -225,14 +305,14 @@ final class TelegramBotTest extends ApiTestCase
     /**
      * @return array{int, array<string, mixed>}
      */
-    private function press(string $chat, int $messageId, string $data): array
+    private function press(string $chat, int $messageId, string $data, string $chatType = 'private', ?string $from = null): array
     {
         [$status, $body] = $this->call('POST', '/api/webhooks/telegram', [
             'update_id' => $this->update++,
             'callback_query' => [
                 'id' => 'cb' . $this->update,
-                'from' => ['id' => (int) $chat],
-                'message' => ['message_id' => $messageId, 'chat' => ['id' => (int) $chat, 'type' => 'private']],
+                'from' => ['id' => (int) ($from ?? $chat)],
+                'message' => ['message_id' => $messageId, 'chat' => ['id' => (int) $chat, 'type' => $chatType]],
                 'data' => $data,
             ],
         ], headers: ['X-Telegram-Bot-Api-Secret-Token' => self::SECRET]);
@@ -240,11 +320,11 @@ final class TelegramBotTest extends ApiTestCase
         return [$status, $body];
     }
 
-    private function say(string $chat, string $text): void
+    private function say(string $chat, string $text, string $chatType = 'private'): void
     {
         $this->call('POST', '/api/webhooks/telegram', [
             'update_id' => $this->update++,
-            'message' => ['message_id' => 1, 'chat' => ['id' => (int) $chat, 'type' => 'private'], 'from' => ['id' => (int) $chat], 'text' => $text],
+            'message' => ['message_id' => 1, 'chat' => ['id' => (int) $chat, 'type' => $chatType], 'from' => ['id' => (int) $chat], 'text' => $text],
         ], headers: ['X-Telegram-Bot-Api-Secret-Token' => self::SECRET]);
     }
 

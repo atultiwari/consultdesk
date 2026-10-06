@@ -7,7 +7,7 @@ declare(strict_types=1);
 //   php bin/telegram.php set-webhook             point the bot at <APP_URL>/api/webhooks/telegram
 //   php bin/telegram.php link provider <slug>    one-time link for a provider's chat
 //   php bin/telegram.php link user <email>       one-time link for an owner/admin/provider user's chat
-// Links expire after 24 hours and work once. (The admin panel will offer the same in Phase 6.)
+// Links work once: 24 hours for providers, 15 minutes for owner/admin users. (The admin panel will offer the same in Phase 6.)
 
 use ConsultDesk\Bootstrap\AppServices;
 use ConsultDesk\Infra\Config;
@@ -66,7 +66,9 @@ try {
             }
             $username = $config->botUsername ?? (string) ($telegram->api->call('getMe')['username'] ?? '');
             $code = $services->linkCodes()->create($type, (int) $id);
-            echo "Open this link on the phone that should get alerts (valid 24 hours, once):\n";
+            echo $type === 'provider'
+                ? "Open this link on the phone that should get alerts (valid 24 hours, once):\n"
+                : "Open this link now, in a private chat on your own phone (valid 15 minutes, once):\n";
             echo "https://t.me/{$username}?start={$code}\n";
             break;
 

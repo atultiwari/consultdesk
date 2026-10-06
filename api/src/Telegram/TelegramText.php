@@ -85,6 +85,7 @@ final class TelegramText
 
     private static function e(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Numeric entities: Telegram's HTML mode does not know &apos;.
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
