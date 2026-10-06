@@ -18,7 +18,7 @@ final class SiteSetupTest extends AdminTestCase
         self::assertNotEmpty($body['data']['template_sets']);
         $first = $body['data']['template_sets'][0];
         self::assertSame(['key', 'label', 'description', 'templates'], array_keys($first));
-        self::assertSame(['key', 'title', 'tagline', 'audience', 'duration_min', 'price_minor', 'requires_approval'], array_keys($first['templates'][0]));
+        self::assertSame(['key', 'title', 'tagline', 'audience', 'duration_min', 'price_minor', 'price_note', 'requires_approval'], array_keys($first['templates'][0]));
     }
 
     public function testAOneTeacherSiteFromStartToFinish(): void

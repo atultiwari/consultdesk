@@ -151,6 +151,7 @@ final class SiteSetup
                 'audience' => $t['audience'] ?? null,
                 'duration_min' => $t['duration_min'],
                 'price_minor' => $t['price_minor'],
+                'price_note' => $t['price_note'] ?? null,
                 'requires_approval' => $t['requires_approval'],
             ], $set['templates']),
         ], ServiceTemplates::sets());
