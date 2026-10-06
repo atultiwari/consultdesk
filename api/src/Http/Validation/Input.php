@@ -132,6 +132,67 @@ final class Input
     }
 
     /**
+     * Whether the field was sent at all, even as null (for partial updates).
+     */
+    public function has(string $field): bool
+    {
+        return array_key_exists($field, $this->data);
+    }
+
+    /**
+     * A whole number from JSON, or digits from a query string.
+     */
+    public function int(string $field, bool $required = true, int $min = 0, int $max = PHP_INT_MAX): ?int
+    {
+        $value = $this->raw($field);
+        if ($value === null || $value === '') {
+            return $this->missing($field, $required);
+        }
+        if (is_string($value) && preg_match('/^-?\d{1,18}$/', $value) === 1) {
+            $value = (int) $value;
+        }
+        if (!is_int($value)) {
+            return $this->fail($field, 'Must be a whole number.');
+        }
+        if ($value < $min || $value > $max) {
+            return $this->fail($field, sprintf('Must be between %d and %d.', $min, $max));
+        }
+
+        return $value;
+    }
+
+    public function bool(string $field, bool $required = false): ?bool
+    {
+        $value = $this->raw($field);
+        if ($value === null) {
+            return $this->missing($field, $required);
+        }
+
+        return is_bool($value) ? $value : $this->fail($field, 'Must be true or false.');
+    }
+
+    /**
+     * A JSON array. Missing means null (or an error when required).
+     *
+     * @return list<mixed>|null
+     */
+    public function list(string $field, bool $required = false, int $max = 100): ?array
+    {
+        $value = $this->raw($field);
+        if ($value === null) {
+            return $this->missing($field, $required);
+        }
+        if (!is_array($value) || !array_is_list($value)) {
+            return $this->fail($field, 'Must be a list.');
+        }
+        if (count($value) > $max) {
+            return $this->fail($field, sprintf('At most %d items.', $max));
+        }
+
+        return $value;
+    }
+
+    /**
      * Records an error found outside this reader, e.g. by validating intake answers.
      */
     public function reject(string $field, string $message): void

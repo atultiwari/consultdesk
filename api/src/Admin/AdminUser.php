@@ -33,6 +33,15 @@ final class AdminUser
     }
 
     /**
+     * The one provider this person is limited to, or null when they see every provider.
+     * A provider account that has lost its provider sees nothing (0 matches no row).
+     */
+    public function providerScope(): ?int
+    {
+        return $this->isStaff() ? null : ($this->providerId ?? 0);
+    }
+
+    /**
      * @return array{id: int, email: string, name: ?string, role: string, provider_id: ?int}
      */
     public function toArray(): array

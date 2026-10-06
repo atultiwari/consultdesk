@@ -9,6 +9,8 @@ use JsonException;
 
 final class QuestionSet
 {
+    public const MAX_QUESTIONS = 20;
+
     /**
      * @param list<Question> $questions
      */
@@ -25,7 +27,28 @@ final class QuestionSet
             throw new InvalidArgumentException('Questions must be a JSON array.');
         }
 
-        return new self(array_map(self::question(...), $decoded));
+        return self::fromArray($decoded);
+    }
+
+    /**
+     * Builds the set from the question builder's data: each question valid, ids unique.
+     *
+     * @param list<mixed> $raw
+     *
+     * @throws InvalidArgumentException with a message fit to show the admin
+     */
+    public static function fromArray(array $raw): self
+    {
+        if (count($raw) > self::MAX_QUESTIONS) {
+            throw new InvalidArgumentException(sprintf('Ask at most %d questions.', self::MAX_QUESTIONS));
+        }
+        $questions = array_map(self::question(...), $raw);
+        $ids = array_map(static fn(Question $q): string => $q->id, $questions);
+        if (count($ids) !== count(array_unique($ids))) {
+            throw new InvalidArgumentException('Each question needs its own id.');
+        }
+
+        return new self($questions);
     }
 
     /**
