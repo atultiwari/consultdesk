@@ -204,7 +204,10 @@ Everyone can change their own name and password, and link their own Telegram, un
 
 **System** shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
 (with **Retry failed jobs**), the version, and any database updates waiting after an upgrade, with a
-**Run database updates** button. Take a backup before running updates.
+**Run database updates** button. Take a backup before running updates. Sign-in keeps working while an
+update is waiting, so you can always reach this page after uploading a new version (or run
+`php bin/migrate.php` on the server instead). The database user needs permission to alter tables for
+updates to run from the web.
 
 ### Signing in
 
