@@ -62,7 +62,7 @@ final class BookingServiceTest extends IntegrationTestCase
         $held = $this->service()->hold($this->request('10:00', answers: ['goal' => 'Thesis feedback']));
 
         self::assertMatchesRegularExpression('/^CD-[2-9A-Z]{4}$/', $held->ref);
-        self::assertSame('2026-10-05T01:00:00+00:00', $held->holdExpiresAt->format(DATE_ATOM));
+        self::assertSame('2026-10-05T00:30:00+00:00', $held->holdExpiresAt->format(DATE_ATOM), 'half an hour to pay');
 
         $row = $this->booking($held->id);
         self::assertSame('held', $row['status']);
@@ -210,12 +210,12 @@ final class BookingServiceTest extends IntegrationTestCase
     {
         $held = $this->service()->hold($this->request('10:00'));
 
-        $this->service('2026-10-05T00:30Z')->submitUtr($held->id, '4123 4567 8901');
+        $this->service('2026-10-05T00:29Z')->submitUtr($held->id, '4123 4567 8901');
 
         $row = $this->booking($held->id);
         self::assertSame('awaiting_verification', $row['status']);
         self::assertSame('412345678901', $row['utr']);
-        self::assertSame('2026-10-06 00:30:00', $row['hold_expires_at']);
+        self::assertSame('2026-10-06 00:29:00', $row['hold_expires_at'], 'a day to verify, from when the UTR arrived');
         self::assertSame(['booking.held', 'booking.utr_submitted'], $this->auditActions($held->id));
     }
 
@@ -325,7 +325,7 @@ final class BookingServiceTest extends IntegrationTestCase
         self::assertSame(0, $this->service('2026-10-06T00:00Z')->expireStale(), 'nothing left to expire');
 
         $fresh = $this->service('2026-10-06T00:00Z')->hold($this->request('17:00', '2026-10-08'));
-        self::assertSame(0, $this->service('2026-10-06T00:59Z')->expireStale());
+        self::assertSame(0, $this->service('2026-10-06T00:29Z')->expireStale());
         self::assertSame('held', $this->booking($fresh->id)['status']);
     }
 

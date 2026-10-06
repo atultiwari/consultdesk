@@ -212,7 +212,7 @@ export default function BookingPage() {
 
               {chosenMethod === 'upi' && (
                 <Notice tone="info" title="What happens next">
-                  Your time is held while you pay (up to an hour). On the next page you'll see the
+                  Your time is held for 30 minutes while you pay. On the next page you'll see the
                   UPI details; pay {service.price_display} once, then enter the 12-digit UTR from
                   your UPI app.
                 </Notice>

@@ -140,6 +140,7 @@ consultdesk/
 - UPI: `held → awaiting_verification` (UTR submitted; the hold is extended to 24 h) `→ confirmed | rejected`. If nobody verifies within 24 h it becomes `expired` and the slot is released.
 - Razorpay Payment Links: `held → confirmed` (webhook) `| expired`.
 - Free services that require approval: `held → confirmed | rejected`, held for up to 24 h.
+- Holds: **UPI** 30 minutes to pay and submit the UTR, then up to **24 hours** for staff to verify it; **Razorpay** 30 minutes (the link closes 90 seconds earlier); **free sessions needing approval** up to 24 hours for staff to approve. Staff can confirm or reject from the admin panel, Telegram or the email links.
 - A booking whose hold has lapsed cannot be confirmed (the slot may already be rebooked). Holds and the UPI verification window never run past the session start.
 - `completed` and `no_show` can only be set once the session has started.
 - A UTR can be used for only one booking, ever (also after expiry or rejection), to stop one payment covering two bookings.
