@@ -52,6 +52,7 @@ final class BookingView
         public readonly ?string $gatewayRef = null,
         public readonly ?string $gatewayUrl = null,
         public readonly ?string $gatewayKeyId = null,
+        public readonly ?string $gatewayPaymentId = null,
     ) {}
 
     /**

@@ -9,6 +9,7 @@ use ConsultDesk\Infra\FrozenClock;
 use ConsultDesk\Telegram\LinkCodes;
 use ConsultDesk\Tests\Integration\Http\ApiTestCase;
 use ConsultDesk\Tests\Integration\Support\Fixtures;
+use ConsultDesk\Tests\Support\FakeRazorpayApi;
 use ConsultDesk\Tests\Support\FakeTelegramApi;
 
 final class TelegramBotTest extends ApiTestCase
@@ -95,6 +96,64 @@ final class TelegramBotTest extends ApiTestCase
         $this->runCron();
         $confirmations = array_filter($this->mailer->subjects(), static fn(string $s): bool => str_starts_with($s, 'Confirmed: ') && str_ends_with($s, "({$booking['ref']})"));
         self::assertCount(1, $confirmations, 'the customer is emailed the confirmation');
+        self::assertCount(1, $this->telegram()->sent, 'the alert is updated in place; no second message');
+    }
+
+    public function testAFreeBookingWithoutApprovalSendsANoticeWithoutButtons(): void
+    {
+        Fixtures::service($this->pdo, $this->providerId, ['slug' => 'hello', 'title' => 'Hello call', 'price_minor' => 0, 'payment_methods' => '["free"]']);
+        [, $created] = $this->call('POST', '/api/bookings', $this->booking(['service' => 'hello', 'payment_method' => 'free']));
+        $this->runCron();
+
+        $notice = $this->telegram()->sent[0];
+        self::assertSame(self::PROVIDER_CHAT, $notice['chat']);
+        self::assertStringContainsString('New booking', $notice['text']);
+        self::assertStringContainsString($created['data']['ref'], $notice['text']);
+        self::assertStringContainsString('Free', $notice['text']);
+        self::assertSame([], $notice['buttons']);
+    }
+
+    public function testAnOnlinePaymentSendsANoticeWithThePaymentId(): void
+    {
+        $id = $this->onlineBooking();
+        $this->services()->bookingService()->confirmPaid($id, 'pay_placeholder1', Actor::webhook());
+        $this->runCron();
+
+        $notice = $this->telegram()->sent[0];
+        self::assertStringContainsString('New booking', $notice['text']);
+        self::assertStringContainsString('paid online', $notice['text']);
+        self::assertStringContainsString('pay_placeholder1', $notice['text']);
+        self::assertSame([], $notice['buttons']);
+    }
+
+    public function testALatePaymentSendsARefundNotice(): void
+    {
+        $id = $this->onlineBooking();
+        $this->at('2026-10-05T01:00Z');
+        $this->services()->bookingService()->confirmPaid($id, 'pay_placeholder2', Actor::webhook());
+        $this->runCron();
+
+        $texts = array_column($this->telegram()->sent, 'text');
+        $refund = array_values(array_filter($texts, static fn(string $t): bool => str_contains($t, 'Refund needed')));
+        self::assertCount(1, $refund);
+        self::assertStringContainsString('pay_placeholder2', $refund[0]);
+        self::assertStringNotContainsString('New booking', implode("\n", $texts));
+    }
+
+    /**
+     * A held online-payment booking (the Razorpay link itself is not needed here).
+     */
+    private function onlineBooking(): int
+    {
+        $this->services()->gatewayKeys()->save(null, 'rzp_test_' . str_repeat('O', 14), bin2hex(random_bytes(12)), bin2hex(random_bytes(16)));
+        $this->razorpay = new FakeRazorpayApi();
+        Fixtures::service($this->pdo, $this->providerId, ['slug' => 'online', 'title' => 'Online session', 'payment_methods' => '["razorpay_link"]']);
+        [$status, $created] = $this->call('POST', '/api/bookings', $this->booking(['service' => 'online', 'payment_method' => 'razorpay_link']));
+        self::assertSame(201, $status, json_encode($created) ?: '');
+        $this->runCron();
+        $this->telegram()->sent = [];
+
+        return $this->bookingId($created['data']['ref']);
     }
 
     public function testRejectNeedsASecondTap(): void

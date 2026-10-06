@@ -12,7 +12,8 @@ use ConsultDesk\Notify\PayloadReader;
 use RuntimeException;
 
 /**
- * Sends one alert with action buttons to one chat, unless the booking was settled in the meantime.
+ * Sends one alert to one chat: with action buttons (unless the booking was settled in the meantime),
+ * or, for a notice, as plain information.
  */
 final class TelegramAlertHandler implements JobHandler
 {
@@ -28,6 +29,13 @@ final class TelegramAlertHandler implements JobHandler
         $kind = AlertKind::from(PayloadReader::string($payload, 'kind'));
         $chat = PayloadReader::string($payload, 'chat_id');
         $booking = $this->views->findById($bookingId) ?? throw new RuntimeException("Booking {$bookingId} not found.");
+
+        if (!$kind->needsAction()) {
+            // Information only: no buttons, and nothing to update later.
+            $this->telegram->api->sendMessage($chat, TelegramText::alert($booking, $kind));
+
+            return;
+        }
 
         $expected = $kind === AlertKind::VerifyPayment ? BookingStatus::AwaitingVerification : BookingStatus::Held;
         if ($booking->status !== $expected || $booking->holdLapsed($this->clock->now())) {
