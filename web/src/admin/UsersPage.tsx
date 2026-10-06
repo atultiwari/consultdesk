@@ -194,7 +194,15 @@ function EditDialog({ user, onClose }: { user: ManagedUser; onClose: () => void 
   );
 }
 
-function UserActions({ user, onNotice }: { user: ManagedUser; onNotice: (text: string) => void }) {
+type Feedback = { tone: 'success' | 'danger'; text: string } | null;
+
+function UserActions({
+  user,
+  onNotice,
+}: {
+  user: ManagedUser;
+  onNotice: (feedback: Feedback) => void;
+}) {
   const { user: me } = useAdmin();
   const resend = useResendInvite();
   const update = useUpdateUser();
@@ -230,9 +238,13 @@ function UserActions({ user, onNotice }: { user: ManagedUser; onNotice: (text: s
           variant="ghost"
           aria-label={`Resend invite to ${user.email}`}
           disabled={resend.isPending}
-          onClick={() =>
-            resend.mutate(user.id, { onSuccess: () => onNotice(`Invite sent to ${user.email}.`) })
-          }
+          onClick={() => {
+            onNotice(null);
+            resend.mutate(user.id, {
+              onSuccess: () => onNotice({ tone: 'success', text: `Invite sent to ${user.email}.` }),
+              onError: (e) => onNotice({ tone: 'danger', text: e.message }),
+            });
+          }}
         >
           Resend invite
         </Button>
@@ -247,7 +259,13 @@ function UserActions({ user, onNotice }: { user: ManagedUser; onNotice: (text: s
           <Button
             variant="ghost"
             aria-label={`Enable ${user.email}`}
-            onClick={() => update.mutate({ id: user.id, body: { disabled: false } })}
+            onClick={() => {
+              onNotice(null);
+              update.mutate(
+                { id: user.id, body: { disabled: false } },
+                { onError: (e) => onNotice({ tone: 'danger', text: e.message }) },
+              );
+            }}
           >
             Enable
           </Button>
@@ -268,7 +286,7 @@ function UserActions({ user, onNotice }: { user: ManagedUser; onNotice: (text: s
 export function UsersPage() {
   const users = useUsers();
   const [inviting, setInviting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Feedback>(null);
   const tz = visitorTimezone();
 
   return (
@@ -281,8 +299,8 @@ export function UsersPage() {
         <Button onClick={() => setInviting(true)}>Invite someone</Button>
       </header>
       {notice && (
-        <Notice tone="success" live>
-          {notice}
+        <Notice tone={notice.tone} live>
+          {notice.text}
         </Notice>
       )}
       {users.isPending && <Loading />}

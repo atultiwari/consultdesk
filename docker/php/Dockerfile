@@ -6,7 +6,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip git \
-    && install-php-extensions pdo_mysql intl zip gd \
+    && install-php-extensions pdo_mysql intl zip gd exif \
     # PECL no longer serves pcov, so build it from the upstream repo.
     && git clone --depth 1 https://github.com/krakjoe/pcov.git /tmp/pcov \
     && cd /tmp/pcov && phpize && ./configure && make -j"$(nproc)" && make install \

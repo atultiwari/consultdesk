@@ -56,9 +56,14 @@ final class TelegramLinks
         $this->pdo->prepare('UPDATE providers SET telegram_chat_id = NULL WHERE id = :id')->execute(['id' => $providerId]);
     }
 
+    /**
+     * Unlinks the user's chat and voids any link they have not opened yet.
+     */
     public function unlinkUser(int $userId): void
     {
         $this->pdo->prepare('UPDATE users SET telegram_chat_id = NULL WHERE id = :id')->execute(['id' => $userId]);
+        $this->pdo->prepare("DELETE FROM telegram_link_codes WHERE target_type = 'user' AND target_id = :id AND used_at IS NULL")
+            ->execute(['id' => $userId]);
     }
 
     private function linked(string $sql, int $id): bool

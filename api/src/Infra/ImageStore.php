@@ -18,7 +18,8 @@ final class ImageStore
 {
     public const NAME = '[0-9a-f]{32}\.(?:webp|png)';
     private const MAX_BYTES = 2 * 1024 * 1024;
-    private const MAX_SOURCE_PIXELS = 40_000_000;
+    /** About 64 MB once decoded, so a small but huge-dimension file can't exhaust PHP's memory. */
+    private const MAX_SOURCE_PIXELS = 16_000_000;
     private const ACCEPTED = [IMAGETYPE_PNG, IMAGETYPE_JPEG, IMAGETYPE_WEBP];
 
     public function __construct(private readonly string $directory) {}
@@ -91,14 +92,35 @@ final class ImageStore
             throw new ValidationFailed(['file' => 'Use a PNG, JPEG or WebP image.']);
         }
         if ($info[0] * $info[1] > self::MAX_SOURCE_PIXELS) {
-            throw new ValidationFailed(['file' => 'That image is too large. Use one under 40 megapixels.']);
+            throw new ValidationFailed(['file' => 'That image is too large. Use one under 16 megapixels.']);
         }
         $image = @imagecreatefromstring($bytes);
         if (!$image instanceof GdImage) {
             throw new ValidationFailed(['file' => 'That image could not be read.']);
         }
 
-        return $image;
+        return $info[2] === IMAGETYPE_JPEG ? self::upright($image, $bytes) : $image;
+    }
+
+    /**
+     * Phones save portraits sideways with an EXIF note to rotate them; re-encoding drops the note,
+     * so apply it first. Skipped quietly when PHP's exif extension is missing.
+     */
+    private static function upright(GdImage $image, string $jpeg): GdImage
+    {
+        if (!function_exists('exif_read_data')) {
+            return $image;
+        }
+        $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($jpeg));
+        $angle = match (is_array($exif) ? (int) ($exif['Orientation'] ?? 1) : 1) {
+            3 => 180,
+            6 => -90,
+            8 => 90,
+            default => 0,
+        };
+        $rotated = $angle === 0 ? false : imagerotate($image, $angle, 0);
+
+        return $rotated instanceof GdImage ? $rotated : $image;
     }
 
     /**

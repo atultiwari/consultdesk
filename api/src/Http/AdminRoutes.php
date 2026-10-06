@@ -20,6 +20,7 @@ use ConsultDesk\Http\Action\AdminScheduleActions;
 use ConsultDesk\Http\Action\AdminServiceActions;
 use ConsultDesk\Http\Action\AdminSystemActions;
 use ConsultDesk\Http\Action\AdminUserActions;
+use ConsultDesk\Http\Middleware\RateLimit;
 use Slim\Routing\RouteCollectorProxy;
 
 /**
@@ -53,6 +54,8 @@ final class AdminRoutes
             new ProviderSettings($pdo()),
             $services->passwordResets(),
             $services->sessions(),
+            $services->telegramLinks(),
+            $services->db(),
             $services->auditLog(),
         );
         $me = static fn(): AdminMeActions => new AdminMeActions($services->adminUsers(), new Passwords(), $services->sessions(), $services->auditLog());
@@ -88,7 +91,9 @@ final class AdminRoutes
         $admin->delete("/blocked/{$id}", static fn($rq, $rs, array $a) => $schedule()->deleteBlocked($rq, $rs, $a));
 
         $admin->patch('/me', static fn($rq, $rs) => $me()->rename($rq, $rs));
-        $admin->post('/me/password', static fn($rq, $rs) => $me()->changePassword($rq, $rs));
+        // The current-password check must not become a way to guess it from a stolen session.
+        $admin->post('/me/password', static fn($rq, $rs) => $me()->changePassword($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-password-change', 10, 3600, $services->clientIp()));
         $admin->get('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegram($rq, $rs));
         $admin->post('/me/telegram/link', static fn($rq, $rs) => $integrations()->myTelegramLink($rq, $rs));
         $admin->delete('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegramUnlink($rq, $rs));

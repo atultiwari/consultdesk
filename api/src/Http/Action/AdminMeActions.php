@@ -31,13 +31,11 @@ final class AdminMeActions
     {
         $session = AdminAuthActions::session($request);
         $input = new Input(JsonInput::decode($request));
-        $name = $input->has('name') ? $input->string('name', required: false, max: 120) : $session->user->name;
-        if ($name !== null && preg_match('#://|[<>]|[\x00-\x1F\x7F]#', $name) === 1) {
-            $input->reject('name', 'Enter just your name.');
-        }
+        $name = $input->has('name') ? $input->personName('name', required: false) : $session->user->name;
         $input->assertValid();
 
         $this->users->setName($session->user->id, $name);
+        $this->audit->record(Actor::user($session->user->id), 'admin.renamed', 'user', $session->user->id);
         $user = $this->users->find($session->user->id);
 
         return JsonResponse::success($response, ['user' => $user?->toArray(), 'csrf_token' => $session->csrfToken]);

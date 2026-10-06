@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Tests\Integration\Admin;
 
+use ConsultDesk\Telegram\TelegramDirectory;
 use ConsultDesk\Tests\Integration\Support\Fixtures;
 
 final class AdminUsersTest extends AdminTestCase
@@ -60,6 +61,30 @@ final class AdminUsersTest extends AdminTestCase
         self::assertSame([409, 'already_active'], $this->codeOf($this->admin('POST', "/api/admin/users/{$ownerId}/invite")));
     }
 
+    public function testResendingTooOftenIsRefusedInsteadOfSilentlyDropped(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $id = $this->admin('POST', '/api/admin/users', ['email' => 'admin2@example.test', 'role' => 'admin'])[1]['data']['id'];
+        foreach (range(1, 4) as $_) {
+            self::assertSame(200, $this->admin('POST', "/api/admin/users/{$id}/invite")[0]);
+        }
+
+        [$status, $body] = $this->admin('POST', "/api/admin/users/{$id}/invite");
+        self::assertSame([429, 'too_many_invites'], [$status, $body['error']['code']]);
+    }
+
+    public function testNamesCarryNoMarkupOrLinks(): void
+    {
+        $this->createUser('owner@example.test');
+        $id = $this->createUser('admin@example.test', 'admin');
+        $this->login('owner@example.test');
+
+        self::assertSame(422, $this->admin('PATCH', "/api/admin/users/{$id}", ['name' => '<b>Admin</b>'])[0]);
+        self::assertSame(422, $this->admin('PATCH', '/api/admin/me', ['name' => 'see https://example.test'])[0]);
+        self::assertSame(200, $this->admin('PATCH', "/api/admin/users/{$id}", ['name' => null])[0], 'a name can be cleared');
+    }
+
     public function testOnlyOwnersManageUsers(): void
     {
         $this->createUser('admin@example.test', 'admin');
@@ -106,6 +131,39 @@ final class AdminUsersTest extends AdminTestCase
         $this->admin('PATCH', "/api/admin/users/{$adminId}", ['disabled' => false]);
         self::assertSame(200, $this->login('admin@example.test')[0]);
         self::assertSame(['admin.user_disabled', 'admin.user_enabled'], self::column($this->pdo, "SELECT action FROM audit_log WHERE action LIKE 'admin.user_%abled' ORDER BY id"));
+    }
+
+    public function testDisablingAlsoCutsTelegramAndOpenLinks(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $id = $this->admin('POST', '/api/admin/users', ['email' => 'admin2@example.test', 'role' => 'admin'])[1]['data']['id'];
+        $this->services()->cronRunner()->run();
+        preg_match('/token=([A-Za-z0-9_-]{43})/', $this->mailer->sent[0]->text, $m);
+        $this->pdo->exec("UPDATE users SET telegram_chat_id = '7770009' WHERE id = {$id}");
+        self::assertNotNull((new TelegramDirectory($this->pdo))->actorFor('7770009', $this->demo));
+
+        $this->admin('PATCH', "/api/admin/users/{$id}", ['disabled' => true]);
+
+        self::assertNull((new TelegramDirectory($this->pdo))->actorFor('7770009', $this->demo), 'no more buttons in Telegram');
+        self::assertSame(['1'], self::column($this->pdo, "SELECT telegram_chat_id IS NULL FROM users WHERE id = {$id}"));
+        self::assertSame(400, $this->resetWith($m[1] ?? '', $this->password)[0], 'the invite no longer works');
+    }
+
+    public function testAForgottenPasswordRequestDoesNotSpoilAnInvite(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $this->admin('POST', '/api/admin/users', ['email' => 'invitee@example.test', 'role' => 'admin']);
+        $this->services()->cronRunner()->run();
+        preg_match('/token=([A-Za-z0-9_-]{43})/', $this->mailer->sent[0]->text, $m);
+
+        foreach (range(1, 4) as $_) {
+            $this->call('POST', '/api/admin/password/forgot', ['path' => self::ADMIN_PATH, 'email' => 'invitee@example.test'], '198.51.100.' . random_int(1, 250));
+        }
+        $this->services()->cronRunner()->run();
+
+        self::assertSame(200, $this->resetWith($m[1] ?? '', $this->password)[0]);
     }
 
     public function testOwnersCannotLockThemselvesOut(): void

@@ -68,7 +68,7 @@ final class AdminImageActions
     {
         $owner = AdminScope::owner($request);
         $name = $this->images->storeLogo(self::file($request));
-        $this->replaceLogo(self::MEDIA_PREFIX . $name);
+        $this->keepOrDiscard($name, fn() => $this->replaceLogo(self::MEDIA_PREFIX . $name));
         $this->audit->record(Actor::user($owner->id), 'admin.logo_changed', 'settings', null);
 
         return JsonResponse::success($response, $this->site());
@@ -91,7 +91,7 @@ final class AdminImageActions
         $provider = AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0));
         $name = $this->images->storePhoto(self::file($request));
 
-        return $this->replacePhoto($request, $response, $provider, 'api/media/' . $name);
+        return $this->keepOrDiscard($name, fn() => $this->replacePhoto($request, $response, $provider, 'api/media/' . $name));
     }
 
     /**
@@ -114,6 +114,26 @@ final class AdminImageActions
         $this->audit->record(Actor::user(AdminScope::user($request)->id), $photoPath === null ? 'admin.photo_removed' : 'admin.photo_changed', 'provider', (int) $provider['id']);
 
         return JsonResponse::success($response, $this->providers->find((int) $provider['id']));
+    }
+
+    /**
+     * Runs the save; if it fails, the image just stored is deleted rather than left orphaned.
+     *
+     * @template T
+     *
+     * @param callable(): T $save
+     *
+     * @return T
+     */
+    private function keepOrDiscard(string $name, callable $save): mixed
+    {
+        try {
+            return $save();
+        } catch (\Throwable $e) {
+            $this->images->delete($name);
+
+            throw $e;
+        }
     }
 
     private function replaceLogo(?string $logoUrl): void

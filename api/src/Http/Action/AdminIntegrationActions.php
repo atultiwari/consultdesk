@@ -95,6 +95,7 @@ final class AdminIntegrationActions
     {
         $user = AdminScope::user($request);
         $url = $this->telegram->link('user', $user->id) ?? throw self::notConfigured('Telegram');
+        $this->audit->record(Actor::user($user->id), 'admin.telegram_link_created', 'user', $user->id);
 
         return JsonResponse::success($response, ['url' => $url]);
     }

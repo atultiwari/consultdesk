@@ -177,7 +177,7 @@ function LogoPanel({ logoUrl }: { logoUrl: string | null }) {
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          aria-label="Upload a logo"
+          aria-label={src ? 'Replace logo' : 'Upload a logo'}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) upload.mutate(file);

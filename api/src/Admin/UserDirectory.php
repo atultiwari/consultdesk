@@ -72,6 +72,19 @@ final class UserDirectory
         $this->pdo->prepare('UPDATE users SET invited_at = :now WHERE id = :id')->execute(['now' => $this->now(), 'id' => $id]);
     }
 
+    /**
+     * How many invites were sent to this user in the last hour (from the audit log).
+     */
+    public function invitesLastHour(int $id): int
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'admin.user_invited' AND entity_type = 'user' AND entity_id = :id AND created_at > :since",
+        );
+        $statement->execute(['id' => $id, 'since' => $this->clock->now()->modify('-1 hour')->format(self::SQL)]);
+
+        return (int) $statement->fetchColumn();
+    }
+
     public function setDisabled(int $id, bool $disabled): void
     {
         $this->pdo->prepare('UPDATE users SET disabled_at = :at, updated_at = :now WHERE id = :id')

@@ -9,6 +9,7 @@ use ConsultDesk\Admin\PasswordResets;
 use ConsultDesk\Admin\ProviderSettings;
 use ConsultDesk\Admin\Role;
 use ConsultDesk\Admin\Sessions;
+use ConsultDesk\Admin\TelegramLinks;
 use ConsultDesk\Admin\UserDirectory;
 use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Http\ApiException;
@@ -16,6 +17,7 @@ use ConsultDesk\Http\JsonInput;
 use ConsultDesk\Http\JsonResponse;
 use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Infra\AuditLog;
+use ConsultDesk\Infra\Db;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -25,12 +27,17 @@ use Psr\Http\Message\ServerRequestInterface as Request;
  */
 final class AdminUserActions
 {
+    /** Matches PasswordResets: more invite emails than this an hour would be dropped. */
+    private const MAX_INVITES_PER_HOUR = 5;
+
     public function __construct(
         private readonly UserDirectory $directory,
         private readonly AdminUsers $users,
         private readonly ProviderSettings $providers,
         private readonly PasswordResets $resets,
         private readonly Sessions $sessions,
+        private readonly TelegramLinks $telegram,
+        private readonly Db $db,
         private readonly AuditLog $audit,
     ) {}
 
@@ -49,7 +56,7 @@ final class AdminUserActions
         if ($email !== null && $this->directory->emailTaken($email)) {
             $input->reject('email', 'Someone already has an account with this email.');
         }
-        $name = $input->has('name') ? $input->personName('name') : null;
+        $name = $input->has('name') ? $input->personName('name', required: false) : null;
         [$role, $providerId] = $this->roleAndProvider($input);
         $input->assertValid();
 
@@ -71,7 +78,7 @@ final class AdminUserActions
         $input = new Input(JsonInput::decode($request));
         $self = $user['id'] === $owner->id;
 
-        $name = $input->has('name') ? $input->string('name', required: false, max: 120) : $user['name'];
+        $name = $input->has('name') ? $input->personName('name', required: false) : $user['name'];
         [$role, $providerId] = $this->roleAndProvider($input, Role::from((string) $user['role']), $user['provider']['id'] ?? null);
         if ($self && $role !== Role::Owner) {
             $input->reject('role', 'You can’t change your own role. Ask another owner.');
@@ -82,21 +89,38 @@ final class AdminUserActions
         }
         $input->assertValid();
 
-        $this->directory->update($user['id'], is_string($name) ? $name : null, $role, $providerId);
-        $actor = Actor::user($owner->id);
-        if ($role->value !== $user['role'] || $providerId !== ($user['provider']['id'] ?? null)) {
-            $this->sessions->endAll($user['id']);
-            $this->audit->record($actor, 'admin.user_role_changed', 'user', $user['id'], ['from' => $user['role'], 'to' => $role->value, 'provider_id' => $providerId]);
-        }
-        if ($disabled !== null && $disabled !== ($user['status'] === 'disabled')) {
-            $this->directory->setDisabled($user['id'], $disabled);
-            if ($disabled) {
-                $this->sessions->endAll($user['id']);
-            }
-            $this->audit->record($actor, $disabled ? 'admin.user_disabled' : 'admin.user_enabled', 'user', $user['id']);
-        }
+        $this->db->transaction(fn() => $this->apply($user, is_string($name) ? $name : null, $role, $providerId, $disabled, Actor::user($owner->id)));
 
         return JsonResponse::success($response, $this->directory->find($user['id']));
+    }
+
+    /**
+     * Saves the changes and their consequences together. A changed role or a disabled account ends
+     * the person's sessions, unlinks their Telegram (whose buttons act with their old powers) and,
+     * when disabled, voids any invite or reset link they still hold.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function apply(array $user, ?string $name, Role $role, ?int $providerId, ?bool $disabled, Actor $actor): void
+    {
+        $id = (int) $user['id'];
+        $this->directory->update($id, $name, $role, $providerId);
+        $roleChanged = $role->value !== $user['role'] || $providerId !== ($user['provider']['id'] ?? null);
+        $disabling = $disabled === true && $user['status'] !== 'disabled';
+        if ($roleChanged || $disabling) {
+            $this->sessions->endAll($id);
+            $this->telegram->unlinkUser($id);
+        }
+        if ($roleChanged) {
+            $this->audit->record($actor, 'admin.user_role_changed', 'user', $id, ['from' => $user['role'], 'to' => $role->value, 'provider_id' => $providerId]);
+        }
+        if ($disabled !== null && $disabled !== ($user['status'] === 'disabled')) {
+            $this->directory->setDisabled($id, $disabled);
+            if ($disabling) {
+                $this->resets->retireAll($id);
+            }
+            $this->audit->record($actor, $disabling ? 'admin.user_disabled' : 'admin.user_enabled', 'user', $id);
+        }
     }
 
     /**
@@ -113,6 +137,9 @@ final class AdminUserActions
         }
         if ($user['status'] === 'disabled') {
             throw new ApiException(409, 'disabled', 'Enable this account before inviting them again.');
+        }
+        if ($this->directory->invitesLastHour($user['id']) >= self::MAX_INVITES_PER_HOUR) {
+            throw new ApiException(429, 'too_many_invites', 'That’s a lot of invites in an hour. Check the address, and try again later.');
         }
 
         $this->resets->invite($user['id']);

@@ -63,6 +63,18 @@ final class AdminBrandingTest extends AdminTestCase
         self::assertSame(404, $this->call('GET', (string) $replaced['data']['logo_url'])[0]);
     }
 
+    public function testSidewaysPhonePhotosAreTurnedUpright(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+
+        // A 400×100 JPEG whose EXIF says "rotate 90° clockwise to view" (orientation 6).
+        [, $body] = $this->upload('/api/admin/branding/logo', self::withOrientation(self::image(400, 100, 'jpeg'), 6), 'phone.jpg', 'image/jpeg');
+
+        $size = getimagesizefromstring((string) $this->call('GET', (string) $body['data']['logo_url'])[2]->getBody());
+        self::assertSame([100, 400], [$size[0] ?? 0, $size[1] ?? 0]);
+    }
+
     public function testOnlyRealPngJpegOrWebpImagesAreAccepted(): void
     {
         $this->createUser('owner@example.test');
@@ -102,6 +114,20 @@ final class AdminBrandingTest extends AdminTestCase
         foreach (['/api/media/' . str_repeat('a', 32) . '.webp', '/api/media/..%2F..%2Fconfig.php', '/api/media/abc.php'] as $url) {
             self::assertSame(404, $this->call('GET', $url)[0], $url);
         }
+    }
+
+    /**
+     * Inserts a minimal EXIF block (one Orientation tag) after the JPEG's start marker.
+     */
+    private static function withOrientation(string $jpeg, int $orientation): string
+    {
+        $tiff = 'II' . pack('v', 42) . pack('V', 8)            // little-endian TIFF header, IFD at 8
+            . pack('v', 1)                                      // one entry
+            . pack('vvVvv', 0x0112, 3, 1, $orientation, 0)       // Orientation, SHORT, count 1, value
+            . pack('V', 0);                                     // no next IFD
+        $app1 = "Exif\0\0" . $tiff;
+
+        return substr($jpeg, 0, 2) . "\xFF\xE1" . pack('n', strlen($app1) + 2) . $app1 . substr($jpeg, 2);
     }
 
     private function mediaDir(): string

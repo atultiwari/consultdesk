@@ -6,6 +6,7 @@ namespace ConsultDesk\Admin;
 
 use ConsultDesk\Infra\Clock;
 use PDO;
+use PDOException;
 
 final class AdminUsers
 {
@@ -19,18 +20,14 @@ final class AdminUsers
      */
     public function findForLogin(string $email): ?array
     {
-        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id, password_hash FROM users WHERE email = :email AND disabled_at IS NULL');
-        $statement->execute(['email' => strtolower(trim($email))]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        $row = $this->fetchActive('SELECT id, email, name, role, provider_id, password_hash FROM users WHERE email = :value', strtolower(trim($email)));
 
         return is_array($row) ? [self::hydrate($row), (string) $row['password_hash']] : null;
     }
 
     public function find(int $id): ?AdminUser
     {
-        $statement = $this->pdo->prepare('SELECT id, email, name, role, provider_id FROM users WHERE id = :id AND disabled_at IS NULL');
-        $statement->execute(['id' => $id]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        $row = $this->fetchActive('SELECT id, email, name, role, provider_id FROM users WHERE id = :value', $id);
 
         return is_array($row) ? self::hydrate($row) : null;
     }
@@ -81,6 +78,30 @@ final class AdminUsers
     {
         $this->pdo->prepare('UPDATE users SET name = :name, updated_at = :now WHERE id = :id')
             ->execute(['name' => $name, 'now' => $this->now(), 'id' => $userId]);
+    }
+
+    /**
+     * One user who is not disabled. Until migration 007 adds users.disabled_at (an upgrade from 6a),
+     * nobody is disabled: falling back keeps sign-in working, so the owner can reach
+     * System → Run database updates.
+     *
+     * @return array<string, mixed>|false
+     */
+    private function fetchActive(string $sql, int|string $value): array|false
+    {
+        try {
+            $statement = $this->pdo->prepare($sql . ' AND disabled_at IS NULL');
+            $statement->execute(['value' => $value]);
+        } catch (PDOException $e) {
+            if (!str_contains($e->getMessage(), 'disabled_at')) {
+                throw $e;
+            }
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['value' => $value]);
+        }
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $row : false;
     }
 
     private function now(): string

@@ -113,10 +113,16 @@ export function usePhoto(providerId: number) {
         `/providers/${providerId}/photo`,
         file ? { method: 'POST', form: upload(file) } : { method: 'DELETE' },
       ),
-    onSuccess: (updated) =>
+    onSuccess: async (updated) => {
       client.setQueryData<AdminProvider[]>(adminKeys.providers, (list = []) =>
         list.map((p) => (p.id === updated.id ? updated : p)),
-      ),
+      );
+      // The old file is gone, so the public pages in this tab must not keep showing it.
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['providers'] }),
+        client.invalidateQueries({ queryKey: ['provider'] }),
+      ]);
+    },
   });
 }
 

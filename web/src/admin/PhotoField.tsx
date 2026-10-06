@@ -26,7 +26,7 @@ export function PhotoField({ provider }: { provider: AdminProvider }) {
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            aria-label="Upload a photo"
+            aria-label={src ? 'Replace photo' : 'Upload a photo'}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) photo.mutate(file);
