@@ -22,7 +22,27 @@ final class ServiceTemplatesTest extends TestCase
         foreach ($templates as $template) {
             $questions = QuestionSet::fromJson((string) json_encode($template['questions']));
             self::assertContains('goal', array_map(static fn($q) => $q->id, $questions->questions), $template['slug']);
-            self::assertSame($template['price_minor'] === 0 ? ['free'] : ['upi'], $template['payment_methods']);
+            self::assertSame(match (true) {
+                $template['price_minor'] === 0 => ['free'],
+                $template['requires_approval'] => ['upi'],
+                default => ['upi', 'razorpay_link'],
+            }, $template['payment_methods']);
         }
+    }
+
+    public function testEveryStarterSetHasUniqueKeysAndValidQuestions(): void
+    {
+        $keys = [];
+        foreach (ServiceTemplates::sets() as $set) {
+            self::assertNotSame([], $set['templates'], $set['key']);
+            foreach ($set['templates'] as $template) {
+                $keys[] = $template['key'];
+                self::assertStringStartsWith($set['key'] . '/', $template['key']);
+                QuestionSet::fromJson((string) json_encode($template['questions']));
+                self::assertSame($template, ServiceTemplates::find($template['key']));
+            }
+        }
+        self::assertSame($keys, array_values(array_unique($keys)));
+        self::assertNull(ServiceTemplates::find('nope/nothing'));
     }
 }

@@ -11,7 +11,9 @@ use ConsultDesk\Admin\LoginThrottle;
 use ConsultDesk\Admin\PasswordResetEmailHandler;
 use ConsultDesk\Admin\PasswordResets;
 use ConsultDesk\Admin\Passwords;
+use ConsultDesk\Admin\ProviderSettings;
 use ConsultDesk\Admin\Sessions;
+use ConsultDesk\Admin\SiteSetup;
 use ConsultDesk\Admin\SystemStatus;
 use ConsultDesk\Admin\TelegramLinks;
 use ConsultDesk\Admin\UserDirectory;
@@ -206,6 +208,11 @@ final class AppServices
     public function razorpayCheckout(): RazorpayCheckout
     {
         return new RazorpayCheckout($this->db(), $this->gatewayKeys(), $this->razorpayApi(), $this->bookingService(), $this->bookingViews(), $this->clock, $this->config->appUrl);
+    }
+
+    public function siteSetup(): SiteSetup
+    {
+        return new SiteSetup($this->db(), $this->settings(), new ProviderSettings($this->pdo()), $this->clock);
     }
 
     public function settings(): Settings

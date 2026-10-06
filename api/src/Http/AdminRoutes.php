@@ -19,6 +19,7 @@ use ConsultDesk\Http\Action\AdminPaymentActions;
 use ConsultDesk\Http\Action\AdminProviderActions;
 use ConsultDesk\Http\Action\AdminScheduleActions;
 use ConsultDesk\Http\Action\AdminServiceActions;
+use ConsultDesk\Http\Action\AdminSetupActions;
 use ConsultDesk\Http\Action\AdminSystemActions;
 use ConsultDesk\Http\Action\AdminUserActions;
 use ConsultDesk\Http\Middleware\RateLimit;
@@ -39,7 +40,8 @@ final class AdminRoutes
     {
         $pdo = static fn(): \PDO => $services->db()->pdo();
         $bookings = static fn(): AdminBookingActions => new AdminBookingActions(new AdminBookings($pdo()), $services->bookingService(), $services->clock());
-        $providers = static fn(): AdminProviderActions => new AdminProviderActions(new ProviderSettings($pdo()), $services->auditLog());
+        $providers = static fn(): AdminProviderActions => new AdminProviderActions(new ProviderSettings($pdo()), $services->auditLog(), $services->siteSetup());
+        $setup = static fn(): AdminSetupActions => new AdminSetupActions($services->siteSetup(), $services->auditLog());
         $catalog = static fn(): AdminServiceActions => new AdminServiceActions(new ProviderSettings($pdo()), new ServiceSettings($pdo()), $services->auditLog());
         $schedule = static fn(): AdminScheduleActions => new AdminScheduleActions(
             new ProviderSettings($pdo()),
@@ -138,6 +140,12 @@ final class AdminRoutes
         $admin->put("/providers/{$id}/razorpay", static fn($rq, $rs, array $a) => $payments()->saveProviderKeys($rq, $rs, $a));
         $admin->post("/providers/{$id}/razorpay/check", static fn($rq, $rs, array $a) => $payments()->checkProviderKeys($rq, $rs, $a));
         $admin->delete("/providers/{$id}/razorpay", static fn($rq, $rs, array $a) => $payments()->removeProviderKeys($rq, $rs, $a));
+
+        $admin->get('/setup', static fn($rq, $rs) => $setup()->show($rq, $rs));
+        $admin->put('/setup/mode', static fn($rq, $rs) => $setup()->setMode($rq, $rs));
+        $admin->post('/setup/teacher', static fn($rq, $rs) => $setup()->saveTeacher($rq, $rs));
+        $admin->post('/setup/sessions', static fn($rq, $rs) => $setup()->addSessions($rq, $rs));
+        $admin->post('/setup/complete', static fn($rq, $rs) => $setup()->complete($rq, $rs));
 
         $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
         $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));

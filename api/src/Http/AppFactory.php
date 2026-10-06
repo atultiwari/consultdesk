@@ -44,7 +44,7 @@ final class AppFactory
             $api->get('/health', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface => JsonResponse::success($response, ['status' => 'ok']));
 
             $limit = static fn(string $bucket, int $max, int $window): RateLimit => new RateLimit(static fn() => $services->rateLimiter(), $bucket, $max, $window, $services->clientIp());
-            $providers = static fn(): ProviderActions => new ProviderActions($services->catalog(), $services->slotFinder(), $services->clock(), $services->config->appUrl);
+            $providers = static fn(): ProviderActions => new ProviderActions($services->catalog(), $services->slotFinder(), $services->clock(), $services->config->appUrl, $services->siteSetup());
             $bookings = static fn(): BookingActions => new BookingActions(
                 $services->catalog(),
                 $services->bookingService(),

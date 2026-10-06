@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ConsultDesk\Seed;
 
 /**
- * Starter services from docs/PLAN.md §8. The installer (Phase 8) offers these as templates;
- * the dev seed uses them as-is. Prices are in paise.
+ * Starter services offered by the site setup wizard (and used as-is by the dev seed). Prices are in
+ * paise; see docs/research/session-pricing.md for how they were chosen.
  */
 final class ServiceTemplates
 {
@@ -59,6 +59,58 @@ final class ServiceTemplates
     }
 
     /**
+     * Starter sessions offered by the setup wizard, in themed sets. Each template has a key
+     * "set/slug" and everything a service needs; the owner can change title, length and price.
+     *
+     * @return list<array{key: string, label: string, description: string, templates: list<array<string, mixed>>}>
+     */
+    public static function sets(): array
+    {
+        $general = [
+            ['id' => 'about', 'label' => 'What would you like help with?', 'type' => 'textarea', 'required' => true],
+            ['id' => 'level', 'label' => 'Where are you now?', 'type' => 'select', 'required' => false, 'options' => ['School student', 'College student', 'Working professional', 'Other']],
+        ];
+        $set = static fn(string $key, string $label, string $description, array $templates): array => [
+            'key' => $key,
+            'label' => $label,
+            'description' => $description,
+            'templates' => array_values(array_map(static fn(array $t): array => ['key' => $key . '/' . $t['slug'], ...$t], $templates)),
+        ];
+        $simple = static fn(string $slug, string $title, string $tagline, int $minutes, int $price, bool $approval = false): array => [
+            ...self::service($slug, $title, $tagline, $minutes, $price, requiresApproval: $approval),
+            'questions' => $general,
+        ];
+
+        return [
+            $set('general', 'Any teacher or consultant', 'Simple one-to-one sessions that suit most subjects.', [
+                $simple('intro-call', 'Free intro call', 'A short call to see whether working together is a good fit.', 15, 0),
+                $simple('one-to-one', 'One-to-one session', 'Focused help with your questions, at your pace.', 45, 99900),
+                $simple('deep-dive', 'Extended deep-dive', 'More time for a bigger problem or a full review.', 90, 179900),
+                $simple('review', 'Review and feedback', 'Send your work beforehand and get detailed feedback.', 30, 79900),
+            ]),
+            $set('medical-ai', 'Medical AI, research and careers', 'For doctors, researchers and educators in medical AI.', self::all()),
+        ];
+    }
+
+    /**
+     * One template by its "set/slug" key.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function find(string $key): ?array
+    {
+        foreach (self::sets() as $set) {
+            foreach ($set['templates'] as $template) {
+                if ($template['key'] === $key) {
+                    return $template;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param list<array<string, mixed>> $extraQuestions
      *
      * @return array<string, mixed>
@@ -73,7 +125,8 @@ final class ServiceTemplates
             'price_minor' => $priceMinor,
             'currency' => 'INR',
             'requires_approval' => $requiresApproval,
-            'payment_methods' => $priceMinor === 0 ? ['free'] : ['upi'],
+            // Online payment shows only where Razorpay is set up; it can't skip an approval.
+            'payment_methods' => $priceMinor === 0 ? ['free'] : ($requiresApproval ? ['upi'] : ['upi', 'razorpay_link']),
             'questions' => [...self::commonQuestions(), ...$extraQuestions],
         ];
     }

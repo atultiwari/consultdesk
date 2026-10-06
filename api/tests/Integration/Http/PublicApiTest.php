@@ -35,7 +35,7 @@ final class PublicApiTest extends ApiTestCase
         [$status, $body] = $this->call('GET', '/api/site');
 
         self::assertSame(200, $status);
-        self::assertSame(['org_name' => 'ConsultDesk', 'preset' => 'neutral', 'accent' => null, 'accent_2' => null, 'logo_url' => null, 'single_provider' => null], $body['data']);
+        self::assertSame(['org_name' => 'ConsultDesk', 'preset' => 'neutral', 'accent' => null, 'accent_2' => null, 'logo_url' => null, 'mode' => null, 'single_provider' => null], $body['data']);
     }
 
     public function testSiteSettingsAreReadAndSanitised(): void
