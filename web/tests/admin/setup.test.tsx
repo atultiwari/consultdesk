@@ -124,7 +124,9 @@ describe('site setup wizard', () => {
     await user.clear(within(oneToOne).getByLabelText('Price (₹)'));
     await user.click(screen.getByRole('button', { name: 'Add 1 session' }));
 
-    expect(await screen.findByText(/Enter a price .* for “One-to-one session”/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Enter a price .* for “One-to-one session”/),
+    ).toBeInTheDocument();
     expect(calls.some((c) => c.path === '/api/admin/setup/sessions')).toBe(false);
   });
 
