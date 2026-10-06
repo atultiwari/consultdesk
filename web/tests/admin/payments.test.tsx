@@ -92,6 +92,26 @@ describe('payments settings', () => {
     expect(await within(section).findByText('Razorpay accepted these keys.')).toBeInTheDocument();
   });
 
+  it('offers online payment on every eligible session at once', async () => {
+    const calls = mockApi({
+      ...signedIn(),
+      'GET /api/admin/providers': ok([demoProvider]),
+      'GET /api/admin/payments': ok(configured),
+      'POST /api/admin/payments/razorpay/offer-everywhere': ok({ sessions_updated: 5 }),
+    });
+    const user = userEvent.setup();
+    renderAt(`${ADMIN}/payments`);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer online payment on every paid session' }),
+    );
+
+    expect(await screen.findByText('Online payment added to 5 sessions.')).toBeInTheDocument();
+    expect(calls.some((c) => c.path === '/api/admin/payments/razorpay/offer-everywhere')).toBe(
+      true,
+    );
+  });
+
   it('gives a teacher their own account', async () => {
     const calls = mockApi({
       ...signedIn(),

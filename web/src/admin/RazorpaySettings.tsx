@@ -6,6 +6,7 @@ import { fieldErrors } from './forms';
 import { useAdminProviders } from './hooks';
 import {
   useCheckOrgKeys,
+  useOfferEverywhere,
   useNewWebhookSecret,
   useRemoveOrgKeys,
   useRemoveProviderKeys,
@@ -122,11 +123,12 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
   const check = useCheckOrgKeys();
   const rotate = useNewWebhookSecret();
   const remove = useRemoveOrgKeys();
+  const offer = useOfferEverywhere();
   const [replacing, setReplacing] = useState(false);
   const [asking, setAsking] = useState(false);
   const r = settings.razorpay;
   const freshSecret = save.data?.razorpay.webhook_secret ?? rotate.data?.razorpay.webhook_secret;
-  const problem = [check, rotate, remove].find((m) => m.isError)?.error;
+  const problem = [check, rotate, remove, offer].find((m) => m.isError)?.error;
 
   return (
     <section className="panel stack" aria-labelledby="rzp-h">
@@ -153,6 +155,22 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
               {problem.message}
             </Notice>
           )}
+          <div className="offer-everywhere">
+            <p className="hint">
+              Online payment shows only on sessions where “Razorpay payment link” is ticked. Tick it
+              on every paid session in rupees that doesn’t need approval:
+            </p>
+            <Button variant="secondary" onClick={() => offer.mutate()} disabled={offer.isPending}>
+              Offer online payment on every paid session
+            </Button>
+            {offer.isSuccess && (
+              <Notice tone="success" live>
+                {offer.data.sessions_updated === 0
+                  ? 'Every eligible session already offers online payment.'
+                  : `Online payment added to ${offer.data.sessions_updated} ${offer.data.sessions_updated === 1 ? 'session' : 'sessions'}.`}
+              </Notice>
+            )}
+          </div>
           <WebhookSetup url={r.webhook_url} secret={freshSecret} />
           {!r.has_webhook_secret && !freshSecret && (
             <Notice tone="warn">No webhook secret yet: make one below.</Notice>

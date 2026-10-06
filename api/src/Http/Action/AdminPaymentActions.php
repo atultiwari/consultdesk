@@ -16,6 +16,7 @@ use ConsultDesk\Payments\PaymentSwitches;
 use ConsultDesk\Payments\Razorpay\GatewayKeys;
 use ConsultDesk\Payments\Razorpay\RazorpayApi;
 use ConsultDesk\Payments\Razorpay\RazorpayError;
+use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -33,6 +34,7 @@ final class AdminPaymentActions
         private readonly ?RazorpayApi $api,
         private readonly ProviderSettings $providers,
         private readonly AuditLog $audit,
+        private readonly PDO $pdo,
         private readonly string $appUrl,
         /** Live keys stay off until real-money payments are signed off (Phase 7 is test mode only). */
         private readonly bool $testKeysOnly = true,
@@ -86,6 +88,25 @@ final class AdminPaymentActions
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_webhook_secret_changed', 'settings', null);
 
         return JsonResponse::success($response, $this->state($secret));
+    }
+
+    /**
+     * Ticks "Razorpay payment link" on every session that can take it: paid, in INR and not needing
+     * approval. Sessions keep their other ways to pay.
+     */
+    public function offerEverywhere(Request $request, Response $response): Response
+    {
+        $owner = AdminScope::owner($request);
+        $statement = $this->pdo->prepare(
+            "UPDATE services SET payment_methods = JSON_ARRAY_APPEND(payment_methods, '$', 'razorpay_link')
+             WHERE price_minor > 0 AND currency = 'INR' AND requires_approval = 0
+               AND NOT JSON_CONTAINS(payment_methods, '\"razorpay_link\"')",
+        );
+        $statement->execute();
+        $count = $statement->rowCount();
+        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_offered_everywhere', 'settings', null, ['sessions' => $count]);
+
+        return JsonResponse::success($response, ['sessions_updated' => $count]);
     }
 
     public function removeOrgKeys(Request $request, Response $response): Response

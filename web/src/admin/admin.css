@@ -1426,3 +1426,9 @@
   color: var(--danger);
   font-weight: 600;
 }
+
+.offer-everywhere {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}

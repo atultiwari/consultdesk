@@ -5,7 +5,7 @@ import type { BookingView, UpiPayment } from '../api/types';
 import { Button, ButtonAnchor, ButtonLink } from '../design/components/Button';
 import { Notice } from '../design/components/Notice';
 import { safeHttpsUrl, safeUpiUri } from '../lib/safeUrl';
-import { OnlinePayment } from './OnlinePayment';
+import { OnlinePayment } from './PayOnlinePanel';
 import { Qr } from './Qr';
 import { useRemaining } from './useRemaining';
 import { UtrForm } from './UtrForm';
