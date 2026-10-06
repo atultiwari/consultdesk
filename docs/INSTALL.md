@@ -13,6 +13,7 @@ with the same names. Never commit real values.
 | `APP_URL` | Public address of the booking site, e.g. `https://book.atultiwari.com` |
 | `APP_KEY` | `base64:` followed by 32 random bytes. Encrypts tokens at rest. Generate with `php -r 'echo "base64:".base64_encode(random_bytes(32));'` and **keep a backup**: losing it breaks status links in old emails. |
 | `CRON_KEY` | At least 32 random characters; only needed if the cron is triggered by URL |
+| `MEDIA_PATH` | Optional. Folder for uploaded logos and provider photos; defaults to `api/storage/media`. Keep it outside the public web folder and writable by PHP. |
 | `ADMIN_PATH` | The secret first part of the admin address, e.g. `desk-7q2x9m4k` for `https://<site>/desk-7q2x9m4k`. 8–64 lowercase letters, digits and dashes, starting with a letter or digit; not `api`, `assets`, `install` or `embed-js`. Leave empty to switch the admin area off. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL / MariaDB database |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_ENCRYPTION`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail (see below) |
@@ -172,10 +173,38 @@ php bin/user.php list
 
 ### Who can do what
 
-- **Owner** and **admin**: every provider and booking, adding providers, closing the whole
-  organisation for a holiday. (Owners also get Users, Branding and Payments in Phase 6b.)
+- **Owner**: everything, including Users, Branding, Payments and System.
+- **Admin**: every provider and booking, adding providers, closing the whole organisation for a
+  holiday.
 - **Provider**: their own profile, UPI details, booking rules, sessions, weekly hours, blocked times
   and bookings, and nothing else.
+
+### Adding people
+
+Owners invite people from **Users → Invite someone**. The invitee gets an email with a link to choose
+their own password; it works once, for two days, and **Resend invite** sends a fresh one. Changing
+someone's role signs them out so the change applies at once; **Disable** ends their sessions and stops
+them signing in until they are enabled again. Owners can't demote or disable themselves; ask another
+owner, or use `php bin/user.php` on the server.
+
+Everyone can change their own name and password, and link their own Telegram, under **My account**.
+
+### Branding, photos and connections
+
+- **Branding** sets the organisation name, the look (Neutral, H&E or Vedant Research Labs), optional
+  brand colours and a logo. Each provider's **Profile** tab takes a photo.
+- Uploads must be PNG, JPEG or WebP under 2 MB. They are re-encoded on the server (which removes
+  location data and anything hidden in the file) and stored in `MEDIA_PATH`, so include that folder
+  in your backups. The server needs PHP's GD extension (standard on Hostinger).
+- A provider's **Connections** tab replaces `bin/telegram.php link` and `bin/google.php connect`:
+  it gives the one-time Telegram link, the Google consent link, and lets them pick which calendars
+  block bookings and which one gets new sessions.
+
+### System
+
+**System** shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
+(with **Retry failed jobs**), the version, and any database updates waiting after an upgrade, with a
+**Run database updates** button. Take a backup before running updates.
 
 ### Signing in
 
