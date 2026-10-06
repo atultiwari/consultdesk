@@ -2,7 +2,7 @@
 
 ConsultDesk is a self-hosted app for booking consultations with doctors, teachers and mentors. It's built to run on ordinary shared hosting with just PHP and MySQL. Each provider's calendar syncs with Google Calendar, and one installation can hold several providers. Bookings can be paid by manual UPI, confirmed through a Telegram bot or the admin panel, or through Razorpay Payment Links. A secret admin panel manages availability, blocked times, services and rules.
 
-**Status:** Phase 5 (public web UI) done: themed booking site (provider page, 4-step booking flow, appointment-slip status page with UPI payment and UTR), `embed.js`, and end-to-end tests; on top of the Google Calendar, Telegram, booking API, email and cron phases. Admin panel next (Phase 6).
+**Status:** Phase 6a (admin panel, part 1) in progress: sign-in at a secret path with password reset, dashboard, bookings, providers, sessions with the question builder, weekly hours and blocked times; on top of the public booking site, Google Calendar, Telegram, booking API, email and cron phases. Users, branding, integrations and system settings follow in Phase 6b.
 
 - Build plan: [docs/PLAN.md](docs/PLAN.md)
 - Kick-off prompt for a new Claude Code session: [START_PROMPT.md](START_PROMPT.md)
@@ -45,6 +45,13 @@ Then start the frontend (proxies `/api` to `:8080`):
 
 ```bash
 cd web && npm install && npm run dev   # http://localhost:5173
+```
+
+The admin panel is at http://localhost:5173/desk-local-dev (set `ADMIN_PATH` in `.env` to change
+it). Create yourself a local account first; it asks for a password:
+
+```bash
+docker compose exec api php bin/user.php create --email=owner@example.test --role=owner
 ```
 
 ### API (`api/`)
