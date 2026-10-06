@@ -23,10 +23,10 @@ jobs:
       mariadb:
         image: mariadb:10.6
         env:
-          MARIADB_ROOT_PASSWORD: ci-root
+          MARIADB_ROOT_PASSWORD: root-${{ github.run_id }}
           MARIADB_DATABASE: consultdesk_test
           MARIADB_USER: consultdesk
-          MARIADB_PASSWORD: ci-password
+          MARIADB_PASSWORD: db-${{ github.run_id }}
         ports: ['3306:3306']
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
@@ -42,7 +42,7 @@ jobs:
       DB_PORT: '3306'
       DB_TEST_NAME: consultdesk_test
       DB_USER: consultdesk
-      DB_PASSWORD: ci-password
+      DB_PASSWORD: db-${{ github.run_id }}
     defaults:
       run:
         working-directory: api
@@ -95,10 +95,10 @@ jobs:
       mariadb:
         image: mariadb:10.6
         env:
-          MARIADB_ROOT_PASSWORD: ci-root
+          MARIADB_ROOT_PASSWORD: root-${{ github.run_id }}
           MARIADB_DATABASE: consultdesk_e2e
           MARIADB_USER: consultdesk
-          MARIADB_PASSWORD: ci-password
+          MARIADB_PASSWORD: db-${{ github.run_id }}
         ports: ['3306:3306']
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
@@ -108,7 +108,7 @@ jobs:
       DB_PORT: '3306'
       DB_NAME: consultdesk_e2e
       DB_USER: consultdesk
-      DB_PASSWORD: ci-password
+      DB_PASSWORD: db-${{ github.run_id }}
       APP_URL: http://localhost:5173
       SMTP_HOST: 127.0.0.1
       SMTP_PORT: '1025'
