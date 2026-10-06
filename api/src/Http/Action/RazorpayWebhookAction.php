@@ -24,13 +24,25 @@ final class RazorpayWebhookAction
     public function __invoke(Request $request, Response $response): Response
     {
         $checkout = $this->checkout ?? throw ApiException::notFound();
-        $raw = $request->getBody()->read(self::MAX_BYTES + 1);
+        if ((int) $request->getHeaderLine('Content-Length') > self::MAX_BYTES) {
+            throw new ApiException(413, 'payload_too_large', 'Too large.');
+        }
+        // read() may return fewer bytes than asked, so read until the end (or the size limit).
+        $body = $request->getBody();
+        $raw = '';
+        while (!$body->eof() && strlen($raw) <= self::MAX_BYTES) {
+            $chunk = $body->read(8192);
+            if ($chunk === '') {
+                break;
+            }
+            $raw .= $chunk;
+        }
         if (strlen($raw) > self::MAX_BYTES) {
             throw new ApiException(413, 'payload_too_large', 'Too large.');
         }
 
         try {
-            $checkout->handleWebhook($raw, $request->getHeaderLine('X-Razorpay-Signature'), $request->getHeaderLine('X-Razorpay-Event-Id'));
+            $checkout->handleWebhook($raw, $request->getHeaderLine('X-Razorpay-Signature'));
         } catch (InvalidSignature) {
             throw new ApiException(400, 'bad_signature', 'Signature check failed.');
         }

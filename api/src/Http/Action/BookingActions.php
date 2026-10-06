@@ -77,7 +77,12 @@ final class BookingActions
         if ($paymentMethod === PaymentMethod::RazorpayLink) {
             // Made straight away so the customer can pay at once; if Razorpay is down, the status
             // page offers to try again.
-            $this->razorpay?->ensureLink($this->view($held->ref));
+            try {
+                $this->razorpay?->ensureLink($this->view($held->ref));
+            } catch (\Throwable $e) {
+                // The booking is made; the status page can still ask for the link.
+                error_log(sprintf('ConsultDesk: payment link for %s failed: %s', $held->ref, $e->getMessage()));
+            }
         }
 
         return JsonResponse::success($response, [
@@ -131,7 +136,7 @@ final class BookingActions
         $input->assertValid();
 
         $booking = $this->authorised($args['ref'] ?? '', (string) $token);
-        $this->razorpay?->ensureLink($booking);
+        $this->razorpay?->ensureLink($booking, retry: true);
 
         return JsonResponse::success($response, BookingPresenter::present($this->view($booking->ref), $this->clock->now()));
     }

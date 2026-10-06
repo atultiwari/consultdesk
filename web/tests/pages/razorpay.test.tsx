@@ -128,6 +128,18 @@ describe('paying online with Razorpay', () => {
     expect(await screen.findByText('Payment received — you’re booked')).toBeInTheDocument();
   });
 
+  it('explains a payment that arrived after the hold ended', async () => {
+    mockApi({
+      'GET /api/site': ok(site),
+      'POST /api/bookings/CD-7F3K/razorpay/return': ok({ ref: 'CD-7F3K', status: 'expired' }),
+    });
+    renderAt('/b/CD-7F3K?paid=1&razorpay_signature=sig');
+
+    expect(
+      await screen.findByText('Your payment arrived after the slot was released'),
+    ).toBeInTheDocument();
+  });
+
   it('is honest when the return cannot be checked', async () => {
     mockApi({
       'GET /api/site': ok(site),

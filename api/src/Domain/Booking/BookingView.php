@@ -51,6 +51,7 @@ final class BookingView
         /** Razorpay payment link id and short URL, once made. */
         public readonly ?string $gatewayRef = null,
         public readonly ?string $gatewayUrl = null,
+        public readonly ?string $gatewayKeyId = null,
     ) {}
 
     /**

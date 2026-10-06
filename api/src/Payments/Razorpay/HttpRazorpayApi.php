@@ -66,7 +66,8 @@ final class HttpRazorpayApi implements RazorpayApi
      */
     private function send(RazorpayCredentials $credentials, string $method, string $path, ?array $json = null): array
     {
-        $options = ['auth' => [$credentials->keyId, $credentials->keySecret], 'timeout' => self::TIMEOUT_SECONDS, 'http_errors' => true];
+        // No redirects: the keys must only ever go to api.razorpay.com.
+        $options = ['auth' => [$credentials->keyId, $credentials->keySecret], 'timeout' => self::TIMEOUT_SECONDS, 'http_errors' => true, 'allow_redirects' => false];
         if ($json !== null) {
             $options['json'] = $json;
         }

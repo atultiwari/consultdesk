@@ -45,8 +45,7 @@ export function WebhookSetup({ url, secret }: { url: string; secret?: string }) 
       <p className="hint">
         In the Razorpay Dashboard (Test Mode), open{' '}
         <strong>Account &amp; Settings → Webhooks → Add new webhook</strong>, paste this URL
-        {secret ? ' and secret' : ''}, tick <strong>payment_link.paid</strong>,{' '}
-        <strong>payment_link.cancelled</strong> and <strong>payment_link.expired</strong>, and save.
+        {secret ? ' and secret' : ''}, tick <strong>payment_link.paid</strong>, and save.
       </p>
       <CopyField label="Webhook URL" value={url} />
       {secret && (

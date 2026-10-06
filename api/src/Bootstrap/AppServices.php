@@ -205,7 +205,7 @@ final class AppServices
 
     public function razorpayCheckout(): RazorpayCheckout
     {
-        return new RazorpayCheckout($this->pdo(), $this->gatewayKeys(), $this->razorpayApi(), $this->bookingService(), $this->bookingViews(), $this->clock, $this->config->appUrl);
+        return new RazorpayCheckout($this->db(), $this->gatewayKeys(), $this->razorpayApi(), $this->bookingService(), $this->bookingViews(), $this->clock, $this->config->appUrl);
     }
 
     public function settings(): Settings

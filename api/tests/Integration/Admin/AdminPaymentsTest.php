@@ -57,11 +57,29 @@ final class AdminPaymentsTest extends AdminTestCase
         $this->fake->rejectKeys = true;
         self::assertSame([422, 'razorpay_rejected'], $this->codeOf($this->admin('POST', '/api/admin/payments/razorpay/check')));
 
+        [, $resaved] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => $keyId, 'key_secret' => $secret]);
+        self::assertArrayNotHasKey('webhook_secret', $resaved['data']['razorpay'], 're-saving the same account keeps the webhook working');
+
         [, $rotated] = $this->admin('POST', '/api/admin/payments/razorpay/webhook-secret');
         self::assertNotSame($body['data']['razorpay']['webhook_secret'], $rotated['data']['razorpay']['webhook_secret']);
 
         self::assertFalse($this->admin('DELETE', '/api/admin/payments/razorpay')[1]['data']['razorpay']['configured']);
         self::assertGreaterThanOrEqual(3, (int) (self::column($this->pdo, "SELECT COUNT(*) FROM audit_log WHERE action LIKE 'admin.razorpay_%'")[0] ?? 0));
+    }
+
+    public function testKeysCanNotBeRemovedWhileCustomersHaveLinksToPay(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        $keyId = 'rzp_test_' . str_repeat('A', 14);
+        $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => $keyId, 'key_secret' => str_repeat('s', 24)]);
+        $service = Fixtures::service($this->pdo, $this->demo, ['payment_methods' => '["razorpay_link"]']);
+        $this->pdo->exec("INSERT INTO bookings (ref, public_token_hash, provider_id, service_id, start_at, end_at, customer_name, customer_email, answers,
+            amount_minor, payment_method, gateway_ref, gateway_key_id, status, hold_expires_at, status_changed_at, created_at, updated_at)
+            VALUES ('CD-OPEN', REPEAT('a', 64), {$this->demo}, {$service}, '2026-10-07 04:30:00', '2026-10-07 05:30:00', 'X', 'x@example.test', '{}',
+            149900, 'razorpay_link', 'plink_open', '{$keyId}', 'held', '2026-10-05 00:20:00', NOW(), NOW(), NOW())");
+
+        self::assertSame([409, 'links_open'], $this->codeOf($this->admin('DELETE', '/api/admin/payments/razorpay')));
     }
 
     public function testATeacherCanHaveTheirOwnRazorpayAccount(): void

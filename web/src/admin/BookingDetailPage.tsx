@@ -53,7 +53,7 @@ function Facts({ booking }: { booking: BookingDetail }) {
             </span>
           )}
           {booking.gateway_payment_id &&
-            ['cancelled', 'expired', 'rejected'].includes(booking.status) && (
+            !['confirmed', 'completed', 'no_show'].includes(booking.status) && (
               <span className="cell-sub refund-note">
                 Paid but not going ahead: refund it from the Razorpay Dashboard.
               </span>

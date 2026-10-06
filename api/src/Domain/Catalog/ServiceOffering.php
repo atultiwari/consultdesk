@@ -42,9 +42,10 @@ final class ServiceOffering
 
         return array_values(array_filter(
             $this->paymentMethods,
-            static fn(PaymentMethod $m): bool => match ($m) {
+            fn(PaymentMethod $m): bool => match ($m) {
                 PaymentMethod::Upi => $provider->acceptsUpi,
-                PaymentMethod::RazorpayLink => $provider->acceptsRazorpay,
+                // Paying online confirms at once, which would skip an approval; and links are INR only.
+                PaymentMethod::RazorpayLink => $provider->acceptsRazorpay && !$this->requiresApproval && $this->currency === 'INR',
                 PaymentMethod::Free => false,
             },
         ));

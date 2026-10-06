@@ -254,18 +254,25 @@ Secret and **Save keys**. ConsultDesk stores the secret encrypted, then shows:
 ### 3. Add the webhook in Razorpay
 
 **Account & Settings → Webhooks → Add new webhook** (still in Test Mode): paste the URL and the
-secret, tick **payment_link.paid**, **payment_link.cancelled** and **payment_link.expired**, and save.
+secret, tick **payment_link.paid**, and save. (That is the only event ConsultDesk needs; others are
+recorded and ignored.) Without the webhook, a booking still confirms when the customer comes back from
+Razorpay, but not if they close the tab after paying, so do add it.
 
 If the same Razorpay account already sends webhooks somewhere else (for example a WordPress site),
 add this as a **second** webhook; leave the existing one as it is. ConsultDesk ignores events for
 payments it didn't create, and only the `payment_link.*` events above are needed here.
+
+Saving the **same** Key ID again (for example to update the secret) keeps the webhook secret; a
+different account gets a new one. Keys can't be removed or swapped while customers still hold unpaid
+links made with them (at most half an hour).
 
 ### 4. Turn it on for sessions
 
 - **Payments → Ways to pay** switches UPI and Razorpay on or off for the whole site.
 - Each paid session lists the ways it accepts (**Providers → Sessions → Edit**: "UPI" and "Razorpay
   payment link"). Customers see a way to pay only when it is switched on, ticked on the session and set
-  up for that teacher (a UPI ID for UPI; Razorpay keys for Razorpay).
+  up for that teacher (a UPI ID for UPI; Razorpay keys for Razorpay). Razorpay is offered only for
+  sessions priced in INR that don't need approval (paying online confirms at once).
 - Make a test booking and pay with one of Razorpay's
   [test cards](https://razorpay.com/docs/payments/payments/test-card-details/).
 
@@ -280,7 +287,8 @@ secret ConsultDesk shows for them.
 
 - **The customer pays:** the booking is confirmed (by the webhook, or as soon as Razorpay sends the
   customer back, whichever comes first), with the usual emails, calendar event and alerts.
-- **The hold runs out first (30 minutes):** the link is cancelled at Razorpay so it can't be paid.
+- **The hold runs out first (30 minutes):** the link closes 90 seconds before the hold ends and is
+  cancelled at Razorpay, so it can't be paid late.
 - **A payment arrives after the hold ended:** the booking is not confirmed (the slot may be taken);
   the customer and staff get an email, and the booking shows "refund it from the Razorpay
   Dashboard" with the payment id.

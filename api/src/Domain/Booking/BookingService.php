@@ -182,6 +182,12 @@ final class BookingService
             $this->bookings->recordPayment($bookingId, $paymentId, $now);
             $live = $booking->status === BookingStatus::Held && ($booking->holdExpiresAt === null || $booking->holdExpiresAt > $now);
             if (!$live) {
+                if (in_array($booking->status, [BookingStatus::Held, BookingStatus::AwaitingVerification], true)) {
+                    // The hold ran out but cron hasn't marked it yet: do it now, quietly; the
+                    // paid-late emails below explain what happened.
+                    $this->bookings->setStatus($bookingId, BookingStatus::Expired, $now);
+                    $this->bookings->audit(Actor::system(), 'booking.expired', $bookingId, [], $now);
+                }
                 $this->bookings->audit($actor, 'booking.paid_late', $bookingId, ['payment_id' => $paymentId, 'status' => $booking->status->value], $now);
                 $this->events->record(BookingEvent::PaidLate, $bookingId);
 

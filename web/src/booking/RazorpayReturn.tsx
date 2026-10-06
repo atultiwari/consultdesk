@@ -37,13 +37,19 @@ export function RazorpayReturn({ refCode, params }: { refCode: string; params: U
     );
   }
 
-  const confirmed = confirm.data?.status === 'confirmed';
+  const status = confirm.data?.status;
   return (
     <div className="container status">
-      {confirmed ? (
+      {status === 'confirmed' ? (
         <Notice tone="success" title="Payment received — you’re booked" live>
           Booking <span className="mono">{refCode}</span> is confirmed. The confirmation email has
           the link to your booking and the call details.
+        </Notice>
+      ) : status === 'expired' || status === 'cancelled' || status === 'rejected' ? (
+        <Notice tone="danger" title="Your payment arrived after the slot was released" live>
+          Booking <span className="mono">{refCode}</span> could not be confirmed, so the payment
+          will be refunded in full. We’ve emailed you the details.{' '}
+          <Link to="/">Book another time</Link>
         </Notice>
       ) : (
         <Notice tone="warn" title="We couldn’t confirm the payment here" live>

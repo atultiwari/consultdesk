@@ -41,7 +41,8 @@ final class RazorpayBookingTest extends ApiTestCase
         self::assertSame(['method' => 'razorpay_link', 'pay_url' => 'https://rzp.example.test/plink_test000001'], array_intersect_key($booking['payment'], ['method' => 1, 'pay_url' => 1]));
         $sent = $this->razorpay?->created[0] ?? self::fail('No payment link was made.');
         self::assertSame([$this->orgKey, 299900, $ref], [$sent['key'], $sent['request']->amountMinor, $sent['request']->reference]);
-        self::assertSame('2026-10-05T00:30:00+00:00', $sent['request']->expireBy->format(DATE_ATOM), 'the link dies with the hold');
+        self::assertSame('2026-10-05T00:28:30+00:00', $sent['request']->expireBy->format(DATE_ATOM), 'the link closes just before the hold ends');
+        self::assertSame('+910000000000', $sent['request']->customerPhone, 'Razorpay wants digits only');
         self::assertSame(self::APP_URL . "/b/{$ref}?paid=1", $sent['request']->callbackUrl, 'no status token is given to Razorpay');
 
         self::assertSame(400, $this->webhook($this->paidEvent($ref, 'plink_test000001'), 'not-the-signature')[0]);
@@ -80,13 +81,46 @@ final class RazorpayBookingTest extends ApiTestCase
         $this->at('2026-10-05T00:31Z');
 
         self::assertSame(200, $this->webhook($this->paidEvent($ref, 'plink_test000001'))[0]);
-        self::assertNotSame('confirmed', $this->statusOf($ref));
+        self::assertSame('expired', $this->statusOf($ref), 'marked expired at once, before cron gets to it');
         self::assertSame(['booking.paid_late'], self::column($this->pdo, "SELECT action FROM audit_log WHERE action = 'booking.paid_late'"));
 
         $this->services()->cronRunner()->run();
         $subjects = array_map(static fn($m) => $m->subject, $this->mailer->sent);
         self::assertContains("Refund needed: {$ref}", $subjects);
         self::assertContains("Payment received after your hold ended: {$ref}", $subjects);
+        self::assertNotContains("Booking expired: {$ref}", $subjects, 'no contradictory "hold expired" email');
+    }
+
+    public function testAWebhookThatFailedHalfwayIsProcessedOnRetry(): void
+    {
+        [$ref] = $this->book();
+        $event = $this->paidEvent($ref, 'plink_test000001');
+        unset($event['_event_id']);
+        // As if a first delivery was recorded but crashed before confirming.
+        $this->pdo->prepare("INSERT INTO payment_events (gateway, event_id, event_type, payload, received_at) VALUES ('razorpay', :id, 'payment_link.paid', '{}', '2026-10-05 00:05:00')")
+            ->execute(['id' => hash('sha256', json_encode($event, JSON_THROW_ON_ERROR))]);
+
+        self::assertSame(200, $this->webhook($this->paidEvent($ref, 'plink_test000001'))[0]);
+        self::assertSame('confirmed', $this->statusOf($ref));
+    }
+
+    public function testPaymentsOnOpenLinksStillConfirmAfterTheKeysChange(): void
+    {
+        [$ref] = $this->book();
+        $this->services()->gatewayKeys()->save($this->demo, 'rzp_test_' . str_repeat('T', 14), bin2hex(random_bytes(12)), bin2hex(random_bytes(16)));
+
+        self::assertSame(200, $this->webhook($this->paidEvent($ref, 'plink_test000001'))[0]);
+        self::assertSame('confirmed', $this->statusOf($ref), 'the account that made the link vouches for it');
+    }
+
+    public function testRazorpayIsOnlyForInrSessionsThatNeedNoApproval(): void
+    {
+        Fixtures::service($this->pdo, $this->demo, ['slug' => 'approval', 'payment_methods' => '["upi","razorpay_link"]', 'requires_approval' => 1]);
+        Fixtures::service($this->pdo, $this->demo, ['slug' => 'dollars', 'currency' => 'USD', 'payment_methods' => '["upi","razorpay_link"]']);
+
+        $methods = array_column($this->call('GET', '/api/providers/demo')[1]['data']['services'], 'payment_methods', 'slug');
+        self::assertSame(['upi'], $methods['approval'], 'paying online would skip the approval');
+        self::assertSame(['upi'], $methods['dollars']);
     }
 
     public function testLapsedHoldsCancelTheirLink(): void
@@ -160,7 +194,7 @@ final class RazorpayBookingTest extends ApiTestCase
             'service' => 'thesis',
             'start' => '2026-10-07T04:30:00Z',
             'payment_method' => $method,
-            'customer' => ['name' => 'Asha Placeholder', 'email' => 'asha' . random_int(1, 99999) . '@example.test', 'phone' => '+910000000000'],
+            'customer' => ['name' => 'Asha Placeholder', 'email' => 'asha' . random_int(1, 99999) . '@example.test', 'phone' => '+91 00000-00000'],
         ];
     }
 

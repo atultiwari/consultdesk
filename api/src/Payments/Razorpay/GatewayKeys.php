@@ -48,6 +48,35 @@ final class GatewayKeys
     }
 
     /**
+     * The account with this key id, wherever it is used.
+     */
+    public function byKeyId(string $keyId): ?RazorpayCredentials
+    {
+        $statement = $this->pdo->prepare('SELECT provider_id, key_id, secret_enc, webhook_secret_enc FROM payment_gateways WHERE gateway = :gateway AND key_id = :key ORDER BY id DESC LIMIT 1');
+        $statement->execute(['gateway' => self::GATEWAY, 'key' => $keyId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $this->hydrate($row) : null;
+    }
+
+    /**
+     * Unpaid payment links made with this owner's account that customers can still pay.
+     */
+    public function openLinks(?int $providerId): int
+    {
+        $account = $this->find($providerId);
+        if ($account === null) {
+            return 0;
+        }
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM bookings WHERE gateway_key_id = :key AND status = 'held' AND hold_expires_at > :now",
+        );
+        $statement->execute(['key' => $account->keyId, 'now' => $this->clock->now()->format(self::SQL)]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    /**
      * Every configured account, e.g. to check which one signed a webhook.
      *
      * @return list<RazorpayCredentials>
@@ -82,11 +111,30 @@ final class GatewayKeys
     }
 
     /**
-     * Replaces the keys for the organisation (null) or one provider.
+     * Replaces the keys for the organisation (null) or one provider, in one step. With a null webhook
+     * secret, the current one is kept if the key id is the same account's.
+     *
+     * @return bool whether a webhook secret is now stored
      */
-    public function save(?int $providerId, string $keyId, #[\SensitiveParameter] string $keySecret, #[\SensitiveParameter] ?string $webhookSecret): void
+    public function save(?int $providerId, string $keyId, #[\SensitiveParameter] string $keySecret, #[\SensitiveParameter] ?string $webhookSecret): bool
     {
-        $this->delete($providerId);
+        $current = $this->find($providerId);
+        $webhookSecret ??= $current !== null && $current->keyId === $keyId ? $current->webhookSecret : null;
+        $this->pdo->beginTransaction();
+        try {
+            $this->delete($providerId);
+            $this->insert($providerId, $keyId, $keySecret, $webhookSecret);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        return $webhookSecret !== null;
+    }
+
+    private function insert(?int $providerId, string $keyId, #[\SensitiveParameter] string $keySecret, #[\SensitiveParameter] ?string $webhookSecret): void
+    {
         $now = $this->clock->now()->format(self::SQL);
         $this->pdo->prepare(
             "INSERT INTO payment_gateways (provider_id, gateway, mode, key_id, secret_enc, webhook_secret_enc, active, created_at, updated_at)

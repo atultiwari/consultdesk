@@ -91,6 +91,7 @@ final class AdminPaymentActions
     public function removeOrgKeys(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
+        $this->assertNoOpenLinks(null);
         $this->keys->delete(null);
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'settings', null);
 
@@ -130,6 +131,7 @@ final class AdminPaymentActions
     {
         $owner = AdminScope::owner($request);
         $providerId = (int) AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0))['id'];
+        $this->assertNoOpenLinks($providerId);
         $this->keys->delete($providerId);
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'provider', $providerId);
 
@@ -137,9 +139,10 @@ final class AdminPaymentActions
     }
 
     /**
-     * Validates and stores keys with a fresh webhook secret, which is returned to show once.
+     * Validates and stores keys. A new account gets a fresh webhook secret, returned to show once;
+     * re-saving the same account keeps its secret (and returns null), so its webhook keeps working.
      */
-    private function saveKeys(Request $request, ?int $providerId): string
+    private function saveKeys(Request $request, ?int $providerId): ?string
     {
         $input = new Input(JsonInput::decode($request));
         $keyId = $input->string('key_id', max: 64);
@@ -154,10 +157,31 @@ final class AdminPaymentActions
         }
         $input->assertValid();
 
-        $webhookSecret = self::randomSecret();
+        $current = $this->keys->find($providerId);
+        if ($current !== null && $current->keyId !== $keyId) {
+            $this->assertNoOpenLinks($providerId);
+        }
+        $keepSecret = $current !== null && $current->keyId === $keyId && $current->webhookSecret !== null;
+        $webhookSecret = $keepSecret ? null : self::randomSecret();
         $this->keys->save($providerId, (string) $keyId, (string) $secret, $webhookSecret);
 
         return $webhookSecret;
+    }
+
+    /**
+     * Customers still holding payment links from this account must be able to finish paying.
+     */
+    private function assertNoOpenLinks(?int $providerId): void
+    {
+        $open = $this->keys->openLinks($providerId);
+        if ($open > 0) {
+            throw new ApiException(409, 'links_open', sprintf(
+                '%d %s waiting to be paid with these keys. Try again in about half an hour, once %s.',
+                $open,
+                $open === 1 ? 'customer is' : 'customers are',
+                $open === 1 ? 'that hold has ended' : 'those holds have ended',
+            ));
+        }
     }
 
     private function checkAccount(?int $providerId): void
