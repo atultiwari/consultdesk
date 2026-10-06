@@ -193,6 +193,26 @@ php bin/user.php list
 
 `reset-password` also signs that person out everywhere.
 
+### Setting up your site
+
+After the first sign-in, the dashboard shows **Set up your site** until it's done (owners only; it
+lives at `<ADMIN_PATH>/setup`). It asks three things, and every answer can be changed later:
+
+1. **Who will people book with?** *Just me* (a personal site such as yourname.com: the booking page
+   opens straight on your sessions, and "Add provider" is hidden) or *Several teachers* (an academy
+   or practice). You can switch a single-teacher site to several teachers at any time from
+   Branding → Site mode. Going back to one teacher is only possible while one teacher is active.
+2. **Your first teacher:** name, title, about, timezone, the email for new bookings, and optional
+   WhatsApp and UPI details. Starter weekly hours are added (Mon–Fri 10–13 and 16–19, Sat 10–13)
+   if the teacher has none; edit them under Hours.
+3. **Starter sessions:** tick any of the suggested sessions, change the title, length and price, or
+   skip and create your own. Suggestions come in three sets (any teacher, medical AI and research,
+   institutions). Each shows the price band Indian providers charge; see
+   [research/session-pricing.md](research/session-pricing.md) for the sources.
+
+A fresh install has no demo data. `bin/seed-dev.php` (the "Dr. Demo Placeholder" provider) is for
+local development only.
+
 ### Who can do what
 
 - **Owner**: everything, including Users, Branding, Payments and System.

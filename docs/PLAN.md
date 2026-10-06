@@ -224,20 +224,21 @@ consultdesk/
   - Every token pair used for text passes WCAG AA in all presets and themes (`e2e/scripts/contrast.ts`). Lighthouse (mobile): provider 97, booking 94, status 96 performance; 100 accessibility.
 - Before building any UI, use the `frontend-design` / `motion-design` skills, and review the screens in the browser at 375, 768 and 1280 px.
 
-## 8. Seed data — service templates from research
+## 8. Seed data — starter sessions from research
 
-The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for 60 min) and Indian AI mentors (₹500–2,000). The Calendly reference charges $197 for 60 min. Shipped as templates the installer can apply:
+The prices come from a survey of 32 Indian price points (Topmate, Preply, UrbanPro, mentorship
+platforms, government honorarium norms): see [research/session-pricing.md](research/session-pricing.md).
+The setup wizard (`<ADMIN_PATH>/setup`) offers three sets from `ServiceTemplates::sets()`; each price
+is the early-career/student end of the band, and the wizard shows the full band beside it.
 
-| Service | Duration | Seed price |
-|---|---|---|
-| Intro / fit call (requires approval) | 15 min | Free |
-| AI-in-Medicine career guidance (students, residents, doctors) | 30 min | ₹1,499 |
-| Research & thesis guidance (AI/ML study design, datasets, methodology, paper review) | 60 min | ₹2,999 |
-| Project / code review (DL pathology/imaging, AI tool builds) | 60 min | ₹3,499 |
-| AI tools for clinicians & educators (hands-on) | 45 min | ₹1,999 |
-| Health-AI startup / product consult | 60 min | ₹4,499 |
-| Institutional workshop / FDP / invited talk (scoping call) | 30 min | Free (requires approval) |
-| *(phase 2)* Mentorship bundle 4 × 45 min, valid 90 days · Priority DM async question | — | ₹8,999 · ₹499–999 |
+| Set | Sessions (price) |
+|---|---|
+| Any teacher or consultant | Free intro call 15 min · Quick clarity call 30 min ₹499 · One-to-one 60 min ₹999 · CV and LinkedIn review 30 min ₹499 · Mock interview 60 min ₹1,499 · Tutoring 60 min ₹449 · Career roadmap 45 min ₹799 |
+| Medical AI, research and careers | Free intro call · Medical AI career roadmap 45 min ₹999 · Thesis clinic 60 min ₹1,499* · Statistics review 60 min ₹1,999* · Manuscript review 45 min ₹2,999* · ML code review 60 min ₹1,499 · Medical career guidance 30 min ₹699 · Health-tech startup advice 60 min ₹4,999* |
+| Institutions | Invited talk · Hands-on workshop · Faculty development programme: free requests needing approval*, fee agreed afterwards |
+
+\* requires approval. Free sessions are `free`; approval sessions offer UPI; others offer UPI and Razorpay.
+The medical set is also what `bin/seed-dev.php` gives the local "demo" provider.
 
 **Intake questions**
 - **Every service asks for:** name, email, WhatsApp, role, institution, "What do you want to walk away with?" and optional links.
@@ -254,7 +255,7 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 - Buffers: 10 min before and 10 min after, customisable per provider. Between two of a provider's sessions the required gap is the **larger** of the two buffers (not their sum). Against external busy time (Google), a session's own before/after buffers apply.
 - Slot interval: 30 min.
 - At most 3 sessions per day.
-- Holds: 60 min for UPI, 20 min for Razorpay links, 24 h for free sessions awaiting approval. A UPI booking awaiting verification is held for 24 h after the UTR is submitted.
+- Holds: 30 min for UPI (to submit the UTR), 30 min for Razorpay links, 24 h for free sessions awaiting approval. A UPI booking awaiting verification is held for 24 h after the UTR is submitted.
 
 ## 9. Phases (TDD throughout; one PR per phase)
 

@@ -28,7 +28,7 @@ docker compose up -d --build  # API on :8080, MariaDB on :3307, Mailpit UI on :8
 docker compose exec api composer install
 ```
 
-Create the schema and some placeholder data (a `demo` provider with the §8 services):
+Create the schema and some placeholder data (a `demo` provider with the §8 medical starter sessions; a real install uses the setup wizard instead):
 
 ```bash
 docker compose exec api composer migrate
