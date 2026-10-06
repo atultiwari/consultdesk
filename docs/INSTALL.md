@@ -94,6 +94,16 @@ don't forward them). Open it on the phone that should receive alerts and tap **S
 Alerts and buttons work only in a **private chat** with the bot, not in groups. Sending `/stop` to the
 bot unlinks that chat.
 
+### What the bot sends
+
+- **With buttons** (someone needs to decide): a UPI payment to verify (✅ Confirm / ❌ Reject) and a
+  free request that needs approval.
+- **Notices** (no buttons): a new booking that confirmed itself (paid online with Razorpay, or a free
+  session that needs no approval), and **Refund needed** when an online payment arrives after the
+  hold ended, with the Razorpay payment id to find it in the dashboard.
+
+Alerts go to the provider's linked chat, or to the owners' chats if the provider has none.
+
 ### Trying the bot on your own computer
 
 Telegram can't reach `localhost`, so instead of the webhook, let ConsultDesk fetch the bot's

@@ -17,7 +17,7 @@ final class PdoBookingViews implements BookingViewRepository
             p.id AS provider_id, p.slug AS provider_slug, p.name AS provider_name, p.timezone AS provider_timezone,
             p.whatsapp, p.notify_email, p.upi_vpa, p.upi_payee_name,
             s.id AS service_id, s.title AS service_title, s.requires_approval,
-            b.gcal_event_id, b.gcal_calendar_id, (o.status = \'active\') AS calendar_connected, b.gateway_ref, b.gateway_url, b.gateway_key_id
+            b.gcal_event_id, b.gcal_calendar_id, (o.status = \'active\') AS calendar_connected, b.gateway_ref, b.gateway_url, b.gateway_key_id, b.gateway_payment_id
         FROM bookings b
         JOIN providers p ON p.id = b.provider_id
         JOIN services s ON s.id = b.service_id
@@ -118,6 +118,7 @@ final class PdoBookingViews implements BookingViewRepository
             gatewayRef: self::nullable($r['gateway_ref'] ?? null),
             gatewayUrl: self::nullable($r['gateway_url'] ?? null),
             gatewayKeyId: self::nullable($r['gateway_key_id'] ?? null),
+            gatewayPaymentId: self::nullable($r['gateway_payment_id'] ?? null),
         );
     }
 

@@ -62,6 +62,10 @@ final class TelegramEventHandler implements JobHandler
         return match (true) {
             $this->event === BookingEvent::UtrSubmitted && $booking->status === BookingStatus::AwaitingVerification => AlertKind::VerifyPayment,
             $this->event === BookingEvent::Held && $booking->status === BookingStatus::Held && $booking->paymentMethod === PaymentMethod::Free => AlertKind::ApprovalNeeded,
+            // Confirmed without anyone pressing a button: paid online, or free with no approval.
+            $this->event === BookingEvent::Confirmed && $booking->status === BookingStatus::Confirmed
+                && ($booking->paymentMethod === PaymentMethod::RazorpayLink || ($booking->paymentMethod === PaymentMethod::Free && !$booking->requiresApproval)) => AlertKind::NewBooking,
+            $this->event === BookingEvent::PaidLate => AlertKind::RefundNeeded,
             default => null,
         };
     }

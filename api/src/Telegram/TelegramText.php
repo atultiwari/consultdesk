@@ -37,7 +37,26 @@ final class TelegramText
                 '',
                 sprintf('Approve or reject before %s.', self::e($deadline)),
             ]),
+            AlertKind::NewBooking => implode("\n", [
+                '🎉 <b>New booking</b>',
+                self::summary($booking),
+                '',
+                $booking->amountMinor === 0
+                    ? 'Free session, confirmed automatically.'
+                    : sprintf('%s paid online%s; confirmed automatically.', self::e(self::amount($booking)), self::paymentRef($booking)),
+            ]),
+            AlertKind::RefundNeeded => implode("\n", [
+                '↩️ <b>Refund needed</b>',
+                self::summary($booking),
+                '',
+                sprintf('%s arrived after the hold ended, so the booking was not confirmed. Refund it in the Razorpay Dashboard%s, or offer the customer another time.', self::e(self::amount($booking)), self::paymentRef($booking)),
+            ]),
         };
+    }
+
+    private static function paymentRef(BookingView $booking): string
+    {
+        return $booking->gatewayPaymentId === null ? '' : ' (payment <code>' . self::e($booking->gatewayPaymentId) . '</code>)';
     }
 
     public static function rejectPrompt(BookingView $booking, AlertKind $kind): string
