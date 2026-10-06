@@ -143,3 +143,20 @@ forgets the tokens.
 
 Free/busy is fetched per week and cached for 2 minutes; if Google is unreachable, that is remembered
 for a minute and bookings stay open.
+
+## Putting booking on another site (Phase 5)
+
+Add this where the "Book a session" button should appear (any HTML page, including WordPress in a
+Custom HTML block):
+
+```html
+<script src="https://<your-booking-site>/embed.js" data-provider="<provider-slug>"
+        data-service="<service-slug>" data-label="Book a session" async></script>
+```
+
+`data-service` is optional (without it the button opens the provider's page), and `data-provider` too
+(without it, the list of everyone taking bookings). Or simply link to
+`https://<your-booking-site>/p/<provider-slug>` from anywhere, e.g. a WhatsApp or Instagram bio.
+
+If the other site sends a Content-Security-Policy, allow the booking site in `frame-src` and, for the
+script, in `script-src`.

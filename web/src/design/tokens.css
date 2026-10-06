@@ -1,0 +1,227 @@
+/*
+ * Design tokens. Every component reads these variables; a preset (data-preset on <html>) swaps the
+ * palette, type and shape. Each preset has a light theme and a dark theme, chosen by the system
+ * setting unless the visitor picks one (data-theme on <html>).
+ *
+ *   neutral — calm default for any installation, system fonts (nothing to download)
+ *   he      — atultiwari.com: haematoxylin & eosin on a warm lab-bench paper; darkfield at night
+ *   vrl     — Vedant Research Labs: deep violet brand, rose accent, Bricolage Grotesque + Figtree
+ */
+:root {
+  --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --display-weight: 600;
+  --display-tracking: -0.015em;
+
+  --bg: #f7f7f5;
+  --bg-elev: #ffffff;
+  --bg-sunk: #eeeeea;
+  --ink: #1d1f24;
+  --ink-2: #464a54;
+  --ink-3: #5f636d;
+  --rule: #e1e1dc;
+  --rule-strong: #c9c9c2;
+
+  --brand: #2f4a7a;
+  --brand-ink: #ffffff;
+  --brand-soft: #e3e9f4;
+  --accent: #a3405a;
+  --accent-soft: #f6e3e8;
+
+  --success: #24704f;
+  --success-soft: #dff0e7;
+  --warn: #8a5a00;
+  --warn-soft: #fbefd5;
+  --danger: #b3261e;
+  --danger-soft: #fbe4e2;
+  --focus: #2f6bff;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-btn: 10px;
+  --shadow-card: 0 1px 2px rgb(20 20 30 / 6%), 0 8px 24px rgb(20 20 30 / 6%);
+  --shadow-float: 0 12px 32px rgb(20 20 30 / 12%);
+
+  /* Motion: one signature curve, three durations ("premium-calm"). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 160ms;
+  --dur-2: 260ms;
+  --dur-3: 420ms;
+
+  --gutter: clamp(16px, 4vw, 40px);
+  --maxw: 1120px;
+
+  color-scheme: light;
+}
+
+/* ---------- atultiwari.com: H&E ---------- */
+:root[data-preset='he'] {
+  --font-display: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --font-body: 'Geist Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --display-weight: 400;
+  --display-tracking: -0.01em;
+
+  --bg: #f5f1ea;
+  --bg-elev: #fbf8f3;
+  --bg-sunk: #ede7dd;
+  --ink: #1c1827;
+  --ink-2: #4b4459;
+  --ink-3: #5e5670;
+  --rule: #ddd5c8;
+  --rule-strong: #c9bfae;
+  --brand: #40297a;
+  --brand-soft: #e6e0f3;
+  --accent: #b02a60;
+  --accent-soft: #f8dfe8;
+  --radius: 14px;
+  --radius-btn: 999px;
+}
+
+/* ---------- Vedant Research Labs ---------- */
+:root[data-preset='vrl'] {
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --display-weight: 800;
+  --display-tracking: -0.035em;
+
+  --bg: #fffdfb;
+  --bg-elev: #ffffff;
+  --bg-sunk: #f6f2fb;
+  --ink: #1c2240;
+  --ink-2: #3f4568;
+  --ink-3: #5b6180;
+  --rule: #e6def2;
+  --rule-strong: #d2c6e6;
+  --brand: #3b2e7e;
+  --brand-soft: #efeafb;
+  --accent: #b23a6d;
+  --accent-soft: #fbe4ee;
+  --success: #276b4d;
+  --radius-sm: 10px;
+  --radius: 24px;
+  --radius-lg: 36px;
+  --radius-btn: 16px;
+  --shadow-card: 0 1px 2px rgb(59 46 126 / 6%), 0 18px 40px rgb(59 46 126 / 8%);
+}
+
+/* ---------- dark themes ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #121317;
+    --bg-elev: #1a1c21;
+    --bg-sunk: #0d0e11;
+    --ink: #eceef2;
+    --ink-2: #b9bdc7;
+    --ink-3: #959aa6;
+    --rule: #2a2d34;
+    --rule-strong: #3a3e47;
+    --brand: #9db6ea;
+    --brand-ink: #10141c;
+    --brand-soft: #1e2636;
+    --accent: #f08aa6;
+    --accent-soft: #3a1d26;
+    --success: #6fd3a3;
+    --success-soft: #15291f;
+    --warn: #f2c46b;
+    --warn-soft: #2f2410;
+    --danger: #ff8a80;
+    --danger-soft: #3a1714;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 30%);
+    --shadow-float: 0 12px 32px rgb(0 0 0 / 50%);
+    color-scheme: dark;
+  }
+
+  :root[data-preset='he']:not([data-theme='light']) {
+    --bg: #100e16;
+    --bg-elev: #17141f;
+    --bg-sunk: #0b0a10;
+    --ink: #efeaf6;
+    --ink-2: #bdb5cc;
+    --ink-3: #9a92ab;
+    --rule: #2a2535;
+    --rule-strong: #3b3448;
+    --brand: #b3a1f5;
+    --brand-ink: #140f22;
+    --brand-soft: #231c3a;
+    --accent: #f383ab;
+    --accent-soft: #3a1a29;
+  }
+
+  :root[data-preset='vrl']:not([data-theme='light']) {
+    --bg: #110f1f;
+    --bg-elev: #191630;
+    --bg-sunk: #0c0a17;
+    --ink: #eeecf8;
+    --ink-2: #bfbad8;
+    --ink-3: #9a95b6;
+    --rule: #2b2745;
+    --rule-strong: #3d3860;
+    --brand: #b9acf7;
+    --brand-ink: #15102e;
+    --brand-soft: #241f45;
+    --accent: #f08bb5;
+    --accent-soft: #3d1a2c;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #121317;
+  --bg-elev: #1a1c21;
+  --bg-sunk: #0d0e11;
+  --ink: #eceef2;
+  --ink-2: #b9bdc7;
+  --ink-3: #959aa6;
+  --rule: #2a2d34;
+  --rule-strong: #3a3e47;
+  --brand: #9db6ea;
+  --brand-ink: #10141c;
+  --brand-soft: #1e2636;
+  --accent: #f08aa6;
+  --accent-soft: #3a1d26;
+  --success: #6fd3a3;
+  --success-soft: #15291f;
+  --warn: #f2c46b;
+  --warn-soft: #2f2410;
+  --danger: #ff8a80;
+  --danger-soft: #3a1714;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 30%);
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 50%);
+  color-scheme: dark;
+}
+
+:root[data-preset='he'][data-theme='dark'] {
+  --bg: #100e16;
+  --bg-elev: #17141f;
+  --bg-sunk: #0b0a10;
+  --ink: #efeaf6;
+  --ink-2: #bdb5cc;
+  --ink-3: #9a92ab;
+  --rule: #2a2535;
+  --rule-strong: #3b3448;
+  --brand: #b3a1f5;
+  --brand-ink: #140f22;
+  --brand-soft: #231c3a;
+  --accent: #f383ab;
+  --accent-soft: #3a1a29;
+}
+
+:root[data-preset='vrl'][data-theme='dark'] {
+  --bg: #110f1f;
+  --bg-elev: #191630;
+  --bg-sunk: #0c0a17;
+  --ink: #eeecf8;
+  --ink-2: #bfbad8;
+  --ink-3: #9a95b6;
+  --rule: #2b2745;
+  --rule-strong: #3d3860;
+  --brand: #b9acf7;
+  --brand-ink: #15102e;
+  --brand-soft: #241f45;
+  --accent: #f08bb5;
+  --accent-soft: #3d1a2c;
+}

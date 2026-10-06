@@ -46,7 +46,7 @@ So it is built as an **independent, installable product**, not as code inside th
 - **Updates:** upload a new zip; the admin panel's "Run database updates" button applies pending migrations.
 - **Three ways to put it on a site:**
   1. **Subdomain page.** `book.atultiwari.com` lists providers, or goes straight to the provider when there is only one.
-  2. **Embed script** for any site, including static sites and WordPress: `<script src="https://book.x.com/embed.js" data-provider="atul" data-service="research-guidance"></script>` renders a "Book a session" button that opens an accessible modal iframe, auto-resized via `postMessage`.
+  2. **Embed script** for any site, including static sites and WordPress: `<script src="https://book.x.com/embed.js" data-provider="atul" data-service="research-guidance"></script>` renders a "Book a session" button that opens an accessible modal iframe, auto-resized via `postMessage` (only messages from the booking site's origin are accepted). `data-label` changes the button text. 1.4 KB gzipped.
   3. **Direct deep links** such as `/p/atul/research-guidance`, usable in WhatsApp, Instagram bio or email signatures.
   - A WordPress shortcode plugin wrapper for the embed (`[consultdesk provider="..."]`) is a later phase.
 - **Roles:**
@@ -211,7 +211,14 @@ consultdesk/
   - A **week-strip date picker plus a slot grid** grouped Morning / Afternoon / Evening, with the visitor's timezone shown inline.
   - A 4-step stepper with a sticky summary panel on desktop that becomes a bottom sheet on mobile.
   - A status page styled like an appointment slip, or a clinic token slip, with a ref number and QR code.
-- Light and dark themes, `prefers-reduced-motion` honoured, WCAG AA contrast, full keyboard support (Radix), and touch targets of at least 44 px.
+- Light and dark themes, `prefers-reduced-motion` honoured, WCAG AA contrast, full keyboard support, and touch targets of at least 44 px.
+- **As built (Phase 5):**
+  - Presets are token sets selected by `data-preset` on `<html>`: `neutral` (system fonts, the default), `he` (portfolio tokens: haematoxylin `#40297a`, eosin `#b02a60`, lab-bench paper; Instrument Serif + Geist) and `vrl` (from the VRL site: violet `#3b2e7e`, rose accent, Bricolage Grotesque + Figtree, larger radii). Each has a tuned dark theme.
+  - `GET /api/site` returns the org name, preset and optional brand colours (settings key `site`, sanitised; edited in Branding in Phase 6). Custom colours apply to the light theme only.
+  - Fonts are self-hosted from `@fontsource/*`; only the active preset's fonts download. The last preset is cached so returning visitors get it before the API answers.
+  - Motion: one signature curve `cubic-bezier(.22,1,.36,1)`, durations 160 / 260 / 420 ms, a short rise-in for entrances, stagger capped under 200 ms.
+  - Plain CSS on tokens instead of Radix: the few interactive pieces (radio-based week strip and slot grid, `<details>` bottom sheet, native selects) are accessible with native elements.
+  - Every token pair used for text passes WCAG AA in all presets and themes (`e2e/scripts/contrast.ts`). Lighthouse (mobile): provider 97, booking 94, status 96 performance; 100 accessibility.
 - Before building any UI, use the `frontend-design` / `motion-design` skills, and review the screens in the browser at 375, 768 and 1280 px.
 
 ## 8. Seed data — service templates from research
@@ -283,7 +290,11 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 - Telegram: secret-token header plus the chat-id allowlist.
 - Login: argon2id, rate limits, and session ID regeneration on login.
 - CSRF on every state-changing admin route.
-- CSP headers in the shipped `.htaccess`.
+- CSP headers in the shipped `.htaccess` (Phase 8). For the static web app:
+  - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: <allowed logo/photo hosts>; font-src 'self'; connect-src 'self'; frame-ancestors <'self' + sites allowed to embed>; base-uri 'none'; form-action 'self'; object-src 'none'` (the brand-colour `<style>` needs `'unsafe-inline'` for styles or a nonce);
+  - `Referrer-Policy: no-referrer` (status URLs carry the token; the page also sets the meta tag), `X-Content-Type-Options: nosniff`, HSTS, a `Permissions-Policy`, `Cross-Origin-Opener-Policy: same-origin`;
+  - `Cache-Control: no-store` on `/b/*`; no `X-Frame-Options` on pages meant to be embedded (it cannot express an allowlist; `frame-ancestors` does);
+  - the SPA fallback rewrite must not swallow `/embed.js` or `/api/*`.
 - `/install` locks itself once installation is done.
 - Public status pages are reachable only with the token. The token is looked up by hash and kept otherwise only encrypted (`public_token_enc`); unknown ref and wrong token return the same 404.
 - Uploads (provider photos only) are checked by MIME, re-encoded with GD, and stored outside executable paths.

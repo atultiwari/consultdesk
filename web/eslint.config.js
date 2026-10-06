@@ -18,5 +18,10 @@ export default tseslint.config(
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Fast refresh only concerns app modules, not test helpers.
+    files: ['tests/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
   prettier,
 );

@@ -9,6 +9,9 @@ export default defineConfig({
   server: {
     proxy: { '/api': API_DEV_ORIGIN },
   },
+  preview: {
+    proxy: { '/api': API_DEV_ORIGIN },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

@@ -13,6 +13,8 @@ interface CatalogRepository
 
     public function activeProvider(string $slug): ?ProviderProfile;
 
+    public function siteSettings(): SiteSettings;
+
     /**
      * @return list<ServiceOffering> the provider's active services in display order
      */

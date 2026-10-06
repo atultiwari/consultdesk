@@ -25,3 +25,9 @@ api/var/
 web/coverage/
 e2e/test-results/
 e2e/playwright-report/
+
+# Local design QA output
+e2e/screenshots/
+
+# Local Claude Code preview config
+.claude/

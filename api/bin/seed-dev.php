@@ -27,7 +27,7 @@ $insert = static function (string $table, array $row) use ($pdo): int {
     $pdo->prepare(sprintf(
         'INSERT INTO %s (%s) VALUES (%s)',
         $table,
-        implode(', ', $columns),
+        implode(', ', array_map(static fn(string $c): string => "`{$c}`", $columns)),
         implode(', ', array_map(static fn(string $c): string => ':' . $c, $columns)),
     ))->execute($row);
 
@@ -75,6 +75,8 @@ foreach (ServiceTemplates::all() as $order => $service) {
         'sort_order' => $order,
     ]);
 }
+
+$insert('settings', ['key' => 'site', 'value' => json_encode(['org_name' => 'Dr. Demo Bookings', 'preset' => 'he'], JSON_THROW_ON_ERROR)]);
 
 $pdo->commit();
 echo "Seeded provider 'demo' with " . count(ServiceTemplates::all()) . " services.\n";

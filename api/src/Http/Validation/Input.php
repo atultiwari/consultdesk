@@ -124,7 +124,7 @@ final class Input
     public function timezone(string $field, bool $required = true): ?string
     {
         $value = $this->string($field, $required, 64);
-        if ($value !== null && !in_array($value, DateTimeZone::listIdentifiers(), true)) {
+        if ($value !== null && !in_array($value, DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), true)) {
             return $this->fail($field, 'Unknown timezone.');
         }
 

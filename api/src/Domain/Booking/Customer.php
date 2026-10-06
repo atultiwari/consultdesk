@@ -42,7 +42,7 @@ final class Customer
             throw new InvalidArgumentException('Phone number is not valid.');
         }
 
-        if ($timezone !== null && !in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
+        if ($timezone !== null && !in_array($timezone, DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), true)) {
             throw new InvalidArgumentException('Timezone is not valid.');
         }
 
