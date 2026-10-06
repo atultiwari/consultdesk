@@ -26,9 +26,10 @@ final class GoogleDeleteEventHandler implements JobHandler
         }
 
         try {
-            $this->calendar->deleteEvent($booking->providerId, $booking->gcalEventId);
+            $this->calendar->deleteEvent($booking->providerId, $booking->gcalCalendarId ?? 'primary', $booking->gcalEventId);
         } catch (CalendarDisconnected) {
-            // Cannot reach their calendar any more; forget the link so the event is not retried forever.
+            // Their calendar cannot be reached any more, so the event may remain there.
+            error_log(sprintf('[consultdesk] could not delete Google event for booking %s: calendar disconnected', $booking->ref));
         }
         $this->links->detach($bookingId);
     }

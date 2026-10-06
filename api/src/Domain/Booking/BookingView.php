@@ -46,6 +46,7 @@ final class BookingView
         public readonly bool $requiresApproval,
         public readonly ?string $meetUrl,
         public readonly ?string $gcalEventId = null,
+        public readonly ?string $gcalCalendarId = null,
         public readonly bool $calendarConnected = false,
     ) {}
 

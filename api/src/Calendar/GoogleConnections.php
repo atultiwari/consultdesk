@@ -48,6 +48,7 @@ final class GoogleConnections
             is_array($busy) ? array_values(array_filter($busy, 'is_string')) : [],
             $row['target_calendar_id'] === null ? null : (string) $row['target_calendar_id'],
             $row['status'] === 'active',
+            (string) $row['refresh_token_enc'],
         );
     }
 
@@ -82,17 +83,21 @@ final class GoogleConnections
         ]);
     }
 
-    public function saveAccessToken(int $providerId, GoogleTokens $tokens): void
+    /**
+     * Stores a refreshed access token, unless the provider has reconnected since $connection was read.
+     */
+    public function saveAccessToken(GoogleConnection $connection, GoogleTokens $tokens): void
     {
         $this->pdo->prepare(
             'UPDATE oauth_tokens SET access_token_enc = :access, access_expires_at = :expires, updated_at = :now
-             WHERE provider_id = :provider AND oauth_provider = :name',
+             WHERE provider_id = :provider AND oauth_provider = :name AND refresh_token_enc = :version',
         )->execute([
             'access' => $this->crypto->encrypt($tokens->accessToken),
             'expires' => $this->expiry($tokens)->format(self::SQL_DATETIME),
             'now' => $this->clock->now()->format(self::SQL_DATETIME),
-            'provider' => $providerId,
+            'provider' => $connection->providerId,
             'name' => self::PROVIDER,
+            'version' => $connection->version,
         ]);
     }
 
@@ -114,16 +119,25 @@ final class GoogleConnections
     }
 
     /**
+     * Marks the connection broken, unless the provider has reconnected since $connection was read.
+     *
      * @return bool true only for the call that changed it from active to broken
      */
-    public function markBroken(int $providerId, string $error): bool
+    public function markBroken(GoogleConnection $connection, string $error): bool
     {
         $statement = $this->pdo->prepare(
             "UPDATE oauth_tokens SET status = 'broken', last_error = :error, access_token_enc = NULL, broken_notified_at = :now, updated_at = :now2
-             WHERE provider_id = :provider AND oauth_provider = :name AND status = 'active'",
+             WHERE provider_id = :provider AND oauth_provider = :name AND status = 'active' AND refresh_token_enc = :version",
         );
         $now = $this->clock->now()->format(self::SQL_DATETIME);
-        $statement->execute(['error' => mb_substr($error, 0, 500), 'now' => $now, 'now2' => $now, 'provider' => $providerId, 'name' => self::PROVIDER]);
+        $statement->execute([
+            'error' => mb_substr($error, 0, 500),
+            'now' => $now,
+            'now2' => $now,
+            'provider' => $connection->providerId,
+            'name' => self::PROVIDER,
+            'version' => $connection->version,
+        ]);
 
         return $statement->rowCount() === 1;
     }

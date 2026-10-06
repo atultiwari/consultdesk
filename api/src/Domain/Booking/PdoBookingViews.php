@@ -17,7 +17,7 @@ final class PdoBookingViews implements BookingViewRepository
             p.id AS provider_id, p.slug AS provider_slug, p.name AS provider_name, p.timezone AS provider_timezone,
             p.whatsapp, p.notify_email, p.upi_vpa, p.upi_payee_name,
             s.id AS service_id, s.title AS service_title, s.requires_approval,
-            b.gcal_event_id, (o.status = \'active\') AS calendar_connected
+            b.gcal_event_id, b.gcal_calendar_id, (o.status = \'active\') AS calendar_connected
         FROM bookings b
         JOIN providers p ON p.id = b.provider_id
         JOIN services s ON s.id = b.service_id
@@ -113,6 +113,7 @@ final class PdoBookingViews implements BookingViewRepository
             requiresApproval: (bool) $r['requires_approval'],
             meetUrl: self::nullable($r['meet_url']),
             gcalEventId: self::nullable($r['gcal_event_id']),
+            gcalCalendarId: self::nullable($r['gcal_calendar_id']),
             calendarConnected: (bool) ($r['calendar_connected'] ?? false),
         );
     }

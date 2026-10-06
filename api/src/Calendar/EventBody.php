@@ -8,7 +8,8 @@ use ConsultDesk\Domain\Booking\BookingView;
 
 /**
  * The Google Calendar event for a confirmed booking. The customer is an attendee and can see the
- * description, so it holds only what they already gave us — never the status-page token.
+ * description, so it holds no status-page token and no free-text intake answers (Google would send
+ * that text from the provider's account to whatever address was entered). Staff see answers in email.
  */
 final class EventBody
 {
@@ -24,9 +25,6 @@ final class EventBody
             sprintf('Booking %s', $booking->ref),
             sprintf('Customer: %s <%s>%s', $booking->customerName, $booking->customerEmail, $booking->customerPhone === null ? '' : ', ' . $booking->customerPhone),
         ];
-        foreach ($booking->answers as $question => $answer) {
-            $lines[] = sprintf('%s: %s', ucfirst(str_replace('_', ' ', (string) $question)), is_scalar($answer) ? (is_bool($answer) ? ($answer ? 'Yes' : 'No') : (string) $answer) : '');
-        }
 
         return [
             'id' => $eventId,

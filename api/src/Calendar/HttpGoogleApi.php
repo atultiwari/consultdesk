@@ -35,7 +35,7 @@ final class HttpGoogleApi implements GoogleApi
         private readonly ClientInterface $http,
     ) {}
 
-    public function authorizationUrl(string $state, string $codeChallenge): string
+    public function authorizationUrl(string $state, string $codeChallenge, string $loginHint): string
     {
         return self::AUTH_URL . '?' . http_build_query([
             'client_id' => $this->clientId,
@@ -44,7 +44,7 @@ final class HttpGoogleApi implements GoogleApi
             'scope' => implode(' ', self::SCOPES),
             'access_type' => 'offline',
             'prompt' => 'consent',
-            'include_granted_scopes' => 'true',
+            'login_hint' => $loginHint,
             'state' => $state,
             'code_challenge' => $codeChallenge,
             'code_challenge_method' => 'S256',
@@ -111,7 +111,8 @@ final class HttpGoogleApi implements GoogleApi
 
     public function freeBusy(string $accessToken, array $calendarIds, Interval $range): array
     {
-        $result = $this->json('POST', self::CALENDAR_URL . '/freeBusy', $accessToken, ['json' => [
+        // Short timeouts: free/busy is on the booking path, and a slow Google must not hold it up.
+        $result = $this->json('POST', self::CALENDAR_URL . '/freeBusy', $accessToken, ['timeout' => 4, 'connect_timeout' => 2, 'json' => [
             'timeMin' => $range->start->format(self::RFC3339_UTC),
             'timeMax' => $range->end->format(self::RFC3339_UTC),
             'items' => array_map(static fn(string $id): array => ['id' => $id], $calendarIds),
@@ -148,6 +149,17 @@ final class HttpGoogleApi implements GoogleApi
     public function getEvent(string $accessToken, string $calendarId, string $eventId): GoogleEvent
     {
         return self::event($this->json('GET', self::eventsUrl($calendarId) . '/' . rawurlencode($eventId), $accessToken, [], 'events.get'));
+    }
+
+    public function updateEvent(string $accessToken, string $calendarId, string $eventId, array $event): GoogleEvent
+    {
+        return self::event($this->json(
+            'PUT',
+            self::eventsUrl($calendarId) . '/' . rawurlencode($eventId),
+            $accessToken,
+            ['json' => $event, 'query' => ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']],
+            'events.update',
+        ));
     }
 
     public function deleteEvent(string $accessToken, string $calendarId, string $eventId): void
@@ -202,7 +214,7 @@ final class HttpGoogleApi implements GoogleApi
     private function send(string $method, string $url, array $options, string $label): ResponseInterface
     {
         try {
-            return $this->http->request($method, $url, $options + ['http_errors' => false, 'timeout' => 15, 'connect_timeout' => 5]);
+            return $this->http->request($method, $url, $options + ['http_errors' => false, 'timeout' => 10, 'connect_timeout' => 3]);
         } catch (GuzzleException) {
             // Exception messages can echo request details; they are dropped.
             throw new GoogleApiError(sprintf('Google API unreachable (%s).', $label));
@@ -256,7 +268,7 @@ final class HttpGoogleApi implements GoogleApi
             }
         }
 
-        return new GoogleEvent($id, $meet);
+        return new GoogleEvent($id, $meet, ($body['status'] ?? null) === 'cancelled');
     }
 
     private static function eventsUrl(string $calendarId): string

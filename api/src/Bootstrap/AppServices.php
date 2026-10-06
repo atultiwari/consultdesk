@@ -140,7 +140,7 @@ final class AppServices
             $this->bookingService(),
             new OutboxWorker($this->outbox(), $handlers),
             $this->rateLimiter(),
-            [static fn(): int => $cache->prune()],
+            [static fn(): int => $cache->prune(), fn(): int => $this->googleOAuth()?->prune() ?? 0],
         );
     }
 

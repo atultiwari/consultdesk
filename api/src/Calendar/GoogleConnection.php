@@ -22,5 +22,7 @@ final class GoogleConnection
         public readonly array $busyCalendarIds,
         public readonly ?string $targetCalendarId,
         public readonly bool $active,
+        /** The stored ciphertext of the refresh token; updates apply only if it is unchanged. */
+        public readonly string $version = '',
     ) {}
 }

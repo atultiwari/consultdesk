@@ -12,7 +12,10 @@ use ConsultDesk\Domain\Availability\Interval;
  */
 interface GoogleApi
 {
-    public function authorizationUrl(string $state, string $codeChallenge): string;
+    /**
+     * @param string $loginHint the Google account expected to sign in
+     */
+    public function authorizationUrl(string $state, string $codeChallenge, string $loginHint): string;
 
     public function exchangeCode(string $code, string $codeVerifier): GoogleTokens;
 
@@ -42,6 +45,13 @@ interface GoogleApi
     public function insertEvent(string $accessToken, string $calendarId, array $event): GoogleEvent;
 
     public function getEvent(string $accessToken, string $calendarId, string $eventId): GoogleEvent;
+
+    /**
+     * Replaces an event, e.g. to restore one that was deleted in Google.
+     *
+     * @param array<string, mixed> $event
+     */
+    public function updateEvent(string $accessToken, string $calendarId, string $eventId, array $event): GoogleEvent;
 
     /**
      * Deletes an event and notifies attendees. An event that is already gone is not an error.

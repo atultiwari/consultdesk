@@ -20,6 +20,13 @@ final class FakeGoogleApi implements GoogleApi
     public string $scopeToIssue = 'openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.calendarlist.readonly';
     public bool $refreshRevoked = false;
     public bool $freeBusyDown = false;
+    public bool $meetPending = false;
+    public bool $accountEmailFails = false;
+    public string $accountEmailToReturn = 'provider@example.test';
+    /** @var (callable(): void)|null runs inside insertEvent, to simulate something happening meanwhile */
+    public $duringInsert = null;
+    /** @var list<string> */
+    public array $loginHints = [];
     /** @var list<Interval> */
     public array $busy = [];
     /** @var array<string, array<string, mixed>> event id => event body */
@@ -34,8 +41,10 @@ final class FakeGoogleApi implements GoogleApi
     public array $revoked = [];
     private int $issued = 0;
 
-    public function authorizationUrl(string $state, string $codeChallenge): string
+    public function authorizationUrl(string $state, string $codeChallenge, string $loginHint): string
     {
+        $this->loginHints[] = $loginHint;
+
         return 'https://accounts.example.test/auth?state=' . rawurlencode($state) . '&code_challenge=' . rawurlencode($codeChallenge);
     }
 
@@ -63,7 +72,11 @@ final class FakeGoogleApi implements GoogleApi
 
     public function accountEmail(string $accessToken): string
     {
-        return 'provider@example.test';
+        if ($this->accountEmailFails) {
+            throw new GoogleApiError('Google userinfo failed: HTTP 500', 500);
+        }
+
+        return $this->accountEmailToReturn;
     }
 
     public function calendars(string $accessToken): array
@@ -93,15 +106,27 @@ final class FakeGoogleApi implements GoogleApi
             throw new GoogleApiError('Google events.insert failed: The requested identifier already exists.', 409, true);
         }
         $this->events[$id] = $event + ['calendar' => $calendarId];
+        if ($this->duringInsert !== null) {
+            ($this->duringInsert)();
+        }
 
-        return new GoogleEvent($id, 'https://meet.example.test/' . substr($id, 0, 8));
+        return new GoogleEvent($id, $this->meetPending ? null : 'https://meet.example.test/' . substr($id, 0, 8));
+    }
+
+    public function updateEvent(string $accessToken, string $calendarId, string $eventId, array $event): GoogleEvent
+    {
+        $this->calls[] = "update:{$calendarId}:{$eventId}";
+        $this->events[$eventId] = $event + ['calendar' => $calendarId];
+
+        return new GoogleEvent($eventId, 'https://meet.example.test/' . substr($eventId, 0, 8));
     }
 
     public function getEvent(string $accessToken, string $calendarId, string $eventId): GoogleEvent
     {
         $this->calls[] = "get:{$calendarId}:{$eventId}";
+        $cancelled = ($this->events[$eventId]['status'] ?? null) === 'cancelled';
 
-        return new GoogleEvent($eventId, 'https://meet.example.test/' . substr($eventId, 0, 8));
+        return new GoogleEvent($eventId, $this->meetPending ? null : 'https://meet.example.test/' . substr($eventId, 0, 8), $cancelled);
     }
 
     public function deleteEvent(string $accessToken, string $calendarId, string $eventId): void

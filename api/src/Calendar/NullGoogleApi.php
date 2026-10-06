@@ -11,7 +11,7 @@ use ConsultDesk\Domain\Availability\Interval;
  */
 final class NullGoogleApi implements GoogleApi
 {
-    public function authorizationUrl(string $state, string $codeChallenge): string
+    public function authorizationUrl(string $state, string $codeChallenge, string $loginHint): string
     {
         throw self::off();
     }
@@ -52,6 +52,11 @@ final class NullGoogleApi implements GoogleApi
     }
 
     public function getEvent(string $accessToken, string $calendarId, string $eventId): GoogleEvent
+    {
+        throw self::off();
+    }
+
+    public function updateEvent(string $accessToken, string $calendarId, string $eventId, array $event): GoogleEvent
     {
         throw self::off();
     }

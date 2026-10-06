@@ -39,7 +39,7 @@ final class GoogleDisconnectedHandler implements JobHandler
             ->heading('Google Calendar disconnected')
             ->paragraph("Google stopped accepting ConsultDesk's access to {$name}'s calendar (the permission was removed or expired).")
             ->paragraph('Bookings still work, but until it is reconnected their Google calendar is not checked for clashes and new bookings are not added to it.')
-            ->note(sprintf('To reconnect, run: php api/bin/google.php connect %s', (string) $provider['slug']));
+            ->note(sprintf('To reconnect, run: php api/bin/google.php connect %s <their-google-email>', (string) $provider['slug']));
 
         $this->mailer->send(new EmailMessage($to, "Google Calendar disconnected for {$name}", $body->toText(), $body->toHtml()));
     }

@@ -51,35 +51,51 @@ final class GoogleCalendar
 
     /**
      * Creates the event for a confirmed booking, inviting the customer and adding a Meet link.
-     * Safe to retry: the event id is derived from the booking, so a second attempt finds the first.
+     * Safe to retry: the event id is derived from the booking, so a second attempt finds the first
+     * (and restores it if someone deleted it in Google).
+     *
+     * @return array{GoogleEvent, string} the event and the calendar it is on
      *
      * @throws CalendarDisconnected|GoogleApiError
      */
-    public function createEvent(BookingView $booking): GoogleEvent
+    public function createEvent(BookingView $booking): array
     {
         $connection = $this->activeConnection($booking->providerId);
         $calendarId = $connection->targetCalendarId ?? 'primary';
         $token = $this->accessToken($connection);
         $eventId = $this->eventIdFor($booking->id);
+        $body = EventBody::for($booking, $eventId);
 
         try {
-            return $this->api->insertEvent($token, $calendarId, EventBody::for($booking, $eventId));
+            return [$this->api->insertEvent($token, $calendarId, $body), $calendarId];
         } catch (GoogleApiError $e) {
             if ($e->status !== 409) {
                 throw $e;
             }
-
-            return $this->api->getEvent($token, $calendarId, $eventId);
         }
+
+        $existing = $this->api->getEvent($token, $calendarId, $eventId);
+        if ($existing->cancelled) {
+            $existing = $this->api->updateEvent($token, $calendarId, $eventId, $body + ['status' => 'confirmed']);
+        }
+
+        return [$existing, $calendarId];
     }
 
     /**
      * @throws CalendarDisconnected|GoogleApiError
      */
-    public function deleteEvent(int $providerId, string $eventId): void
+    public function fetchEvent(int $providerId, string $calendarId, string $eventId): GoogleEvent
     {
-        $connection = $this->activeConnection($providerId);
-        $this->api->deleteEvent($this->accessToken($connection), $connection->targetCalendarId ?? 'primary', $eventId);
+        return $this->api->getEvent($this->accessToken($this->activeConnection($providerId)), $calendarId, $eventId);
+    }
+
+    /**
+     * @throws CalendarDisconnected|GoogleApiError
+     */
+    public function deleteEvent(int $providerId, string $calendarId, string $eventId): void
+    {
+        $this->api->deleteEvent($this->accessToken($this->activeConnection($providerId)), $calendarId, $eventId);
     }
 
     /**
@@ -139,14 +155,14 @@ final class GoogleCalendar
             $tokens = $this->api->refresh($connection->refreshToken);
         } catch (GoogleApiError $e) {
             if ($e->invalidGrant) {
-                if ($this->connections->markBroken($connection->providerId, $e->getMessage())) {
+                if ($this->connections->markBroken($connection, $e->getMessage())) {
                     $this->outbox->enqueue(self::DISCONNECTED_JOB, ['provider_id' => $connection->providerId]);
                 }
                 throw new CalendarDisconnected('Google access was revoked; the provider needs to reconnect.');
             }
             throw $e;
         }
-        $this->connections->saveAccessToken($connection->providerId, $tokens);
+        $this->connections->saveAccessToken($connection, $tokens);
 
         return $tokens->accessToken;
     }

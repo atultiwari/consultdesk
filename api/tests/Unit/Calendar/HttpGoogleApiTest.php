@@ -29,7 +29,7 @@ final class HttpGoogleApiTest extends TestCase
 
     public function testAuthorizationUrlAsksForOfflineAccessWithPkce(): void
     {
-        $url = $this->api([])->authorizationUrl('state-123', 'challenge-abc');
+        $url = $this->api([])->authorizationUrl('state-123', 'challenge-abc', 'provider@example.test');
 
         self::assertStringStartsWith('https://accounts.google.com/o/oauth2/v2/auth?', $url);
         parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
@@ -41,6 +41,8 @@ final class HttpGoogleApiTest extends TestCase
         self::assertSame('state-123', $q['state']);
         self::assertSame('challenge-abc', $q['code_challenge']);
         self::assertSame('S256', $q['code_challenge_method']);
+        self::assertSame('provider@example.test', $q['login_hint']);
+        self::assertArrayNotHasKey('include_granted_scopes', $q, 'earlier grants must not satisfy the scope check');
         self::assertSame(
             'openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.calendarlist.readonly',
             $q['scope'],
@@ -110,6 +112,24 @@ final class HttpGoogleApiTest extends TestCase
         self::assertSame('https://meet.google.com/abc-defg-hij', $event->meetUrl);
         $request = $this->request(0);
         self::assertSame('/calendar/v3/calendars/primary/events', $request->getUri()->getPath());
+        parse_str($request->getUri()->getQuery(), $q);
+        self::assertSame(['conferenceDataVersion' => '1', 'sendUpdates' => 'all'], $q);
+    }
+
+    public function testReadsEventStatusAndCanRestoreAnEvent(): void
+    {
+        $api = $this->api([
+            new Response(200, [], '{"id":"cdabc","status":"cancelled"}'),
+            new Response(200, [], '{"id":"cdabc","status":"confirmed","hangoutLink":"https://meet.google.com/x"}'),
+        ]);
+
+        self::assertTrue($api->getEvent('at', 'primary', 'cdabc')->cancelled);
+        $restored = $api->updateEvent('at', 'primary', 'cdabc', ['id' => 'cdabc', 'status' => 'confirmed']);
+
+        self::assertFalse($restored->cancelled);
+        $request = $this->request(1);
+        self::assertSame('PUT', $request->getMethod());
+        self::assertSame('/calendar/v3/calendars/primary/events/cdabc', $request->getUri()->getPath());
         parse_str($request->getUri()->getQuery(), $q);
         self::assertSame(['conferenceDataVersion' => '1', 'sendUpdates' => 'all'], $q);
     }

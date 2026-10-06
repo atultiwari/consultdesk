@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ConsultDesk\Domain\Booking;
 
 use ConsultDesk\Domain\Availability\BusyTimeSource;
+use ConsultDesk\Domain\Availability\BusyWindow;
 use ConsultDesk\Domain\Availability\Interval;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotEngine;
@@ -60,7 +61,11 @@ final class BookingService
             throw new PaymentMethodNotAllowed();
         }
 
-        return $this->db->transaction(function () use ($request, $confirmImmediately): HeldBooking {
+        // External busy time is fetched before taking the provider lock, so a slow calendar API
+        // can never hold up other bookings for this provider.
+        $busy = $this->externalBusy($request);
+
+        return $this->db->transaction(function () use ($request, $confirmImmediately, $busy): HeldBooking {
             $provider = $this->bookings->lockActiveProvider($request->providerId) ?? throw new ServiceNotBookable();
             $now = $this->clock->now();
             $service = $this->bookings->findActiveService($request->serviceId);
@@ -73,7 +78,7 @@ final class BookingService
             }
 
             $slot = new Interval($request->start, $request->start->modify(sprintf('+%d minutes', $service->durationMinutes)));
-            $this->assertOffered($provider, $service, $slot, $now);
+            $this->assertOffered($provider, $service, $slot, $now, $busy);
 
             $token = $this->refs->token();
             $holdExpiresAt = min($now->modify(sprintf('+%d minutes', HoldPolicy::holdMinutes($request->paymentMethod))), $slot->start);
@@ -231,14 +236,38 @@ final class BookingService
     }
 
     /**
-     * Runs SlotEngine for the slot's local day with fresh data and requires the exact start.
+     * @return list<Interval>
      */
-    private function assertOffered(ProviderRecord $provider, ServiceRecord $service, Interval $slot, DateTimeImmutable $now): void
+    private function externalBusy(HoldRequest $request): array
+    {
+        $provider = $this->bookings->findActiveProvider($request->providerId);
+        if ($provider === null) {
+            return []; // the transaction reports the provider as not bookable
+        }
+        $window = BusyWindow::clip(self::context($request->start, $provider), $this->clock->now(), $provider->rules);
+
+        return $window === null ? [] : $this->busy->busy($provider->id, $window);
+    }
+
+    /**
+     * The slot's local day widened by a day either side, to catch neighbours whose gap reaches across midnight.
+     */
+    private static function context(DateTimeImmutable $start, ProviderRecord $provider): Interval
+    {
+        $dayStart = new DateTimeImmutable($start->setTimezone($provider->timezone)->format('Y-m-d'), $provider->timezone);
+
+        return new Interval($dayStart->modify('-1 day'), $dayStart->modify('+2 days'));
+    }
+
+    /**
+     * Runs SlotEngine for the slot's local day with fresh data and requires the exact start.
+     *
+     * @param list<Interval> $busy external busy time, fetched before the lock
+     */
+    private function assertOffered(ProviderRecord $provider, ServiceRecord $service, Interval $slot, DateTimeImmutable $now, array $busy): void
     {
         $localDate = $slot->start->setTimezone($provider->timezone)->format('Y-m-d');
-        $dayStart = new DateTimeImmutable($localDate, $provider->timezone);
-        // A day either side catches neighbours whose gap reaches across midnight.
-        $context = new Interval($dayStart->modify('-1 day'), $dayStart->modify('+2 days'));
+        $context = self::context($slot->start, $provider);
         $bookings = $this->bookings->blockingIntervals($provider->id, $context, $now);
 
         $maxPerDay = $provider->rules->maxPerDay;
@@ -257,7 +286,7 @@ final class BookingService
             now: $now,
             blocked: $this->bookings->blockedPeriods($provider->id, $context),
             bookings: $bookings,
-            busy: $this->busy->busy($provider->id, $context),
+            busy: $busy,
         ));
 
         foreach ($offered as $candidate) {

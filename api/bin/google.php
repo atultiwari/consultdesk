@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 // Google Calendar per provider. (The admin panel offers the same in Phase 6.)
-//   php bin/google.php connect <provider-slug>        prints a consent link (valid 30 minutes, once)
+//   php bin/google.php connect <provider-slug> <google-email> [--replace]
+//                                                     prints a consent link (valid 30 minutes, once) that only
+//                                                     works for that Google account; --replace switches an
+//                                                     existing connection to another account
 //   php bin/google.php status <provider-slug>         connection, account and calendars in use
 //   php bin/google.php calendars <provider-slug>      lists the account's calendars and their ids
 //   php bin/google.php set-calendars <provider-slug> --busy=<id>[,<id>...] --target=<id>
@@ -34,7 +37,7 @@ try {
     $lookup->execute([$slug]);
     $provider = $lookup->fetch(PDO::FETCH_ASSOC);
     if (!is_array($provider)) {
-        $fail('Usage: php bin/google.php connect|status|calendars|set-calendars|disconnect <provider-slug>');
+        $fail('Usage: php bin/google.php connect <slug> <google-email> [--replace] | status|calendars|disconnect <slug> | set-calendars <slug> --busy=... --target=...');
     }
     $providerId = (int) $provider['id'];
     $connections = $services->googleConnections();
@@ -42,7 +45,12 @@ try {
     switch ($command) {
         case 'connect':
             $oauth = $services->googleOAuth() ?? $fail('Google is not configured.');
-            printf("Open this link signed in as %s's Google account (valid 30 minutes, once):\n%s\n", (string) $provider['name'], $oauth->start($providerId));
+            $email = $args[3] ?? '';
+            if ($email === '' || str_starts_with($email, '--')) {
+                $fail('Usage: connect <provider-slug> <google-email> [--replace]');
+            }
+            $url = $oauth->start($providerId, $email, in_array('--replace', $args, true));
+            printf("Send this link to %s. It works once, for 30 minutes, and only for the Google account %s:\n%s\n", (string) $provider['name'], strtolower($email), $url);
             break;
 
         case 'status':

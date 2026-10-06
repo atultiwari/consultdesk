@@ -120,11 +120,14 @@ one Google Cloud "OAuth client"; every provider then connects their own account 
 ### 2. Connect each provider
 
 ```bash
-php api/bin/google.php connect <provider-slug>
+php api/bin/google.php connect <provider-slug> <provider's-google-email>
 ```
 
-This prints a Google link (valid 30 minutes, once). Open it signed in as **the provider's** Google
-account, tick both calendar permissions and allow. The page then says "Google Calendar connected".
+This prints a Google link that works once, for 30 minutes, and **only for that Google account**:
+anyone else who opens it is refused. Send it to the provider; they sign in, tick all the calendar
+permissions and allow. The page then says "Google Calendar connected".
+
+To move a provider to a different Google account, add `--replace` (the old access is revoked).
 
 By default only the provider's primary calendar blocks time and receives events. To change that:
 
@@ -137,3 +140,6 @@ php api/bin/google.php status <provider-slug>
 If a provider removes the app's access in their Google account, bookings keep working (without the
 clash check), staff get one email, and `connect` must be run again. `disconnect` revokes access and
 forgets the tokens.
+
+Free/busy is fetched per week and cached for 2 minutes; if Google is unreachable, that is remembered
+for a minute and bookings stay open.

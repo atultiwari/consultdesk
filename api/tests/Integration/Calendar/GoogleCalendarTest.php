@@ -24,7 +24,12 @@ final class GoogleCalendarTest extends ApiTestCase
         parent::setUp();
         $this->google = new FakeGoogleApi();
         $this->providerId = Fixtures::provider($this->pdo, ['slug' => 'demo', 'name' => 'Dr. Demo', 'notify_email' => 'provider@example.test']);
-        Fixtures::service($this->pdo, $this->providerId, ['slug' => 'thesis', 'title' => 'Thesis guidance', 'payment_methods' => '["upi"]']);
+        Fixtures::service($this->pdo, $this->providerId, [
+            'slug' => 'thesis',
+            'title' => 'Thesis guidance',
+            'payment_methods' => '["upi"]',
+            'questions' => '[{"id": "goal", "label": "Goal", "type": "textarea", "required": true}]',
+        ]);
         Fixtures::user($this->pdo, 'owner', email: 'owner@example.test');
         $this->adminId = Fixtures::user($this->pdo, 'admin', email: 'admin@example.test');
     }
@@ -56,12 +61,12 @@ final class GoogleCalendarTest extends ApiTestCase
     {
         $oauth = $this->services()->googleOAuth();
         self::assertNotNull($oauth);
-        $state = $this->stateFrom($oauth->start($this->providerId));
+        $state = $this->stateFrom($oauth->start($this->providerId, 'provider@example.test'));
         $oauth->complete($state, 'auth-code');
 
         $this->assertConnectFails(fn() => $oauth->complete($state, 'auth-code'), 'expired');
 
-        $stale = $this->stateFrom($oauth->start($this->providerId));
+        $stale = $this->stateFrom($oauth->start($this->providerId, 'provider@example.test'));
         $this->at('2026-10-05T00:31Z');
         $later = $this->services()->googleOAuth();
         self::assertNotNull($later);
@@ -77,23 +82,99 @@ final class GoogleCalendarTest extends ApiTestCase
         $this->google()->scopeToIssue = 'openid email';
         $this->assertConnectFails(fn() => $this->connect(), 'calendar');
         self::assertSame(['refresh-2'], $this->google()->revoked, 'partial grants are revoked');
+
+        $this->google()->scopeToIssue = 'openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy';
+        $this->assertConnectFails(fn() => $this->connect(), 'calendar');
         self::assertSame([], self::column($this->pdo, 'SELECT id FROM oauth_tokens'));
+    }
+
+    public function testOnlyTheExpectedGoogleAccountCanConnect(): void
+    {
+        $this->google()->accountEmailToReturn = 'attacker@example.test';
+
+        $this->assertConnectFails(fn() => $this->connect('provider@example.test'), 'provider@example.test');
+        self::assertSame(['refresh-1'], $this->google()->revoked);
+        self::assertSame([], self::column($this->pdo, 'SELECT id FROM oauth_tokens'));
+        self::assertSame(['provider@example.test'], $this->google()->loginHints);
+    }
+
+    public function testAnExistingConnectionIsOnlyReplacedOnPurpose(): void
+    {
+        $this->connect();
+        $this->google()->refreshTokenToIssue = 'refresh-2';
+
+        $this->assertConnectFails(fn() => $this->connect(), 'already connected');
+        self::assertSame(['refresh-2'], $this->google()->revoked);
+
+        $this->google()->refreshTokenToIssue = 'refresh-3';
+        $this->connect(replace: true);
+        self::assertContains('refresh-1', $this->google()->revoked, 'the replaced grant is revoked');
+        self::assertSame('refresh-3', $this->services()->crypto()->decrypt((string) $this->connectionRow()['refresh_token_enc']));
+    }
+
+    public function testFailuresAfterTheExchangeRevokeTheNewGrant(): void
+    {
+        $this->google()->accountEmailFails = true;
+
+        $this->assertConnectFails(fn() => $this->connect(), 'try again');
+        self::assertSame(['refresh-1'], $this->google()->revoked);
+    }
+
+    public function testAStaleRefreshCannotBreakANewConnection(): void
+    {
+        $this->connect();
+        $staleConnection = $this->services()->googleConnections()->find($this->providerId);
+        self::assertNotNull($staleConnection);
+
+        $this->google()->refreshTokenToIssue = 'refresh-2';
+        $this->connect(replace: true);
+
+        self::assertFalse($this->services()->googleConnections()->markBroken($staleConnection, 'old grant revoked'));
+        self::assertSame('active', $this->connectionRow()['status']);
     }
 
     public function testTheCallbackPageReportsTheOutcome(): void
     {
         $oauth = $this->services()->googleOAuth();
         self::assertNotNull($oauth);
-        $state = $this->stateFrom($oauth->start($this->providerId));
+        $state = $this->stateFrom($oauth->start($this->providerId, 'provider@example.test'));
 
         [$status, , $response] = $this->call('GET', "/api/google/callback?state={$state}&code=auth-code");
         self::assertSame(200, $status);
+        self::assertSame('no-referrer', $response->getHeaderLine('Referrer-Policy'));
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertStringContainsString('text/html', $response->getHeaderLine('Content-Type'));
         self::assertStringContainsString('Google Calendar connected', (string) $response->getBody());
 
         [$denied, , $deniedResponse] = $this->call('GET', '/api/google/callback?error=access_denied&state=x');
         self::assertSame(400, $denied);
         self::assertStringContainsString('not connected', (string) $deniedResponse->getBody());
+    }
+
+    public function testFreeBusyIsFetchedPerWeekSoArbitraryRangesCannotRunUpGoogleCalls(): void
+    {
+        $this->connect();
+
+        foreach (['2026-10-06&to=2026-10-06', '2026-10-07&to=2026-10-09', '2026-10-05&to=2026-10-10'] as $range) {
+            $this->call('GET', "/api/providers/demo/services/thesis/slots?from={$range}", ip: '198.51.100.' . random_int(1, 250));
+        }
+        self::assertSame(2, $this->google()->count('freeBusy'), 'week of 28 Sep (for the day before) and week of 5 Oct');
+
+        $this->call('GET', '/api/providers/demo/services/thesis/slots?from=2027-06-01&to=2027-06-30', ip: '198.51.100.251');
+        self::assertSame(2, $this->google()->count('freeBusy'), 'nothing beyond the booking horizon is fetched');
+    }
+
+    public function testAGoogleOutageIsRememberedForAMinute(): void
+    {
+        $this->connect();
+        $this->google()->freeBusyDown = true;
+
+        $this->slotStarts();
+        $this->slotStarts();
+        self::assertSame(1, $this->google()->count('freeBusy'), 'one failed call, then remembered');
+        $this->at('2026-10-05T00:01Z');
+        $this->slotStarts();
+        self::assertSame(2, $this->google()->count('freeBusy'));
     }
 
     public function testGoogleBusyTimeHidesSlotsAndIsCachedForTwoMinutes(): void
@@ -104,13 +185,14 @@ final class GoogleCalendarTest extends ApiTestCase
         $starts = $this->slotStarts();
         self::assertNotContains('2026-10-07T04:30:00Z', $starts);
         self::assertContains('2026-10-07T06:30:00Z', $starts);
-        self::assertSame([['provider@example.test']], $this->google()->freeBusyCalendars);
+        self::assertSame(['provider@example.test'], $this->google()->freeBusyCalendars[0]);
 
+        $calls = $this->google()->count('freeBusy');
         $this->slotStarts();
-        self::assertSame(1, $this->google()->count('freeBusy'), 'second call within 2 minutes is cached');
+        self::assertSame($calls, $this->google()->count('freeBusy'), 'second call within 2 minutes is cached');
         $this->at('2026-10-05T00:02Z');
         $this->slotStarts();
-        self::assertSame(2, $this->google()->count('freeBusy'));
+        self::assertGreaterThan($calls, $this->google()->count('freeBusy'));
     }
 
     public function testBookingAGoogleBusySlotIsRefused(): void
@@ -176,6 +258,7 @@ final class GoogleCalendarTest extends ApiTestCase
         self::assertSame('2026-10-07T04:30:00Z', $event['start']['dateTime']);
         self::assertSame('Asia/Kolkata', $event['start']['timeZone']);
         self::assertStringContainsString($booking['ref'], (string) $event['description']);
+        self::assertStringNotContainsString('Feedback on my thesis', (string) $event['description'], 'free-text answers stay out of the invite');
 
         $statement = $this->pdo->prepare('SELECT gcal_event_id, meet_url FROM bookings WHERE id = ?');
         $statement->execute([$booking['id']]);
@@ -203,6 +286,49 @@ final class GoogleCalendarTest extends ApiTestCase
 
         self::assertContains("get:provider@example.test:{$eventId}", $this->google()->calls);
         self::assertSame($eventId, self::column($this->pdo, "SELECT gcal_event_id FROM bookings WHERE id = {$booking['id']}")[0] ?? null);
+    }
+
+    public function testAPendingMeetLinkIsFetchedOnALaterTry(): void
+    {
+        $this->connect();
+        $this->google()->meetPending = true;
+        $booking = $this->bookPayAndConfirm();
+
+        $this->runCron();
+        self::assertSame(['1', '0'], self::column($this->pdo, "SELECT meet_url IS NULL FROM bookings WHERE id = {$booking['id']} UNION ALL SELECT gcal_event_id IS NULL FROM bookings WHERE id = {$booking['id']}"), 'event linked, Meet link still pending');
+
+        $this->google()->meetPending = false;
+        $this->at('2026-10-05T00:02Z');
+        $this->runCron();
+        self::assertStringStartsWith('https://meet.example.test/', (string) (self::column($this->pdo, "SELECT meet_url FROM bookings WHERE id = {$booking['id']}")[0] ?? ''));
+    }
+
+    public function testABookingCancelledWhileItsEventIsCreatedLosesTheEvent(): void
+    {
+        $this->connect();
+        $booking = $this->bookPayAndConfirm();
+        $this->google()->duringInsert = function () use ($booking): void {
+            $this->services()->bookingService()->cancel($booking['id'], Actor::user($this->adminId));
+        };
+
+        $this->runCron();
+        $this->runCron();
+
+        self::assertSame([], $this->google()->events, 'the event created during cancellation was removed');
+        self::assertSame('1', self::column($this->pdo, "SELECT gcal_event_id IS NULL FROM bookings WHERE id = {$booking['id']}")[0] ?? null);
+    }
+
+    public function testAnEventDeletedByHandIsRestoredRatherThanLinked(): void
+    {
+        $this->connect();
+        $booking = $this->bookPayAndConfirm();
+        $eventId = $this->services()->calendarEventId($booking['id']);
+        $this->google()->events[$eventId] = ['id' => $eventId, 'status' => 'cancelled', 'calendar' => 'provider@example.test'];
+
+        $this->runCron();
+
+        self::assertContains("update:provider@example.test:{$eventId}", $this->google()->calls);
+        self::assertSame('confirmed', $this->google()->events[$eventId]['status'] ?? null);
     }
 
     public function testCancellingDeletesTheEventAndNotifiesAttendees(): void
@@ -242,12 +368,12 @@ final class GoogleCalendarTest extends ApiTestCase
         self::assertFalse($calendar->isConnected($this->providerId));
     }
 
-    private function connect(): string
+    private function connect(string $expectedEmail = 'provider@example.test', bool $replace = false): string
     {
         $oauth = $this->services()->googleOAuth();
         self::assertNotNull($oauth);
 
-        return $oauth->complete($this->stateFrom($oauth->start($this->providerId)), 'auth-code');
+        return $oauth->complete($this->stateFrom($oauth->start($this->providerId, $expectedEmail, $replace)), 'auth-code');
     }
 
     private function stateFrom(string $url): string
@@ -339,6 +465,7 @@ final class GoogleCalendarTest extends ApiTestCase
             'service' => 'thesis',
             'start' => '2026-10-07T04:30:00Z',
             'customer' => ['name' => 'Asha Placeholder', 'email' => 'asha@example.test', 'phone' => '+910000000000', 'timezone' => 'Asia/Kolkata'],
+            'answers' => ['goal' => 'Feedback on my thesis'],
         ];
     }
 }
