@@ -158,6 +158,12 @@ consultdesk/
    - The UI shows the amount, a `upi://pay?pa&pn&am&cu=INR&tn={ref}` deep link on mobile and a QR code on desktop, using the provider's own VPA.
    - The customer submits the **12-digit UTR** (validated), and can optionally tap **"Send screenshot on WhatsApp"**, which opens `wa.me/<provider whatsapp>?text=<prefilled ref, amount, slot>`.
    - Status becomes `awaiting_verification`.
+   - **UTRs are single-use, forever** (a unique key, kept after expiry or rejection). Because of this, the payment step must stop customers from paying for a hold that is about to lapse:
+     - before the UPI button, a plain notice: pay **once**, for this booking only (ref and amount shown), and submit the UTR straight after paying; one UTR can confirm only one booking;
+     - a live countdown to `hold_expires_at`, with a warning in the last 10 minutes not to start a payment that cannot be submitted in time;
+     - once the hold has lapsed, the page hides the UPI link and QR, says **do not pay**, and offers to pick a new slot;
+     - the UTR field sits right next to the payment button, so paying and submitting happen together;
+     - a duplicate-UTR error explains that an expired booking's payment cannot be reused and gives the provider's WhatsApp link pre-filled with the old ref, so the provider can sort it out by hand.
    - The **Telegram bot** messages the provider's chat (owner chat as fallback) with **[✅ Confirm] [❌ Reject]** buttons.
    - The webhook verifies the `X-Telegram-Bot-Api-Secret-Token` header and checks that the chat id is mapped to that provider or an admin.
    - The same confirm action is available in the admin panel.

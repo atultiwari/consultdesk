@@ -20,7 +20,8 @@ use DateTimeZone;
  */
 final class SlotEngine
 {
-    private const DAY_SECONDS = 86_400;
+    /** Wider than any real DST gap, narrower than the time between two clock changes. */
+    private const GAP_SEARCH_SECONDS = 3 * 3600;
 
     /**
      * @return list<Interval> open slots in UTC, sorted by start
@@ -102,8 +103,11 @@ final class SlotEngine
             return $instant;
         }
 
-        $transitions = $timezone->getTransitions($instant->getTimestamp() - self::DAY_SECONDS, $instant->getTimestamp());
-        $change = $transitions === [] ? null : end($transitions);
+        // PHP versions disagree on which side of the gap they resolve to, so look both ways.
+        // The first entry getTransitions() returns is the range start itself, not a real change.
+        $around = $instant->getTimestamp();
+        $transitions = $timezone->getTransitions($around - self::GAP_SEARCH_SECONDS, $around + self::GAP_SEARCH_SECONDS);
+        $change = $transitions[1] ?? null;
 
         return $change === null ? $instant : (new DateTimeImmutable())->setTimestamp($change['ts'])->setTimezone($timezone);
     }
