@@ -93,6 +93,15 @@ final class Sessions
         $this->pdo->prepare('DELETE FROM sessions WHERE id = :id')->execute(['id' => hash('sha256', $token)]);
     }
 
+    /**
+     * Signs the user out everywhere except this session (after they change their own password).
+     */
+    public function endOthers(int $userId, #[\SensitiveParameter] string $keepToken): void
+    {
+        $this->pdo->prepare('DELETE FROM sessions WHERE user_id = :user AND id <> :keep')
+            ->execute(['user' => $userId, 'keep' => hash('sha256', $keepToken)]);
+    }
+
     public function endAll(int $userId): void
     {
         $this->pdo->prepare('DELETE FROM sessions WHERE user_id = :user')->execute(['user' => $userId]);

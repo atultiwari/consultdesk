@@ -82,6 +82,18 @@ final class AuthTest extends AdminTestCase
         self::assertSame(200, $this->login('owner@example.test', ip: '203.0.113.50')[0], 'locks lift after 15 minutes');
     }
 
+    public function testTheOwnerCanStillSignInBeforeTheDatabaseIsUpdated(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->pdo->exec('ALTER TABLE users DROP COLUMN disabled_at');
+        try {
+            self::assertSame(200, $this->login('owner@example.test')[0], 'so they can reach System → Run database updates');
+            self::assertSame(200, $this->admin('GET', '/api/admin/me')[0]);
+        } finally {
+            $this->pdo->exec('ALTER TABLE users ADD COLUMN disabled_at DATETIME NULL AFTER last_login_at');
+        }
+    }
+
     public function testEveryWriteNeedsTheCsrfToken(): void
     {
         $this->createUser('owner@example.test');

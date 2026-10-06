@@ -9,12 +9,14 @@ use ConsultDesk\Http\Action\AdminAuthActions;
 use ConsultDesk\Http\Action\BookingActions;
 use ConsultDesk\Http\Action\CronAction;
 use ConsultDesk\Http\Action\GoogleCallbackAction;
+use ConsultDesk\Http\Action\MediaAction;
 use ConsultDesk\Http\Action\ProviderActions;
 use ConsultDesk\Http\Action\TelegramWebhookAction;
 use ConsultDesk\Http\Middleware\AdminAuth;
 use ConsultDesk\Http\Middleware\ErrorHandling;
 use ConsultDesk\Http\Middleware\RateLimit;
 use ConsultDesk\Http\Middleware\SecurityHeaders;
+use ConsultDesk\Infra\ImageStore;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -82,6 +84,8 @@ final class AppFactory
                 $admin->post('/logout-all', static fn($rq, $rs) => $auth()->logoutAll($rq, $rs));
                 AdminRoutes::register($admin, $services);
             })->add(new AdminAuth(static fn() => $services->sessions(), $services->adminCookie()))->add($limit('admin', 600, self::MINUTE));
+
+            $api->get('/media/{name:' . ImageStore::NAME . '}', static fn($rq, $rs, array $a) => (new MediaAction($services->imageStore()))($rq, $rs, $a))->add($limit('media', 600, self::MINUTE));
 
             $api->get('/cron', static fn($rq, $rs) => (new CronAction($services->cronRunner(), $services->config->cronKey))($rq, $rs))->add($limit('cron', 30, self::MINUTE));
         });

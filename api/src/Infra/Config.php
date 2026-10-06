@@ -37,6 +37,8 @@ final class Config
         public readonly ?GoogleConfig $google = null,
         /** The secret first path segment of the admin area; null turns the admin area off. */
         public readonly ?string $adminPath = null,
+        /** Where uploaded images live: outside the web root, served by GET /api/media/{name}. */
+        public readonly string $mediaPath = '',
     ) {}
 
     /**
@@ -111,6 +113,7 @@ final class Config
             telegram: TelegramConfig::fromValues($v),
             google: GoogleConfig::fromValues($v, $appUrl),
             adminPath: self::adminPath($v['ADMIN_PATH'] ?? '', $appUrl),
+            mediaPath: rtrim(($v['MEDIA_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/media' : $v['MEDIA_PATH'], '/'),
         );
     }
 

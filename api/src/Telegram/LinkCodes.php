@@ -70,11 +70,11 @@ final class LinkCodes
         }
 
         $isProvider = $row['target_type'] === 'provider';
-        $label = $this->pdo->prepare($isProvider ? 'SELECT name FROM providers WHERE id = :id' : 'SELECT email FROM users WHERE id = :id');
+        $label = $this->pdo->prepare($isProvider ? 'SELECT name FROM providers WHERE id = :id' : 'SELECT email FROM users WHERE id = :id AND disabled_at IS NULL');
         $label->execute(['id' => $row['target_id']]);
         $name = $label->fetchColumn();
         if (!is_string($name)) {
-            return null; // the provider or user was deleted after the link was made
+            return null; // the provider or user was deleted, or the user disabled, after the link was made
         }
 
         $this->pdo->prepare('UPDATE telegram_link_codes SET used_at = :now WHERE code_hash = :hash')

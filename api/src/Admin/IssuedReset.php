@@ -13,5 +13,6 @@ final class IssuedReset
         public readonly string $email,
         #[\SensitiveParameter]
         public readonly string $token,
+        public readonly ?string $name = null,
     ) {}
 }

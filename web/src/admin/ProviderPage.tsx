@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Loading, Notice } from '../design/components/Notice';
+import { ConnectionsPanel } from './ConnectionsPanel';
 import { isStaff, useAdmin } from './context';
 import { HoursEditor } from './HoursEditor';
 import { useAdminProviders } from './hooks';
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'rules', label: 'Booking rules' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'hours', label: 'Weekly hours' },
+  { key: 'connections', label: 'Connections' },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
@@ -25,6 +27,8 @@ function panel(tab: Tab, provider: AdminProvider): ReactNode {
       return <ServicesPanel providerId={provider.id} />;
     case 'hours':
       return <HoursEditor providerId={provider.id} timezone={provider.timezone} />;
+    case 'connections':
+      return <ConnectionsPanel providerId={provider.id} />;
     default:
       return <ProfileForm provider={provider} />;
   }

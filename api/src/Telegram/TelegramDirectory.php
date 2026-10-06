@@ -30,7 +30,7 @@ final class TelegramDirectory
         }
 
         return array_values(array_unique($this->column(
-            "SELECT telegram_chat_id FROM users WHERE role = 'owner' AND telegram_chat_id IS NOT NULL ORDER BY id",
+            "SELECT telegram_chat_id FROM users WHERE role = 'owner' AND telegram_chat_id IS NOT NULL AND disabled_at IS NULL ORDER BY id",
             [],
         )));
     }
@@ -42,7 +42,7 @@ final class TelegramDirectory
     {
         $statement = $this->pdo->prepare(
             "SELECT id FROM users
-             WHERE telegram_chat_id = :chat AND (role IN ('owner', 'admin') OR (role = 'provider' AND provider_id = :provider))
+             WHERE telegram_chat_id = :chat AND disabled_at IS NULL AND (role IN ('owner', 'admin') OR (role = 'provider' AND provider_id = :provider))
              ORDER BY FIELD(role, 'owner', 'admin', 'provider'), id LIMIT 1",
         );
         $statement->execute(['chat' => $chatId, 'provider' => $providerId]);

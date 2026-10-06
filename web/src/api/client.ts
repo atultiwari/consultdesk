@@ -29,6 +29,8 @@ type Envelope<T> =
 export type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   json?: unknown;
+  /** A file upload; the browser sets the multipart Content-Type itself. */
+  form?: FormData;
   signal?: AbortSignal;
   headers?: Record<string, string>;
 };
@@ -52,7 +54,7 @@ export async function apiRequest<T>(
     response = await fetch(`${API_BASE}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.json === undefined ? undefined : JSON.stringify(options.json),
+      body: options.form ?? (options.json === undefined ? undefined : JSON.stringify(options.json)),
       signal: options.signal,
     });
   } catch (error) {

@@ -106,3 +106,43 @@ test('signing out ends the session', async ({ page }) => {
   const me = await page.request.get('/api/admin/me');
   expect(me.status()).toBe(401);
 });
+
+test('the owner uploads a logo and the booking site shows it', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Branding' }).click();
+
+  // A 1×1 PNG made on the spot; the server re-encodes whatever it gets.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page.getByLabel('Upload a logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
+  const logo = page.getByRole('img', { name: 'Current logo' });
+  await expect(logo).toBeVisible();
+  const src = (await logo.getAttribute('src')) ?? '';
+  expect(src).toMatch(/^\/api\/media\/[0-9a-f]{32}\.(webp|png)$/);
+
+  await page.goto('/');
+  await expect(page.locator('.site-header__logo')).toHaveAttribute('src', src);
+
+  await page.goto(`/${ADMIN_PATH}/branding`);
+  await page.getByRole('button', { name: 'Remove logo' }).click();
+  await expect(page.getByRole('img', { name: 'Current logo' })).toHaveCount(0);
+});
+
+test('the owner invites a provider', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Users' }).click();
+  const email = `invitee-${Date.now()}@example.test`;
+
+  await page.getByRole('button', { name: 'Invite someone' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Invite someone' });
+  await dialog.getByLabel('Email').fill(email);
+  await dialog.getByLabel('Role').selectOption('provider');
+  await dialog.getByLabel('Provider').selectOption({ label: 'Dr. Demo Placeholder' });
+  await dialog.getByRole('button', { name: 'Send invite' }).click();
+
+  const row = page.getByRole('row', { name: new RegExp(email) });
+  await expect(row.getByText('Invited')).toBeVisible();
+  expect(sql("SELECT COUNT(*) FROM outbox_jobs WHERE type = 'email.invite'")).not.toBe('0');
+});

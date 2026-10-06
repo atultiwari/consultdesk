@@ -109,7 +109,7 @@ consultdesk/
 - `settings`: key/value JSON. Holds org name, branding (logo, accent colours, fonts), default timezone, SMTP settings and the cron key. The secret admin path is the `ADMIN_PATH` config value, not a setting, so it never reaches the database or the web bundle.
 - `users`: `id`, `email`, `name`, `password_hash` (argon2id), `role` (owner | admin | provider), `provider_id` (nullable), `telegram_chat_id` (nullable), `last_login_at`.
 - `sessions`: admin sign-ins. `id` is a SHA-256 of the cookie value, with the CSRF token hash, IP, user agent, and `expires_at` (8 hours idle, 30 days at most).
-- `password_resets`: one-time reset links (token hashed, an encrypted copy only until the email is sent, 30-minute expiry, single use).
+- `password_resets`: one-time links, `purpose` reset (30 minutes) or invite (two days); only the token's hash is stored, and a newer link retires older ones. `users` also has `password_set_at`, `invited_at` and `disabled_at`.
 - `providers`: `slug`, `name`, `title`, `bio`, `photo_path`, `timezone`, `active`, `sort_order`.
   - Contact: `whatsapp`, `telegram_chat_id`, `notify_email` (provider-side emails; the owner gets a copy, or gets them alone when this is empty).
   - UPI: `upi_vpa`, `upi_payee_name`.
@@ -272,7 +272,7 @@ The anchors are Topmate peer Dr. Avneesh Khare (medical AI, ₹2,999–3,499 for
 5. **Public web UI.** Design system and tokens, then the booking flow, status page, branding presets and the embed script.
 6. **Admin API and UI**, in two PRs.
    - **6a.** Sign-in at the secret `ADMIN_PATH` (argon2id, throttled per IP and per email, sessions of 8 hours idle and 30 days at most, a `__Host-` cookie with `SameSite=Strict`, CSRF header on every write), email password reset, roles (owner and admin see everything; a provider only their own), and the panels: Dashboard (payments to verify, requests to approve, today, coming up), Bookings (filters, detail with history, confirm/reject/cancel/complete/no-show), Providers (profile, contact, UPI, rules), Sessions with the question builder, Weekly hours and Blocked times. Every change is audited. `bin/user.php` creates accounts and resets passwords from the shell.
-   - **6b.** Users, Branding, Integrations (Google and Telegram from the panel), Payments (UPI details per provider) and System (database updates, cron health).
+   - **6b.** Owner-only Users (email invites with a two-day link; role changes; disabling), Branding (name, preset, colours, logo upload), Payments (each provider's UPI details) and System (cron heartbeat, outbox health and retry, version, "Run database updates"); for everyone, My account (name, password, own Telegram), provider photos, and a Connections tab for Telegram and Google Calendar. Uploads are PNG/JPEG/WebP under 2 MB, re-encoded with GD and served from outside the web root.
 7. **Razorpay Payment Links.** The gateway settings screen, link creation, the webhook (signature check and idempotency) and return handling. Tested end-to-end with **VRL test-mode keys**.
 8. **Installer and release.** Web installer, updater, the `release.yml` zip, and an INSTALL.md walkthrough of Hostinger subdomain setup, cron and the Google OAuth client.
 9. **Go live:**

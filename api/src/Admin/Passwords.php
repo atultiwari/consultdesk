@@ -19,11 +19,16 @@ final class Passwords
         return password_hash($password, PASSWORD_ARGON2ID);
     }
 
+    /**
+     * Always does the full hashing work, even for a missing account or an invited user who has no
+     * password yet, so timing does not tell them apart.
+     */
     public function verify(#[\SensitiveParameter] string $password, ?string $hash): bool
     {
-        $ok = password_verify($password, $hash ?? self::DUMMY_HASH);
+        $usable = $hash !== null && str_starts_with($hash, '$');
+        $ok = password_verify($password, $usable ? $hash : self::DUMMY_HASH);
 
-        return $hash !== null && $ok;
+        return $usable && $ok;
     }
 
     public function needsRehash(string $hash): bool

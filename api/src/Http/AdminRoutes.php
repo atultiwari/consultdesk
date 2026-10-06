@@ -6,14 +6,21 @@ namespace ConsultDesk\Http;
 
 use ConsultDesk\Admin\AdminBookings;
 use ConsultDesk\Admin\BlockedTimes;
+use ConsultDesk\Admin\Passwords;
 use ConsultDesk\Admin\ProviderSettings;
 use ConsultDesk\Admin\ServiceSettings;
 use ConsultDesk\Admin\WeeklyHours;
 use ConsultDesk\Bootstrap\AppServices;
 use ConsultDesk\Http\Action\AdminBookingActions;
+use ConsultDesk\Http\Action\AdminImageActions;
+use ConsultDesk\Http\Action\AdminIntegrationActions;
+use ConsultDesk\Http\Action\AdminMeActions;
 use ConsultDesk\Http\Action\AdminProviderActions;
 use ConsultDesk\Http\Action\AdminScheduleActions;
 use ConsultDesk\Http\Action\AdminServiceActions;
+use ConsultDesk\Http\Action\AdminSystemActions;
+use ConsultDesk\Http\Action\AdminUserActions;
+use ConsultDesk\Http\Middleware\RateLimit;
 use Slim\Routing\RouteCollectorProxy;
 
 /**
@@ -41,6 +48,27 @@ final class AdminRoutes
             $services->auditLog(),
             $services->clock(),
         );
+        $users = static fn(): AdminUserActions => new AdminUserActions(
+            $services->userDirectory(),
+            $services->adminUsers(),
+            new ProviderSettings($pdo()),
+            $services->passwordResets(),
+            $services->sessions(),
+            $services->telegramLinks(),
+            $services->db(),
+            $services->auditLog(),
+        );
+        $me = static fn(): AdminMeActions => new AdminMeActions($services->adminUsers(), new Passwords(), $services->sessions(), $services->auditLog());
+        $images = static fn(): AdminImageActions => new AdminImageActions($services->settings(), $services->imageStore(), new ProviderSettings($pdo()), $services->auditLog());
+        $integrations = static fn(): AdminIntegrationActions => new AdminIntegrationActions(
+            new ProviderSettings($pdo()),
+            $services->telegramLinks(),
+            $services->googleConnections(),
+            $services->googleOAuth(),
+            $services->googleCalendar(),
+            $services->auditLog(),
+        );
+        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog());
         $id = self::ID;
 
         $admin->get('/dashboard', static fn($rq, $rs) => $bookings()->dashboard($rq, $rs));
@@ -61,5 +89,37 @@ final class AdminRoutes
         $admin->get('/blocked', static fn($rq, $rs) => $schedule()->listBlocked($rq, $rs));
         $admin->post('/blocked', static fn($rq, $rs) => $schedule()->createBlocked($rq, $rs));
         $admin->delete("/blocked/{$id}", static fn($rq, $rs, array $a) => $schedule()->deleteBlocked($rq, $rs, $a));
+
+        $admin->patch('/me', static fn($rq, $rs) => $me()->rename($rq, $rs));
+        // The current-password check must not become a way to guess it from a stolen session.
+        $admin->post('/me/password', static fn($rq, $rs) => $me()->changePassword($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-password-change', 10, 3600, $services->clientIp()));
+        $admin->get('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegram($rq, $rs));
+        $admin->post('/me/telegram/link', static fn($rq, $rs) => $integrations()->myTelegramLink($rq, $rs));
+        $admin->delete('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegramUnlink($rq, $rs));
+
+        $admin->get('/users', static fn($rq, $rs) => $users()->list($rq, $rs));
+        $admin->post('/users', static fn($rq, $rs) => $users()->create($rq, $rs));
+        $admin->patch("/users/{$id}", static fn($rq, $rs, array $a) => $users()->update($rq, $rs, $a));
+        $admin->post("/users/{$id}/invite", static fn($rq, $rs, array $a) => $users()->invite($rq, $rs, $a));
+
+        $admin->get('/branding', static fn($rq, $rs) => $images()->branding($rq, $rs));
+        $admin->put('/branding', static fn($rq, $rs) => $images()->saveBranding($rq, $rs));
+        $admin->post('/branding/logo', static fn($rq, $rs) => $images()->uploadLogo($rq, $rs));
+        $admin->delete('/branding/logo', static fn($rq, $rs) => $images()->removeLogo($rq, $rs));
+        $admin->post("/providers/{$id}/photo", static fn($rq, $rs, array $a) => $images()->uploadPhoto($rq, $rs, $a));
+        $admin->delete("/providers/{$id}/photo", static fn($rq, $rs, array $a) => $images()->removePhoto($rq, $rs, $a));
+
+        $admin->get("/providers/{$id}/integrations", static fn($rq, $rs, array $a) => $integrations()->status($rq, $rs, $a));
+        $admin->post("/providers/{$id}/telegram/link", static fn($rq, $rs, array $a) => $integrations()->telegramLink($rq, $rs, $a));
+        $admin->delete("/providers/{$id}/telegram", static fn($rq, $rs, array $a) => $integrations()->telegramUnlink($rq, $rs, $a));
+        $admin->post("/providers/{$id}/google/connect", static fn($rq, $rs, array $a) => $integrations()->googleConnect($rq, $rs, $a));
+        $admin->get("/providers/{$id}/google/calendars", static fn($rq, $rs, array $a) => $integrations()->googleCalendars($rq, $rs, $a));
+        $admin->put("/providers/{$id}/google/calendars", static fn($rq, $rs, array $a) => $integrations()->googleSetCalendars($rq, $rs, $a));
+        $admin->delete("/providers/{$id}/google", static fn($rq, $rs, array $a) => $integrations()->googleDisconnect($rq, $rs, $a));
+
+        $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
+        $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));
+        $admin->post('/system/retry-failed', static fn($rq, $rs) => $system()->retryFailed($rq, $rs));
     }
 }

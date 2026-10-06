@@ -6,11 +6,15 @@ namespace ConsultDesk\Bootstrap;
 
 use ConsultDesk\Admin\AdminUsers;
 use ConsultDesk\Admin\AuthService;
+use ConsultDesk\Admin\InviteEmailHandler;
 use ConsultDesk\Admin\LoginThrottle;
 use ConsultDesk\Admin\PasswordResetEmailHandler;
 use ConsultDesk\Admin\PasswordResets;
 use ConsultDesk\Admin\Passwords;
 use ConsultDesk\Admin\Sessions;
+use ConsultDesk\Admin\SystemStatus;
+use ConsultDesk\Admin\TelegramLinks;
+use ConsultDesk\Admin\UserDirectory;
 use ConsultDesk\Calendar\CalendarLinks;
 use ConsultDesk\Calendar\CalendarServices;
 use ConsultDesk\Calendar\GoogleApi;
@@ -38,7 +42,10 @@ use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Config;
 use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
+use ConsultDesk\Infra\ImageStore;
+use ConsultDesk\Infra\Migrator;
 use ConsultDesk\Infra\RateLimiter;
+use ConsultDesk\Infra\Settings;
 use ConsultDesk\Infra\SystemClock;
 use ConsultDesk\Notify\Mail\BookingEmails;
 use ConsultDesk\Notify\Mail\Mailer;
@@ -149,7 +156,16 @@ final class AppServices
                 $this->config->appUrl,
                 $this->config->adminPath,
             );
+            $handlers[PasswordResets::INVITE_JOB] = new InviteEmailHandler(
+                $this->passwordResets(),
+                $this->mailer(),
+                $this->catalog()->siteSettings()->orgName,
+                $this->config->appUrl,
+                $this->config->adminPath,
+            );
         }
+        $settings = $this->settings();
+        $clock = $this->clock;
         $cache = new GoogleBusyCache($this->pdo(), $this->clock);
         $sessions = $this->sessions();
         $throttle = $this->loginThrottle();
@@ -167,7 +183,38 @@ final class AppServices
                 static fn(): int => $throttle->prune(),
                 static fn(): int => $resets->prune(),
             ],
+            static fn() => $settings->put(SystemStatus::CRON_KEY, ['last_run_at' => $clock->now()->format('Y-m-d H:i:s')]),
         );
+    }
+
+    public function settings(): Settings
+    {
+        return new Settings($this->pdo());
+    }
+
+    public function imageStore(): ImageStore
+    {
+        return new ImageStore($this->config->mediaPath);
+    }
+
+    public function migrator(): Migrator
+    {
+        return new Migrator($this->pdo(), dirname(__DIR__, 2) . '/migrations', $this->clock);
+    }
+
+    public function systemStatus(): SystemStatus
+    {
+        return new SystemStatus($this->pdo(), $this->settings(), $this->migrator(), $this->clock);
+    }
+
+    public function telegramLinks(): TelegramLinks
+    {
+        return new TelegramLinks($this->pdo(), $this->telegramServices(), $this->linkCodes(), $this->config->telegram?->botUsername);
+    }
+
+    public function userDirectory(): UserDirectory
+    {
+        return new UserDirectory($this->pdo(), $this->clock);
     }
 
     public function auditLog(): AuditLog
