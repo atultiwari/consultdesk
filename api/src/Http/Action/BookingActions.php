@@ -23,6 +23,7 @@ use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Http\Validation\ValidationFailed;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\RateLimiter;
+use ConsultDesk\Payments\Razorpay\RazorpayCheckout;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use RuntimeException;
@@ -43,6 +44,7 @@ final class BookingActions
         private readonly Clock $clock,
         private readonly RateLimiter $rateLimiter,
         private readonly string $appUrl,
+        private readonly ?RazorpayCheckout $razorpay = null,
     ) {}
 
     public function create(Request $request, Response $response): Response
@@ -72,6 +74,11 @@ final class BookingActions
             $paymentMethod,
             $answers->answers,
         ), confirmImmediately: $paymentMethod === PaymentMethod::Free && !$service->requiresApproval);
+        if ($paymentMethod === PaymentMethod::RazorpayLink) {
+            // Made straight away so the customer can pay at once; if Razorpay is down, the status
+            // page offers to try again.
+            $this->razorpay?->ensureLink($this->view($held->ref));
+        }
 
         return JsonResponse::success($response, [
             'ref' => $held->ref,
@@ -110,6 +117,42 @@ final class BookingActions
         }
 
         return JsonResponse::success($response, BookingPresenter::present($this->view($booking->ref), $this->clock->now()));
+    }
+
+    /**
+     * Makes (or returns) the online payment link, e.g. after Razorpay was briefly unreachable.
+     *
+     * @param array<string, string> $args
+     */
+    public function payOnline(Request $request, Response $response, array $args): Response
+    {
+        $input = JsonInput::from($request);
+        $token = $input->string('token', max: 64);
+        $input->assertValid();
+
+        $booking = $this->authorised($args['ref'] ?? '', (string) $token);
+        $this->razorpay?->ensureLink($booking);
+
+        return JsonResponse::success($response, BookingPresenter::present($this->view($booking->ref), $this->clock->now()));
+    }
+
+    /**
+     * The customer is back from Razorpay. The redirect is signed by Razorpay, so no status token is
+     * needed (and none was given to Razorpay); the answer is only the outcome.
+     *
+     * @param array<string, string> $args
+     */
+    public function returnFromRazorpay(Request $request, Response $response, array $args): Response
+    {
+        $input = JsonInput::from($request);
+        $params = [];
+        foreach (['razorpay_payment_id', 'razorpay_payment_link_id', 'razorpay_payment_link_reference_id', 'razorpay_payment_link_status', 'razorpay_signature'] as $field) {
+            $params[$field] = (string) $input->string($field, required: false, max: 128);
+        }
+        $ref = $args['ref'] ?? '';
+        $status = $this->razorpay?->handleReturn($ref, $params) ?? throw ApiException::badRequest('This payment confirmation could not be checked. Your booking email has a link to your booking.');
+
+        return JsonResponse::success($response, ['ref' => $ref, 'status' => $status->value]);
     }
 
     /**

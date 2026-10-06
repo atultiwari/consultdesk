@@ -11,6 +11,7 @@ use ConsultDesk\Http\Action\CronAction;
 use ConsultDesk\Http\Action\GoogleCallbackAction;
 use ConsultDesk\Http\Action\MediaAction;
 use ConsultDesk\Http\Action\ProviderActions;
+use ConsultDesk\Http\Action\RazorpayWebhookAction;
 use ConsultDesk\Http\Action\TelegramWebhookAction;
 use ConsultDesk\Http\Middleware\AdminAuth;
 use ConsultDesk\Http\Middleware\ErrorHandling;
@@ -51,6 +52,7 @@ final class AppFactory
                 $services->clock(),
                 $services->rateLimiter(),
                 $services->config->appUrl,
+                $services->razorpayCheckout(),
             );
 
             $api->get('/site', static fn($rq, $rs) => $providers()->site($rq, $rs))->add($limit('read', 120, self::MINUTE));
@@ -60,6 +62,9 @@ final class AppFactory
 
             $api->post('/bookings', static fn($rq, $rs) => $bookings()->create($rq, $rs))->add($limit('book', 10, self::HOUR));
             $api->get('/bookings/{ref}', static fn($rq, $rs, array $a) => $bookings()->show($rq, $rs, $a))->add($limit('status', 60, self::MINUTE));
+            $api->post('/bookings/{ref}/razorpay', static fn($rq, $rs, array $a) => $bookings()->payOnline($rq, $rs, $a))->add($limit('pay', 20, self::HOUR));
+            $api->post('/bookings/{ref}/razorpay/return', static fn($rq, $rs, array $a) => $bookings()->returnFromRazorpay($rq, $rs, $a))->add($limit('pay-return', 30, self::MINUTE));
+            $api->post('/webhooks/razorpay', static fn($rq, $rs) => (new RazorpayWebhookAction($services->razorpayCheckout()))($rq, $rs))->add($limit('razorpay', 600, self::MINUTE));
             $api->post('/bookings/{ref}/utr', static fn($rq, $rs, array $a) => $bookings()->submitUtr($rq, $rs, $a))->add($limit('utr', 10, self::HOUR));
 
             $api->post('/webhooks/telegram', static fn($rq, $rs) => (new TelegramWebhookAction($services->telegramBot(), $services->config->telegram?->webhookSecret))($rq, $rs))->add($limit('telegram', 600, self::MINUTE));

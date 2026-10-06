@@ -26,6 +26,25 @@ final class BookingEmails
 
         return match ($template) {
             EmailTemplate::CustomerPaymentDue => $this->paymentDue($booking, $statusUrl),
+            EmailTemplate::CustomerPayOnline => $this->customer(
+                $booking,
+                $statusUrl,
+                "Complete your payment for {$booking->ref}",
+                'Complete your payment',
+                sprintf(
+                    'Hi %s, your slot is held until %s. Pay %s online (card, UPI, netbanking or wallet) from your booking page to confirm it.',
+                    $booking->customerName,
+                    $this->time($booking->holdExpiresAt, $booking),
+                    $this->amount($booking),
+                ),
+            ),
+            EmailTemplate::CustomerPaidLate => $this->customer(
+                $booking,
+                $statusUrl,
+                "Payment received after your hold ended: {$booking->ref}",
+                'We received your payment, but the slot had been released',
+                "Hi {$booking->customerName}, your payment of {$this->amount($booking)} arrived after the time we could hold your slot, so this booking was not confirmed. {$booking->providerName} will refund it in full, or contact you to find another time.",
+            ),
             EmailTemplate::CustomerRequestReceived => $this->customer(
                 $booking,
                 $statusUrl,
@@ -67,6 +86,12 @@ final class BookingEmails
                 sprintf('Verify UPI payment for %s (%s)', $booking->ref, $this->amount($booking)),
                 'A UPI payment needs verifying',
                 "{$booking->customerName} says they paid {$this->amount($booking)} with UTR {$booking->utr}. Check that it arrived in your UPI app, then confirm or reject the booking before {$this->time($booking->holdExpiresAt, $booking)}.",
+            ),
+            EmailTemplate::StaffRefundNeeded => $this->staff(
+                $booking,
+                "Refund needed: {$booking->ref}",
+                'An online payment arrived too late',
+                "{$booking->customerName} paid {$this->amount($booking)} online after the hold on {$this->when($booking)} ended, so the booking was not confirmed. Refund it from the Razorpay dashboard, or offer another slot.",
             ),
             EmailTemplate::StaffConfirmed => $this->staff(
                 $booking,

@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace ConsultDesk\Domain\Catalog;
 
 use ConsultDesk\Domain\Booking\PaymentMethod;
+use ConsultDesk\Infra\Settings;
+use ConsultDesk\Payments\PaymentSwitches;
 use PDO;
 
 final class PdoCatalog implements CatalogRepository
 {
-    private const PROVIDER_COLUMNS = 'id, slug, name, title, bio, photo_path, timezone, upi_vpa';
+    private const PROVIDER_COLUMNS = "id, slug, name, title, bio, photo_path, timezone, upi_vpa,
+        EXISTS (SELECT 1 FROM payment_gateways g WHERE g.gateway = 'razorpay' AND g.active = 1
+            AND (g.provider_id = providers.id OR g.provider_id IS NULL)) AS razorpay_ready";
     private const SERVICE_COLUMNS = 'id, provider_id, slug, title, tagline, description, audience, duration_min,
         price_minor, currency, requires_approval, payment_methods, questions';
 
@@ -17,8 +21,10 @@ final class PdoCatalog implements CatalogRepository
 
     public function activeProviders(): array
     {
+        $switches = $this->switches();
+
         return array_map(
-            self::provider(...),
+            static fn(array $r): ProviderProfile => self::provider($r, $switches),
             $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE active = 1 ORDER BY sort_order, name', []),
         );
     }
@@ -27,7 +33,7 @@ final class PdoCatalog implements CatalogRepository
     {
         $rows = $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE slug = :slug AND active = 1', ['slug' => $slug]);
 
-        return $rows === [] ? null : self::provider($rows[0]);
+        return $rows === [] ? null : self::provider($rows[0], $this->switches());
     }
 
     public function siteSettings(): SiteSettings
@@ -56,6 +62,11 @@ final class PdoCatalog implements CatalogRepository
         return $rows === [] ? null : self::service($rows[0]);
     }
 
+    private function switches(): PaymentSwitches
+    {
+        return PaymentSwitches::load(new Settings($this->pdo));
+    }
+
     /**
      * @param array<string, scalar> $params
      *
@@ -72,7 +83,7 @@ final class PdoCatalog implements CatalogRepository
     /**
      * @param array<string, mixed> $r
      */
-    private static function provider(array $r): ProviderProfile
+    private static function provider(array $r, PaymentSwitches $switches): ProviderProfile
     {
         return new ProviderProfile(
             (int) $r['id'],
@@ -82,7 +93,8 @@ final class PdoCatalog implements CatalogRepository
             self::nullable($r['bio']),
             self::nullable($r['photo_path']),
             (string) $r['timezone'],
-            self::nullable($r['upi_vpa']) !== null,
+            $switches->upiEnabled && self::nullable($r['upi_vpa']) !== null,
+            $switches->razorpayEnabled && (bool) $r['razorpay_ready'],
         );
     }
 

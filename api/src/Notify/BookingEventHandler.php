@@ -68,8 +68,8 @@ final class BookingEventHandler implements JobHandler
             BookingEvent::Held => match (true) {
                 $booking->status !== BookingStatus::Held => [],
                 $booking->paymentMethod === PaymentMethod::Upi => [EmailTemplate::CustomerPaymentDue],
-                $booking->paymentMethod === PaymentMethod::Free => [EmailTemplate::CustomerRequestReceived, EmailTemplate::StaffApprovalNeeded],
-                default => [],
+                $booking->paymentMethod === PaymentMethod::RazorpayLink => [EmailTemplate::CustomerPayOnline],
+                default => [EmailTemplate::CustomerRequestReceived, EmailTemplate::StaffApprovalNeeded],
             },
             BookingEvent::UtrSubmitted => $booking->status === BookingStatus::AwaitingVerification
                 ? [EmailTemplate::CustomerPaymentReceived, EmailTemplate::StaffVerifyPayment]
@@ -80,6 +80,7 @@ final class BookingEventHandler implements JobHandler
             BookingEvent::Rejected => [EmailTemplate::CustomerRejected],
             BookingEvent::Cancelled => [EmailTemplate::CustomerCancelled],
             BookingEvent::Expired => [EmailTemplate::CustomerExpired],
+            BookingEvent::PaidLate => [EmailTemplate::CustomerPaidLate, EmailTemplate::StaffRefundNeeded],
         };
     }
 }

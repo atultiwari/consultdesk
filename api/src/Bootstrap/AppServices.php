@@ -54,6 +54,10 @@ use ConsultDesk\Notify\NotificationHandlers;
 use ConsultDesk\Notify\Outbox;
 use ConsultDesk\Notify\OutboxBookingEvents;
 use ConsultDesk\Notify\OutboxWorker;
+use ConsultDesk\Payments\Razorpay\GatewayKeys;
+use ConsultDesk\Payments\Razorpay\HttpRazorpayApi;
+use ConsultDesk\Payments\Razorpay\RazorpayApi;
+use ConsultDesk\Payments\Razorpay\RazorpayCheckout;
 use ConsultDesk\Telegram\HttpTelegramApi;
 use ConsultDesk\Telegram\LinkCodes;
 use ConsultDesk\Telegram\MessageLog;
@@ -81,6 +85,7 @@ final class AppServices
         private ?Mailer $mailer = null,
         private ?TelegramApi $telegramApi = null,
         private ?GoogleApi $googleApi = null,
+        private ?RazorpayApi $razorpayApi = null,
     ) {}
 
     public function clock(): Clock
@@ -148,6 +153,7 @@ final class AppServices
             $this->telegramServices(),
             $this->clock,
             $this->calendarServices(),
+            $this->razorpayCheckout(),
         );
         if ($this->config->adminPath !== null) {
             $handlers[PasswordResets::EMAIL_JOB] = new PasswordResetEmailHandler(
@@ -185,6 +191,21 @@ final class AppServices
             ],
             static fn() => $settings->put(SystemStatus::CRON_KEY, ['last_run_at' => $clock->now()->format('Y-m-d H:i:s')]),
         );
+    }
+
+    public function gatewayKeys(): GatewayKeys
+    {
+        return new GatewayKeys($this->pdo(), $this->crypto(), $this->clock);
+    }
+
+    public function razorpayApi(): RazorpayApi
+    {
+        return $this->razorpayApi ??= new HttpRazorpayApi(new Client());
+    }
+
+    public function razorpayCheckout(): RazorpayCheckout
+    {
+        return new RazorpayCheckout($this->pdo(), $this->gatewayKeys(), $this->razorpayApi(), $this->bookingService(), $this->bookingViews(), $this->clock, $this->config->appUrl);
     }
 
     public function settings(): Settings

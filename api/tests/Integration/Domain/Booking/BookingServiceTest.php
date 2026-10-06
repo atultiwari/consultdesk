@@ -268,12 +268,12 @@ final class BookingServiceTest extends IntegrationTestCase
         $live = $this->service()->hold($this->request('10:00', method: PaymentMethod::RazorpayLink));
         $lapsed = $this->service()->hold($this->request('14:00', method: PaymentMethod::RazorpayLink));
 
-        $this->service('2026-10-05T00:19Z')->confirm($live->id, Actor::system());
+        $this->service('2026-10-05T00:29Z')->confirm($live->id, Actor::system());
         self::assertSame('confirmed', $this->booking($live->id)['status']);
         self::assertNull($this->booking($live->id)['confirmed_by']);
 
         $this->expectException(HoldExpired::class);
-        $this->service('2026-10-05T00:20Z')->confirm($lapsed->id, Actor::system());
+        $this->service('2026-10-05T00:30Z')->confirm($lapsed->id, Actor::system());
     }
 
     public function testRejectCancelCompleteAndNoShow(): void

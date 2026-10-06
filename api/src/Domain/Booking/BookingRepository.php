@@ -64,6 +64,11 @@ interface BookingRepository
 
     public function setStatus(int $bookingId, BookingStatus $status, DateTimeImmutable $now): void;
 
+    /** Whether this gateway payment is already recorded on the booking. */
+    public function paymentRecorded(int $bookingId, string $paymentId): bool;
+
+    public function recordPayment(int $bookingId, string $paymentId, DateTimeImmutable $now): void;
+
     /**
      * @return list<int> ids of held / awaiting-verification bookings whose hold has lapsed, locked
      */

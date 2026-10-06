@@ -15,4 +15,6 @@ enum BookingEvent: string
     case Rejected = 'booking.rejected';
     case Cancelled = 'booking.cancelled';
     case Expired = 'booking.expired';
+    /** An online payment arrived after the hold ended: the booking stays unconfirmed and needs a refund. */
+    case PaidLate = 'booking.paid_late';
 }

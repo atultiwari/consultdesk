@@ -159,6 +159,43 @@ final class BookingService
         });
     }
 
+    /**
+     * An online payment for this booking's payment link arrived (webhook or signed return).
+     *
+     * A live hold is confirmed. Repeats are harmless. If the hold had already ended (or the booking
+     * was cancelled), the slot may belong to someone else, so the booking is not confirmed: the
+     * payment is recorded and staff are told to refund it.
+     *
+     * @return bool whether this call confirmed the booking
+     *
+     * @throws BookingNotFound
+     */
+    public function confirmPaid(int $bookingId, string $paymentId, Actor $actor): bool
+    {
+        return $this->db->transaction(function () use ($bookingId, $paymentId, $actor): bool {
+            $booking = $this->lockBooking($bookingId);
+            $now = $this->clock->now();
+            if ($booking->paymentMethod !== PaymentMethod::RazorpayLink || $this->bookings->paymentRecorded($bookingId, $paymentId)) {
+                return false;
+            }
+
+            $this->bookings->recordPayment($bookingId, $paymentId, $now);
+            $live = $booking->status === BookingStatus::Held && ($booking->holdExpiresAt === null || $booking->holdExpiresAt > $now);
+            if (!$live) {
+                $this->bookings->audit($actor, 'booking.paid_late', $bookingId, ['payment_id' => $paymentId, 'status' => $booking->status->value], $now);
+                $this->events->record(BookingEvent::PaidLate, $bookingId);
+
+                return false;
+            }
+
+            $this->bookings->markConfirmed($bookingId, null, $now);
+            $this->bookings->audit($actor, 'booking.confirmed', $bookingId, ['payment_id' => $paymentId], $now);
+            $this->events->record(BookingEvent::Confirmed, $bookingId);
+
+            return true;
+        });
+    }
+
     public function reject(int $bookingId, Actor $actor): void
     {
         $this->changeStatus($bookingId, BookingStatus::Rejected, $actor);

@@ -30,6 +30,12 @@ final class Actor
         return new self(ActorType::System);
     }
 
+    /** A payment gateway telling us about a payment. */
+    public static function webhook(): self
+    {
+        return new self(ActorType::Webhook);
+    }
+
     public static function customer(): self
     {
         return new self(ActorType::Customer);

@@ -29,8 +29,8 @@ final class ServiceOffering
     ) {}
 
     /**
-     * Methods a customer can actually use right now. Free services are always "free"; paid ones
-     * offer UPI only when the provider has a UPI ID. Razorpay links arrive in Phase 7.
+     * Methods a customer can actually use right now. Free services are always "free"; paid ones offer
+     * each of the service's methods the provider can take (see ProviderProfile).
      *
      * @return list<PaymentMethod>
      */
@@ -42,7 +42,11 @@ final class ServiceOffering
 
         return array_values(array_filter(
             $this->paymentMethods,
-            static fn(PaymentMethod $m): bool => $m === PaymentMethod::Upi && $provider->acceptsUpi,
+            static fn(PaymentMethod $m): bool => match ($m) {
+                PaymentMethod::Upi => $provider->acceptsUpi,
+                PaymentMethod::RazorpayLink => $provider->acceptsRazorpay,
+                PaymentMethod::Free => false,
+            },
         ));
     }
 
