@@ -58,28 +58,28 @@ final class AuthTest extends AdminTestCase
     public function testRepeatedFailuresLockTheAddressAndThePairButNotTheOwnerOnAKnownAddress(): void
     {
         $this->createUser('owner@example.test');
-        self::assertSame(200, $this->login('owner@example.test', $this->password, '198.51.100.99')[0], 'a known address');
+        self::assertSame(200, $this->login('owner@example.test', ip: '198.51.100.99')[0], 'a known address');
 
         for ($i = 0; $i < 5; $i++) {
             $this->login('owner@example.test', 'wrong', '192.0.2.9');
         }
-        [$pair, $body] = $this->login('owner@example.test', $this->password, '192.0.2.9');
+        [$pair, $body] = $this->login('owner@example.test', ip: '192.0.2.9');
         self::assertSame([429, 'too_many_attempts'], [$pair, $body['error']['code']], 'this address may not keep guessing this account');
 
         for ($i = 0; $i < 20; $i++) {
             $this->login('owner@example.test', 'wrong', '198.51.100.' . $i);
         }
-        self::assertSame(429, $this->login('owner@example.test', $this->password, '203.0.113.50')[0], 'a spread-out attack locks the account for new addresses');
-        self::assertSame(200, $this->login('owner@example.test', $this->password, '198.51.100.99')[0], 'but not for where the owner has signed in before');
+        self::assertSame(429, $this->login('owner@example.test', ip: '203.0.113.50')[0], 'a spread-out attack locks the account for new addresses');
+        self::assertSame(200, $this->login('owner@example.test', ip: '198.51.100.99')[0], 'but not for where the owner has signed in before');
 
         $this->createUser('second@example.test');
         for ($i = 0; $i < 5; $i++) {
             $this->login('nobody' . $i . '@example.test', 'wrong', '192.0.2.50');
         }
-        self::assertSame(429, $this->login('second@example.test', $this->password, '192.0.2.50')[0], 'the address is locked for every account');
+        self::assertSame(429, $this->login('second@example.test', ip: '192.0.2.50')[0], 'the address is locked for every account');
 
         $this->at('2026-10-05T00:15Z');
-        self::assertSame(200, $this->login('owner@example.test', $this->password, '203.0.113.50')[0], 'locks lift after 15 minutes');
+        self::assertSame(200, $this->login('owner@example.test', ip: '203.0.113.50')[0], 'locks lift after 15 minutes');
     }
 
     public function testEveryWriteNeedsTheCsrfToken(): void
