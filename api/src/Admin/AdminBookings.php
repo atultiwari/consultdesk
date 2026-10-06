@@ -112,8 +112,8 @@ final class AdminBookings
     {
         [$condition, $params] = self::scoped('b.id = :id', $providerScope, ['id' => $bookingId]);
         $statement = $this->pdo->prepare(
-            'SELECT b.id, b.customer_phone, b.customer_timezone, b.answers, b.meet_url, b.confirmed_at
-             FROM bookings b WHERE ' . $condition,
+            'SELECT b.id, b.customer_phone, b.customer_timezone, b.answers, b.meet_url, b.confirmed_at, s.questions
+             FROM bookings b JOIN services s ON s.id = b.service_id WHERE ' . $condition,
         );
         $statement->execute($params);
         $extra = $statement->fetch(PDO::FETCH_ASSOC);
@@ -122,6 +122,7 @@ final class AdminBookings
         }
         $row = $this->rows('b.id = :id', ['id' => $bookingId], $providerScope, 'b.id', 1)[0];
         $answers = json_decode((string) $extra['answers'], true, 16, JSON_THROW_ON_ERROR);
+        $questions = json_decode((string) $extra['questions'], true, 8, JSON_THROW_ON_ERROR);
         $lapsed = $row['hold_expires_at'] !== null && $row['hold_expires_at'] <= $now->format(self::ISO);
 
         return [
@@ -132,7 +133,7 @@ final class AdminBookings
                 'phone' => $extra['customer_phone'],
                 'timezone' => $extra['customer_timezone'],
             ],
-            'answers' => is_array($answers) ? $answers : [],
+            'answers' => self::labelledAnswers(is_array($answers) ? $answers : [], is_array($questions) ? $questions : []),
             'meet_url' => $extra['meet_url'],
             'confirmed_at' => self::iso($extra['confirmed_at']),
             'history' => $this->history($bookingId),
@@ -156,6 +157,32 @@ final class AdminBookings
         }
 
         return $actions;
+    }
+
+    /**
+     * Answers in the order the questions are asked, each with the question's current label.
+     * Answers to questions removed since are kept, labelled by their id.
+     *
+     * @param array<array-key, mixed> $answers
+     * @param array<array-key, mixed> $questions
+     *
+     * @return list<array{id: string, label: string, value: mixed}>
+     */
+    private static function labelledAnswers(array $answers, array $questions): array
+    {
+        $labels = [];
+        foreach ($questions as $question) {
+            if (is_array($question) && is_string($question['id'] ?? null)) {
+                $labels[$question['id']] = is_string($question['label'] ?? null) ? $question['label'] : $question['id'];
+            }
+        }
+        $ordered = [...array_intersect_key($labels, $answers), ...array_diff_key($answers, $labels)];
+        $out = [];
+        foreach (array_keys($ordered) as $id) {
+            $out[] = ['id' => (string) $id, 'label' => $labels[$id] ?? (string) $id, 'value' => $answers[$id]];
+        }
+
+        return $out;
     }
 
     /**

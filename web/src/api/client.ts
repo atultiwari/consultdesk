@@ -16,20 +16,35 @@ export class ApiError extends Error {
   }
 }
 
+export type Meta = { total: number; page: number; per_page: number } | null;
+
 type Envelope<T> =
-  | { success: true; data: T; error: null }
+  | { success: true; data: T; error: null; meta?: Meta }
   | {
       success: false;
       data: null;
       error: { code: string; message: string; fields?: Record<string, string> };
     };
 
-export type RequestOptions = { method?: 'GET' | 'POST'; json?: unknown; signal?: AbortSignal };
+export type RequestOptions = {
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  json?: unknown;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+};
 
 export const API_BASE = '/api';
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  return (await apiRequest<T>(path, options)).data;
+}
+
+/** Like apiFetch, but also returns the envelope's meta (pagination). */
+export async function apiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ data: T; meta: Meta }> {
+  const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
   if (options.json !== undefined) headers['Content-Type'] = 'application/json';
 
   let response: Response;
@@ -71,5 +86,5 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     );
   }
 
-  return body.data;
+  return { data: body.data, meta: body.meta ?? null };
 }

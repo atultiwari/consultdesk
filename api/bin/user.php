@@ -20,9 +20,9 @@ if (PHP_SAPI !== 'cli') {
 }
 
 /** Reads a line from the terminal without echoing it (falls back to plain input when not a TTY). */
-$askPassword = static function (string $prompt): string {
+$tty = stream_isatty(STDIN);
+$askPassword = static function (string $prompt) use ($tty): string {
     fwrite(STDOUT, $prompt);
-    $tty = function_exists('posix_isatty') && posix_isatty(STDIN);
     if ($tty) {
         shell_exec('stty -echo');
     }

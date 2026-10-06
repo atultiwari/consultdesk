@@ -92,7 +92,7 @@ final class AdminBookingsTest extends AdminTestCase
         self::assertSame(200, $status);
         self::assertSame('awaiting_verification', $body['data']['status']);
         self::assertSame('asha@example.test', $body['data']['customer']['email']);
-        self::assertSame(['goal' => 'Feedback'], $body['data']['answers']);
+        self::assertSame([['id' => 'goal', 'label' => 'Goal', 'value' => 'Feedback']], $body['data']['answers']);
         self::assertSame(['booking.held', 'booking.utr_submitted'], array_column($body['data']['history'], 'action'));
         self::assertSame(['confirm', 'reject', 'cancel'], $body['data']['actions']);
     }
