@@ -12,16 +12,36 @@ use ConsultDesk\Tests\Integration\Support\Fixtures;
  */
 abstract class AdminTestCase extends ApiTestCase
 {
-    protected const PASSWORD = 'correct horse battery staple';
+    /** A throwaway password made fresh for each test, so none is written down in the code. */
+    protected string $password = '';
 
     protected string $cookie = '';
     protected string $csrf = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->password = self::throwawayPassword();
+    }
+
+    protected static function throwawayPassword(): string
+    {
+        return bin2hex(random_bytes(12));
+    }
+
+    /**
+     * @return array{int, array<string, mixed>, \Psr\Http\Message\ResponseInterface}
+     */
+    protected function resetWith(string $token, string $newPassword): array
+    {
+        return $this->call('POST', '/api/admin/password/reset', ['path' => self::ADMIN_PATH, 'token' => $token, 'password' => $newPassword]);
+    }
 
     protected function createUser(string $email, string $role = 'owner', ?int $providerId = null): int
     {
         $id = Fixtures::user($this->pdo, $role, $providerId, $email);
         $statement = $this->pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-        $statement->execute([password_hash(self::PASSWORD, PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]), $id]);
+        $statement->execute([password_hash($this->password, PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]), $id]);
 
         return $id;
     }
@@ -29,8 +49,9 @@ abstract class AdminTestCase extends ApiTestCase
     /**
      * @return array{int, array<string, mixed>, \Psr\Http\Message\ResponseInterface}
      */
-    protected function login(string $email, string $password = self::PASSWORD, string $ip = '203.0.113.7'): array
+    protected function login(string $email, ?string $password = null, string $ip = '203.0.113.7'): array
     {
+        $password ??= $this->password;
         $result = $this->call('POST', '/api/admin/login', ['path' => self::ADMIN_PATH, 'email' => $email, 'password' => $password], $ip);
         [$status, $body, $response] = $result;
         if ($status === 200) {
