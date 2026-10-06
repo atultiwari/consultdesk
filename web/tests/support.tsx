@@ -17,7 +17,7 @@ export function mockApi(routes: Routes) {
     calls.push({
       method,
       path: url.pathname + url.search,
-      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body,
     });
     const route = routes[key];
     if (!route) throw new Error(`Unmocked request: ${key}`);

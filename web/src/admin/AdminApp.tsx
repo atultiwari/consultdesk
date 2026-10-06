@@ -4,7 +4,12 @@ import { Route, Routes } from 'react-router';
 import { Button } from '../design/components/Button';
 import { Loading, Notice } from '../design/components/Notice';
 import { useSiteTheme } from '../app/useSiteTheme';
+import { AccountPage } from './AccountPage';
 import { AdminLayout } from './AdminLayout';
+import { BrandingPage } from './BrandingPage';
+import { PaymentsPage } from './PaymentsPage';
+import { SystemPage } from './SystemPage';
+import { UsersPage } from './UsersPage';
 import { ForgotPage, LoginPage, ResetPage } from './AuthPages';
 import { BlockedPage } from './BlockedPage';
 import { BookingDetailPage } from './BookingDetailPage';
@@ -75,6 +80,7 @@ export default function AdminApp({ segment }: { segment: string }) {
       <Routes>
         <Route path="forgot" element={<ForgotPage segment={segment} />} />
         <Route path="reset" element={<ResetPage segment={segment} />} />
+        <Route path="welcome" element={<ResetPage segment={segment} welcome />} />
         <Route path="*" element={<LoginPage segment={segment} />} />
       </Routes>
     );
@@ -90,6 +96,15 @@ export default function AdminApp({ segment }: { segment: string }) {
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="providers/:id" element={<ProviderPage />} />
           <Route path="blocked" element={<BlockedPage />} />
+          <Route path="account" element={<AccountPage />} />
+          {context.user.role === 'owner' && (
+            <>
+              <Route path="users" element={<UsersPage />} />
+              <Route path="branding" element={<BrandingPage />} />
+              <Route path="payments" element={<PaymentsPage />} />
+              <Route path="system" element={<SystemPage />} />
+            </>
+          )}
           <Route path="*" element={<DashboardPage />} />
         </Routes>
       </AdminLayout>

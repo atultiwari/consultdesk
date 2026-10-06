@@ -129,7 +129,8 @@ export function ForgotPage({ segment }: { segment: string }) {
   );
 }
 
-export function ResetPage({ segment }: { segment: string }) {
+/** Choosing a new password from an emailed link: a reset, or (welcome) an invite. */
+export function ResetPage({ segment, welcome = false }: { segment: string; welcome?: boolean }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   // Keep the token in memory only, so it never lingers in history or a Referer header.
@@ -140,14 +141,17 @@ export function ResetPage({ segment }: { segment: string }) {
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    if (params.has('token')) void navigate(`/${segment}/reset`, { replace: true });
-  }, [params, navigate, segment]);
+    if (params.has('token'))
+      void navigate(`/${segment}/${welcome ? 'welcome' : 'reset'}`, { replace: true });
+  }, [params, navigate, segment, welcome]);
 
   if (reset.isSuccess) {
     return (
-      <AuthCard title="Password changed">
+      <AuthCard title={welcome ? 'You’re all set' : 'Password changed'}>
         <p className="auth__text">
-          Your password has been changed and you have been signed out everywhere else.
+          {welcome
+            ? 'Your password is set. You can sign in now.'
+            : 'Your password has been changed and you have been signed out everywhere else.'}
         </p>
         <Link className="btn btn--block" to={`/${segment}`}>
           Sign in
@@ -169,7 +173,7 @@ export function ResetPage({ segment }: { segment: string }) {
   };
 
   return (
-    <AuthCard title="Choose a new password">
+    <AuthCard title={welcome ? 'Welcome! Choose a password' : 'Choose a new password'}>
       {token === '' ? (
         <Notice tone="warn" title="This link is incomplete">
           <p>Open the link from the email again, or ask for a new one.</p>

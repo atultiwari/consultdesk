@@ -81,6 +81,7 @@ export type AdminProvider = {
   name: string;
   title: string | null;
   bio: string | null;
+  photo_url?: string | null;
   timezone: string;
   active: boolean;
   sort_order: number;
@@ -126,4 +127,52 @@ export type BlockedTime = {
   end: string;
   all_day: boolean;
   reason: string | null;
+};
+
+export type UserStatus = 'active' | 'invited' | 'invite_expired' | 'disabled';
+
+export type ManagedUser = {
+  id: number;
+  email: string;
+  name: string | null;
+  role: Role;
+  provider: { id: number; name: string } | null;
+  status: UserStatus;
+  last_login_at: string | null;
+  telegram_linked: boolean;
+};
+
+export type Branding = {
+  org_name: string;
+  preset: 'neutral' | 'he' | 'vrl';
+  accent: string | null;
+  accent_2: string | null;
+  logo_url: string | null;
+};
+
+export type Integrations = {
+  telegram: { configured: boolean; linked: boolean };
+  google: {
+    configured: boolean;
+    connected: boolean;
+    active?: boolean;
+    account_email?: string | null;
+    busy_calendar_ids?: string[];
+    target_calendar_id?: string | null;
+  };
+};
+
+export type GoogleCalendarOption = {
+  id: string;
+  summary: string;
+  primary: boolean;
+  writable: boolean;
+};
+
+export type SystemSnapshot = {
+  version: string;
+  php: string;
+  migrations_pending: string[];
+  cron: { last_run_at: string | null; healthy: boolean };
+  outbox: { pending: number; failed: number; last_error: string | null };
 };

@@ -5,6 +5,7 @@ import { Notice } from '../design/components/Notice';
 import { isStaff, useAdmin } from './context';
 import { fieldErrors, orNull, timezones } from './forms';
 import { useUpdateProvider } from './hooks';
+import { PhotoField } from './PhotoField';
 import type { AdminProvider } from './types';
 
 type Draft = {
@@ -68,6 +69,7 @@ export function ProfileForm({ provider }: { provider: AdminProvider }) {
     <form className="form-grid" onSubmit={submit} noValidate>
       <fieldset className="form-section">
         <legend>About</legend>
+        <PhotoField provider={provider} />
         <Field label="Name" error={errors.name}>
           <input {...text('name')} />
         </Field>

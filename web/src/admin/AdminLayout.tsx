@@ -74,6 +74,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       ? { to: `${base}/providers`, label: 'Providers' }
       : { to: `${base}/providers/${user.provider_id}`, label: 'My profile' },
     { to: `${base}/blocked`, label: 'Blocked times' },
+    ...(user.role === 'owner'
+      ? [
+          { to: `${base}/users`, label: 'Users' },
+          { to: `${base}/branding`, label: 'Branding' },
+          { to: `${base}/payments`, label: 'Payments' },
+          { to: `${base}/system`, label: 'System' },
+        ]
+      : []),
+    { to: `${base}/account`, label: 'My account' },
   ];
 
   return (
