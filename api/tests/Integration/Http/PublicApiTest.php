@@ -30,6 +30,35 @@ final class PublicApiTest extends ApiTestCase
         Fixtures::provider($this->pdo, ['slug' => 'inactive', 'active' => 0]);
     }
 
+    public function testSiteSettingsHaveSafeDefaults(): void
+    {
+        [$status, $body] = $this->call('GET', '/api/site');
+
+        self::assertSame(200, $status);
+        self::assertSame(['org_name' => 'ConsultDesk', 'preset' => 'neutral', 'accent' => null, 'accent_2' => null, 'logo_url' => null, 'single_provider' => null], $body['data']);
+    }
+
+    public function testSiteSettingsAreReadAndSanitised(): void
+    {
+        $this->pdo->exec('DELETE FROM providers WHERE slug <> \'demo\'');
+        $this->pdo->prepare("INSERT INTO settings (`key`, `value`) VALUES ('site', ?)")->execute([json_encode([
+            'org_name' => 'Dr. Demo Bookings',
+            'preset' => 'he',
+            'accent' => '#40297A',
+            'accent_2' => 'red; background:url(x)',
+            'logo_url' => 'javascript:alert(1)',
+        ])]);
+
+        [, $body] = $this->call('GET', '/api/site');
+
+        self::assertSame('Dr. Demo Bookings', $body['data']['org_name']);
+        self::assertSame('he', $body['data']['preset']);
+        self::assertSame('#40297a', $body['data']['accent']);
+        self::assertNull($body['data']['accent_2'], 'only hex colours are accepted');
+        self::assertNull($body['data']['logo_url'], 'only http(s) or site-relative logos');
+        self::assertSame('demo', $body['data']['single_provider'], 'lets the home page skip straight to the only provider');
+    }
+
     public function testListsActiveProvidersWithoutPrivateFields(): void
     {
         [$status, $body] = $this->call('GET', '/api/providers');

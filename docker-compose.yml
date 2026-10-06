@@ -16,6 +16,12 @@ services:
       MAIL_FROM: bookings@example.test
       MAIL_FROM_NAME: ConsultDesk (local)
       SMTP_ENCRYPTION: none
+      # Optional integrations, read from .env when set (see docs/INSTALL.md).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       DB_HOST: db
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:-consultdesk}

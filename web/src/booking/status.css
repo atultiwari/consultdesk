@@ -1,0 +1,234 @@
+.status__grid {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .status__grid {
+    grid-template-columns: 380px minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+.status__side {
+  display: grid;
+  gap: 1.25rem;
+}
+
+/* ---------- the appointment slip (a clinic token) ---------- */
+.slip {
+  --notch: 14px;
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem 1.5rem 1.25rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  /* side notches where the slip would be torn off */
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at 0 calc(100% - 3.25rem), transparent 98%, #000) left / 51%
+      100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% calc(100% - 3.25rem), transparent 98%, #000) right /
+      51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at 0 calc(100% - 3.25rem), transparent 98%, #000) left / 51%
+      100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% calc(100% - 3.25rem), transparent 98%, #000) right /
+      51% 100% no-repeat;
+  animation: rise-in var(--dur-3) var(--ease-out) both;
+}
+
+@media (min-width: 960px) {
+  .slip {
+    position: sticky;
+    top: 88px;
+  }
+}
+
+.slip__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slip__ref {
+  font-size: clamp(2.2rem, 9vw, 2.9rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--brand);
+  line-height: 1;
+}
+
+.slip__title {
+  font-size: 1.6rem;
+}
+
+.slip__rows {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.slip__rows div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.75rem;
+}
+
+.slip__rows dt {
+  color: var(--ink-3);
+  font-size: 0.85rem;
+  padding-top: 0.1rem;
+}
+
+.slip__rows dd {
+  margin: 0;
+}
+
+.slip__tz {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.slip__perforation {
+  height: 0;
+  margin: 0.5rem calc(var(--notch) * -0.2);
+  border-top: 2px dashed var(--rule-strong);
+}
+
+.slip__foot {
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.outcome__action {
+  margin-top: 0.75rem;
+}
+
+/* ---------- payment ---------- */
+.pay {
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.pay__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.pay__title {
+  font-size: 1.5rem;
+}
+
+.hold {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--bg-sunk);
+  font-size: 0.9rem;
+}
+
+.hold--urgent {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 700;
+  animation: hold-pulse 2s var(--ease-in-out) infinite;
+}
+
+@keyframes hold-pulse {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 18%, transparent);
+  }
+}
+
+.upi {
+  display: grid;
+  gap: 1rem;
+}
+
+.upi__pay {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.upi__qr {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.upi__qr .muted {
+  color: #4b4f58;
+  font-size: 0.85rem;
+}
+
+/* Phones pay in the UPI app; computers with a mouse scan the QR with a phone instead.
+   Unknown devices get both. */
+@media (hover: none) {
+  .upi__qr {
+    display: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .upi__app-button {
+    display: none;
+  }
+}
+
+.upi__rows {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+}
+
+.upi__rows div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem 1rem;
+}
+
+.upi__rows dt {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+.upi__rows dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  word-break: break-all;
+}
+
+.utr {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.utr .input {
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+
+.pay__wa {
+  font-size: 0.9rem;
+}

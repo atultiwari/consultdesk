@@ -30,6 +30,14 @@ final class PdoCatalog implements CatalogRepository
         return $rows === [] ? null : self::provider($rows[0]);
     }
 
+    public function siteSettings(): SiteSettings
+    {
+        $rows = $this->rows("SELECT `value` FROM settings WHERE `key` = 'site'", []);
+        $stored = $rows === [] ? [] : json_decode((string) $rows[0]['value'], true);
+
+        return SiteSettings::fromStored(is_array($stored) ? $stored : []);
+    }
+
     public function activeServices(int $providerId): array
     {
         return array_map(self::service(...), $this->rows(

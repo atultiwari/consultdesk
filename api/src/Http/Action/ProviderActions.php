@@ -35,6 +35,16 @@ final class ProviderActions
         private readonly string $appUrl,
     ) {}
 
+    public function site(Request $request, Response $response): Response
+    {
+        $providers = $this->catalog->activeProviders();
+
+        return JsonResponse::success($response, [
+            ...$this->catalog->siteSettings()->toArray(),
+            'single_provider' => count($providers) === 1 ? $providers[0]->slug : null,
+        ]);
+    }
+
     public function list(Request $request, Response $response): Response
     {
         return JsonResponse::success($response, array_map(

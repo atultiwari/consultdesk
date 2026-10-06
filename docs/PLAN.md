@@ -46,7 +46,7 @@ So it is built as an **independent, installable product**, not as code inside th
 - **Updates:** upload a new zip; the admin panel's "Run database updates" button applies pending migrations.
 - **Three ways to put it on a site:**
   1. **Subdomain page.** `book.atultiwari.com` lists providers, or goes straight to the provider when there is only one.
-  2. **Embed script** for any site, including static sites and WordPress: `<script src="https://book.x.com/embed.js" data-provider="atul" data-service="research-guidance"></script>` renders a "Book a session" button that opens an accessible modal iframe, auto-resized via `postMessage`.
+  2. **Embed script** for any site, including static sites and WordPress: `<script src="https://book.x.com/embed.js" data-provider="atul" data-service="research-guidance"></script>` renders a "Book a session" button that opens an accessible modal iframe, auto-resized via `postMessage` (only messages from the booking site's origin are accepted). `data-label` changes the button text. 1.4 KB gzipped.
   3. **Direct deep links** such as `/p/atul/research-guidance`, usable in WhatsApp, Instagram bio or email signatures.
   - A WordPress shortcode plugin wrapper for the embed (`[consultdesk provider="..."]`) is a later phase.
 - **Roles:**
@@ -211,7 +211,14 @@ consultdesk/
   - A **week-strip date picker plus a slot grid** grouped Morning / Afternoon / Evening, with the visitor's timezone shown inline.
   - A 4-step stepper with a sticky summary panel on desktop that becomes a bottom sheet on mobile.
   - A status page styled like an appointment slip, or a clinic token slip, with a ref number and QR code.
-- Light and dark themes, `prefers-reduced-motion` honoured, WCAG AA contrast, full keyboard support (Radix), and touch targets of at least 44 px.
+- Light and dark themes, `prefers-reduced-motion` honoured, WCAG AA contrast, full keyboard support, and touch targets of at least 44 px.
+- **As built (Phase 5):**
+  - Presets are token sets selected by `data-preset` on `<html>`: `neutral` (system fonts, the default), `he` (portfolio tokens: haematoxylin `#40297a`, eosin `#b02a60`, lab-bench paper; Instrument Serif + Geist) and `vrl` (from the VRL site: violet `#3b2e7e`, rose accent, Bricolage Grotesque + Figtree, larger radii). Each has a tuned dark theme.
+  - `GET /api/site` returns the org name, preset and optional brand colours (settings key `site`, sanitised; edited in Branding in Phase 6). Custom colours apply to the light theme only.
+  - Fonts are self-hosted from `@fontsource/*`; only the active preset's fonts download. The last preset is cached so returning visitors get it before the API answers.
+  - Motion: one signature curve `cubic-bezier(.22,1,.36,1)`, durations 160 / 260 / 420 ms, a short rise-in for entrances, stagger capped under 200 ms.
+  - Plain CSS on tokens instead of Radix: the few interactive pieces (radio-based week strip and slot grid, `<details>` bottom sheet, native selects) are accessible with native elements.
+  - Every token pair used for text passes WCAG AA in all presets and themes (`e2e/scripts/contrast.ts`). Lighthouse (mobile): provider 97, booking 94, status 96 performance; 100 accessibility.
 - Before building any UI, use the `frontend-design` / `motion-design` skills, and review the screens in the browser at 375, 768 and 1280 px.
 
 ## 8. Seed data — service templates from research

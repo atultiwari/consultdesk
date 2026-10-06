@@ -49,6 +49,7 @@ final class AppFactory
                 $services->config->appUrl,
             );
 
+            $api->get('/site', static fn($rq, $rs) => $providers()->site($rq, $rs))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers', static fn($rq, $rs) => $providers()->list($rq, $rs))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers/{provider}', static fn($rq, $rs, array $a) => $providers()->show($rq, $rs, $a))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers/{provider}/services/{service}/slots', static fn($rq, $rs, array $a) => $providers()->slots($rq, $rs, $a))->add($limit('read', 120, self::MINUTE));

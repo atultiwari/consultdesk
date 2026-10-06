@@ -21,6 +21,11 @@ final class CustomerTest extends TestCase
         self::assertSame('Asia/Kolkata', $customer->timezone);
     }
 
+    public function testAcceptsLegacyTimezoneAliasesBrowsersReport(): void
+    {
+        self::assertSame('Asia/Calcutta', (new Customer('Asha', 'asha@example.test', null, 'Asia/Calcutta'))->timezone);
+    }
+
     public function testPhoneAndTimezoneAreOptional(): void
     {
         $customer = new Customer('Asha', 'asha@example.test', '  ');
