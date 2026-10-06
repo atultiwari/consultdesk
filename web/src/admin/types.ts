@@ -197,3 +197,27 @@ export type PaymentSettings = {
     has_webhook_secret: boolean;
   }[];
 };
+
+export type StarterTemplate = {
+  key: string;
+  title: string;
+  tagline: string;
+  audience: string | null;
+  duration_min: number;
+  price_minor: number;
+  /** The researched price band, e.g. "Students ₹999 · professionals ₹1,999". */
+  price_note: string | null;
+  requires_approval: boolean;
+};
+
+export type SetupState = {
+  mode: 'single' | 'multi' | null;
+  completed: boolean;
+  provider: AdminProvider | null;
+  template_sets: {
+    key: string;
+    label: string;
+    description: string;
+    templates: StarterTemplate[];
+  }[];
+};

@@ -12,7 +12,7 @@ const VIEWPORTS = [
   { name: '1280', width: 1280, height: 800, mobile: false },
 ];
 const THEMES = ['light', 'dark'] as const;
-const SERVICE = '/p/demo/research-guidance';
+const SERVICE = '/p/demo/code-review';
 
 async function chooseSlot(page: Page) {
   await page.goto(BASE + SERVICE);

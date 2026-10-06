@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Http\Action;
 
+use ConsultDesk\Admin\SiteSetup;
 use ConsultDesk\Domain\Availability\SlotFinder;
 use ConsultDesk\Domain\Availability\SlotRequest;
 use ConsultDesk\Domain\Catalog\CatalogRepository;
@@ -33,15 +34,24 @@ final class ProviderActions
         private readonly SlotFinder $slots,
         private readonly Clock $clock,
         private readonly string $appUrl,
+        private readonly ?SiteSetup $setup = null,
     ) {}
 
     public function site(Request $request, Response $response): Response
     {
-        $providers = $this->catalog->activeProviders();
+        $slugs = [];
+        foreach ($this->catalog->activeProviders() as $provider) {
+            $slugs[$provider->id] = $provider->slug;
+        }
+        $ids = array_keys($slugs);
+        // A one-teacher site (or a site with only one teacher so far) goes straight to their page.
+        $single = $this->setup?->isSingle() === true ? $this->setup->singleProviderId($ids) : null;
+        $single ??= count($ids) === 1 ? $ids[0] : null;
 
         return JsonResponse::success($response, [
             ...$this->catalog->siteSettings()->toArray(),
-            'single_provider' => count($providers) === 1 ? $providers[0]->slug : null,
+            'mode' => $this->setup?->stored()['mode'],
+            'single_provider' => $single === null ? null : $slugs[$single],
         ]);
     }
 

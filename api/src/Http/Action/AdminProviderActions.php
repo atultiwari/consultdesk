@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ConsultDesk\Http\Action;
 
 use ConsultDesk\Admin\ProviderSettings;
+use ConsultDesk\Admin\SiteSetup;
 use ConsultDesk\Domain\Booking\Actor;
 use ConsultDesk\Http\ApiException;
 use ConsultDesk\Http\JsonInput;
@@ -24,7 +25,7 @@ final class AdminProviderActions
     private const STAFF_ONLY = ['slug', 'active', 'sort_order'];
     /** Where money and messages go: audited with old and new values, so a change can be traced. */
     private const TRACED = ['upi_vpa', 'upi_payee_name', 'notify_email', 'whatsapp'];
-    private const UPI_VPA = '/^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/';
+    public const UPI_VPA = '/^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/';
     /** Rule => [min, max]. Matches BookingRules. */
     private const RULE_LIMITS = [
         'min_notice_min' => [0, 525_600],
@@ -38,6 +39,7 @@ final class AdminProviderActions
     public function __construct(
         private readonly ProviderSettings $providers,
         private readonly AuditLog $audit,
+        private readonly ?SiteSetup $setup = null,
     ) {}
 
     public function list(Request $request, Response $response): Response
@@ -50,6 +52,9 @@ final class AdminProviderActions
         $user = AdminScope::user($request);
         if (!$user->isStaff()) {
             throw ApiException::forbidden();
+        }
+        if ($this->setup?->isSingle() === true && $this->providers->all(null) !== []) {
+            throw new ApiException(409, 'single_teacher_site', 'This site is set up for one teacher. Switch it to several teachers first (owner: Set up your site).');
         }
         $input = new Input(JsonInput::decode($request));
         $values = $this->read($input, creating: true);
@@ -82,6 +87,9 @@ final class AdminProviderActions
             $input->reject('slug', 'Another provider already uses this address.');
         }
         $input->assertValid();
+        if ((bool) ($values['active'] ?? false) && !(bool) ($before['active'] ?? false) && $this->setup?->isSingle() === true && $this->setup->activeProviders() > 0) {
+            throw new ApiException(409, 'single_teacher_site', 'This site is set up for one teacher. Switch it to several teachers first (owner: Set up your site).');
+        }
 
         $this->providers->update($id, $values);
         if ($values !== []) {
@@ -100,7 +108,7 @@ final class AdminProviderActions
      *
      * @return array<string, array{from: mixed, to: scalar|null}>
      */
-    private static function tracedChanges(array $before, array $values): array
+    public static function tracedChanges(array $before, array $values): array
     {
         $changes = [];
         foreach (array_intersect_key($values, array_flip(self::TRACED)) as $field => $value) {

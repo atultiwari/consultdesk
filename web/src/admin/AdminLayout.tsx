@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router';
 import { ThemeToggle } from '../app/ThemeToggle';
 import { useSite } from '../api/hooks';
 import { isStaff, useAdmin } from './context';
-import { useLogout } from './hooks';
+import { useAdminProviders, useLogout } from './hooks';
+import { useSetup } from './setupHooks';
 
 function AccountMenu() {
   const { user } = useAdmin();
@@ -63,16 +64,27 @@ function AccountMenu() {
   );
 }
 
+/** The teacher of a one-teacher site, for the "My profile" link. */
+function useSingleTeacherId(single: boolean): number | null {
+  const { user } = useAdmin();
+  const setup = useSetup(single && user.role === 'owner');
+  const providers = useAdminProviders(single && user.role !== 'owner' && user.provider_id === null);
+  if (!single) return null;
+  return user.provider_id ?? setup.data?.provider?.id ?? providers.data?.[0]?.id ?? null;
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { base, user } = useAdmin();
   const { data: site } = useSite();
   const location = useLocation();
+  const teacherId = useSingleTeacherId(site?.mode === 'single');
+  const profileId = teacherId ?? (isStaff(user) ? null : user.provider_id);
   const links = [
     { to: base, label: 'Dashboard', end: true },
     { to: `${base}/bookings`, label: 'Bookings' },
-    isStaff(user) || user.provider_id === null
+    profileId === null
       ? { to: `${base}/providers`, label: 'Providers' }
-      : { to: `${base}/providers/${user.provider_id}`, label: 'My profile' },
+      : { to: `${base}/providers/${profileId}`, label: 'My profile' },
     { to: `${base}/blocked`, label: 'Blocked times' },
     ...(user.role === 'owner'
       ? [

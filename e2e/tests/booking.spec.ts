@@ -11,16 +11,15 @@ async function bookAndSubmitUtr(page: Page): Promise<string> {
   const utr = `9${String(Date.now()).slice(-11)}`;
 
   await page.goto('/p/demo');
-  await page.getByRole('link', { name: /Research & thesis guidance/ }).click();
+  await page.getByRole('link', { name: /ML project and code review/ }).click();
   await page.locator('.slot').first().click();
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await page.getByLabel('Full name').fill('E2E Placeholder');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('WhatsApp number').fill('+91 00000 00000');
-  await page.getByLabel('Your role').selectOption('Researcher');
-  await page.getByLabel('What do you want to walk away with?').fill('A sanity check of my analysis plan.');
-  await page.getByLabel('Stage').selectOption('Analysis');
+  await page.getByLabel('Repository link').fill('https://example.test/placeholder-repo');
+  await page.getByLabel('What the model does').fill('Classifies placeholder images.');
   await page.getByLabel(/identifiable patient data/).check();
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -78,7 +77,7 @@ test('two people booking the same slot at the same moment: exactly one gets it',
         start,
         payment_method: 'upi',
         customer: { name: `Racer ${n}`, email: `race-${n}-${Date.now()}@example.test`, phone: '+910000000000' },
-        answers: { role: 'Researcher', goal: 'Review', repo: 'https://example.test/repo', no_patient_data: true },
+        answers: { repo_link: 'https://example.test/repo', task: 'Review', no_patient_data: true },
       },
     });
 
