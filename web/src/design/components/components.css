@@ -352,3 +352,27 @@ textarea.input {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- the ConsultDesk mark ---------- */
+.brand-mark {
+  flex: none;
+  display: block;
+}
+
+.brand-mark__tile,
+.brand-mark__taken {
+  fill: var(--brand);
+}
+
+.brand-mark__bubble {
+  fill: var(--brand-ink);
+}
+
+.brand-mark__free {
+  fill: var(--brand);
+  fill-opacity: 0.22;
+}
+
+.brand-mark__booked {
+  fill: var(--accent);
+}
