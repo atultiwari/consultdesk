@@ -131,6 +131,11 @@ final class AdminCatalogTest extends AdminTestCase
 
         [, $cleared] = $this->admin('PATCH', "/api/admin/services/{$a}", ['highlight' => '']);
         self::assertNull($cleared['data']['highlight']);
+
+        [$made, $added] = $this->admin('POST', "/api/admin/providers/{$this->demo}/services", ['slug' => 'later', 'title' => 'Added later', 'duration_min' => 30, 'price_minor' => 0, 'payment_methods' => ['free']]);
+        self::assertSame(201, $made, json_encode($added) ?: '');
+        self::assertSame('Added later', array_column($this->call('GET', '/api/providers/demo')[1]['data']['services'], 'title')[3] ?? null, 'new sessions go last, not first');
+        self::assertSame(4, $added['data']['sort_order']);
     }
 
     public function testWeeklyAvailabilityIsReplacedAsAWhole(): void

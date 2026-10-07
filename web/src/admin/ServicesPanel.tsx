@@ -9,10 +9,15 @@ import type { AdminService } from './types';
 export function ServicesPanel({ providerId }: { providerId: number }) {
   const services = useServices(providerId);
   const reorder = useReorderServices(providerId);
+  const [announcement, setAnnouncement] = useState('');
   const move = (index: number, by: -1 | 1) => {
-    const ids = (services.data ?? []).map((s) => s.id);
+    const list = services.data ?? [];
+    const to = index + by;
+    if (reorder.isPending || to < 0 || to >= list.length) return;
+    const ids = list.map((s) => s.id);
     const [moved] = ids.splice(index, 1);
-    ids.splice(index + by, 0, moved);
+    ids.splice(to, 0, moved);
+    setAnnouncement(`${list[index].title} moved to position ${to + 1} of ${list.length}.`);
     reorder.mutate(ids);
   };
   const [editing, setEditing] = useState<AdminService | 'new' | null>(null);
@@ -33,6 +38,9 @@ export function ServicesPanel({ providerId }: { providerId: number }) {
         </Notice>
       )}
       {services.data?.length === 0 && <p className="empty">No sessions yet.</p>}
+      <p className="visually-hidden" role="status" aria-live="polite">
+        {announcement}
+      </p>
       {reorder.isError && (
         <Notice tone="danger" live>
           {reorder.error.message}

@@ -151,6 +151,8 @@ final class AdminServiceActions
         }
         if ($input->has('questions')) {
             $values['questions'] = $this->questions($input);
+        } elseif ($existing === null) {
+            $values['questions'] = []; // a new session may start with no questions
         }
         if ($input->has('active')) {
             $values['active'] = $input->bool('active', required: true);

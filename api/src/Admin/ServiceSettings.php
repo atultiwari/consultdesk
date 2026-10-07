@@ -50,15 +50,20 @@ final class ServiceSettings
      */
     public function reorder(int $providerId, array $ids): bool
     {
-        $mine = array_map(static fn(array $s): int => (int) $s['id'], $this->forProvider($providerId));
-        $sorted = $ids;
-        sort($sorted);
-        sort($mine);
-        if ($sorted !== $mine) {
-            return false;
-        }
         $this->pdo->beginTransaction();
         try {
+            // Locked, so a session added meanwhile can't slip past the check.
+            $lock = $this->pdo->prepare('SELECT id FROM services WHERE provider_id = :p FOR UPDATE');
+            $lock->execute(['p' => $providerId]);
+            $mine = array_map('intval', $lock->fetchAll(PDO::FETCH_COLUMN));
+            $sorted = $ids;
+            sort($sorted);
+            sort($mine);
+            if ($sorted !== $mine) {
+                $this->pdo->rollBack();
+
+                return false;
+            }
             $statement = $this->pdo->prepare('UPDATE services SET sort_order = :order WHERE id = :id AND provider_id = :provider');
             foreach ($ids as $i => $id) {
                 $statement->execute(['order' => $i + 1, 'id' => $id, 'provider' => $providerId]);
@@ -86,6 +91,12 @@ final class ServiceSettings
     public function create(int $providerId, array $values): int
     {
         $values = [...self::row($values), 'provider_id' => $providerId];
+        if (!array_key_exists('sort_order', $values)) {
+            // New sessions go to the end of the teacher's list.
+            $last = $this->pdo->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM services WHERE provider_id = :p');
+            $last->execute(['p' => $providerId]);
+            $values['sort_order'] = (int) $last->fetchColumn() + 1;
+        }
         $columns = array_keys($values);
         $this->pdo->prepare(sprintf(
             'INSERT INTO services (%s) VALUES (%s)',

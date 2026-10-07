@@ -265,7 +265,8 @@ export function useReorderServices(providerId: number) {
         method: 'PUT',
         json: { ids },
       }),
-    onMutate: (ids) => {
+    onMutate: async (ids) => {
+      await client.cancelQueries({ queryKey: adminKeys.services(providerId) });
       const before = client.getQueryData<AdminService[]>(adminKeys.services(providerId));
       if (before) {
         client.setQueryData(
@@ -279,6 +280,9 @@ export function useReorderServices(providerId: number) {
       if (context?.before) client.setQueryData(adminKeys.services(providerId), context.before);
     },
     onSuccess: (saved) => client.setQueryData(adminKeys.services(providerId), saved),
+    // Another tab may have added a session: reload so the next move sends the whole list.
+    onSettled: (_saved, error) =>
+      error ? client.invalidateQueries({ queryKey: adminKeys.services(providerId) }) : undefined,
   });
 }
 
