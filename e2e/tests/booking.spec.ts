@@ -24,7 +24,7 @@ async function bookAndSubmitUtr(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await page.getByRole('button', { name: /Book and pay/ }).click();
-  await expect(page).toHaveURL(/\/b\/CD-[2-9A-Z]{4}\?t=/);
+  await expect(page).toHaveURL(/\/b\/[A-Z][A-Z0-9]{1,5}-[2-9A-Z]{4}\?t=/);
   await expect(page.getByText('Awaiting payment')).toBeVisible();
   await expect(page.getByText('Pay once, for this booking only')).toBeVisible();
   const ref = (await page.locator('.slip__ref').textContent())?.trim() ?? '';

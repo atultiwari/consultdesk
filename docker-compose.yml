@@ -29,6 +29,8 @@ services:
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
       # The first owner on a fresh database (bin/install.php or the first visit to the admin path).
+      # What booking codes start with until staff change it in the admin panel (e.g. VRL → VRL-7F3K).
+      BOOKING_PREFIX: ${BOOKING_PREFIX:-}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
       OWNER_NAME: ${OWNER_NAME:-}
       OWNER_PASSWORD: ${OWNER_PASSWORD:-}

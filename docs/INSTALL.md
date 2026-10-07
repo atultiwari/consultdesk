@@ -295,6 +295,13 @@ updates to run from the web.
 - Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
   their old and new values.
 
+## Booking codes
+
+Every booking gets a short code such as **VRL-7F3K**. Owners and admins change what it starts with
+under **Bookings → Booking codes start with…**: 2–6 letters or digits, starting with a letter. It
+applies to new bookings; existing codes keep working. Put `BOOKING_PREFIX=VRL` in `.env` (or
+`config.php`) to make that the default, so it survives a database reset; without either it's `CD`.
+
 ## Coupons
 
 **Coupons** in the admin panel makes discount codes customers type at **Review & pay** (behind a

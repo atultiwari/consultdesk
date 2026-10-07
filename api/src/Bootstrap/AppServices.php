@@ -36,6 +36,7 @@ use ConsultDesk\Customer\CustomerLinkEmailHandler;
 use ConsultDesk\Domain\Availability\BusyTimeSource;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotFinder;
+use ConsultDesk\Domain\Booking\BookingRefPrefix;
 use ConsultDesk\Domain\Booking\BookingService;
 use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\PdoBookingViews;
@@ -119,12 +120,17 @@ final class AppServices
             $this->db(),
             new PdoBookingRepository($this->pdo()),
             $this->clock,
-            new RandomRefGenerator(),
+            new RandomRefGenerator($this->bookingRefPrefix()->current()),
             new OutboxBookingEvents($this->outbox()),
             $this->crypto(),
             $this->busyTime(),
             coupons: $this->coupons(),
         );
+    }
+
+    public function bookingRefPrefix(): BookingRefPrefix
+    {
+        return new BookingRefPrefix($this->settings(), $this->config->bookingPrefix);
     }
 
     public function coupons(): Coupons

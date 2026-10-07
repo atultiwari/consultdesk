@@ -6,6 +6,7 @@ namespace ConsultDesk\Infra;
 
 use ConsultDesk\Admin\OwnerDefaults;
 use ConsultDesk\Calendar\GoogleConfig;
+use ConsultDesk\Domain\Booking\BookingRefPrefix;
 use ConsultDesk\Payments\Razorpay\RazorpayCredentials;
 use ConsultDesk\Payments\Razorpay\RazorpayEnvKeys;
 use ConsultDesk\Telegram\TelegramConfig;
@@ -52,6 +53,8 @@ final class Config
         /** When set, the first-run "create the owner" form also asks for this key. */
         #[\SensitiveParameter]
         public readonly ?string $setupKey = null,
+        /** What booking codes start with until staff choose (VRL → VRL-7F3K). */
+        public readonly string $bookingPrefix = BookingRefPrefix::FALLBACK,
     ) {}
 
     /**
@@ -131,7 +134,18 @@ final class Config
             razorpay: RazorpayEnvKeys::fromValues($v),
             owner: OwnerDefaults::fromValues($v),
             setupKey: self::setupKey($v['SETUP_KEY'] ?? ''),
+            bookingPrefix: self::bookingPrefix($v['BOOKING_PREFIX'] ?? ''),
         );
+    }
+
+    private static function bookingPrefix(string $value): string
+    {
+        if (trim($value) === '') {
+            return BookingRefPrefix::FALLBACK;
+        }
+
+        return BookingRefPrefix::normalise($value)
+            ?? throw new InvalidArgumentException('BOOKING_PREFIX must be 2–6 letters or digits, starting with a letter, e.g. VRL.');
     }
 
     private static function setupKey(#[\SensitiveParameter] string $value): ?string

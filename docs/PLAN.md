@@ -118,7 +118,7 @@ consultdesk/
 - `availability_rules`: `provider_id`, `weekday` (ISO: 1 = Monday … 7 = Sunday), `start_time`, `end_time`, and an optional `service_id`. If a service has its own rules, **only those apply** to it; otherwise the provider's general rules apply.
 - `blocked_periods`: `provider_id` (nullable means an org-wide holiday), `start_at`, `end_at`, `all_day`, `reason`.
 - `bookings`:
-  - Identity: `ref` (e.g. `CD-7F3K`), `public_token_hash` (lookups), `public_token_enc` (sodium-encrypted copy so every email can carry the status link), `provider_id`, `service_id`, `start_at`/`end_at` (UTC).
+  - Identity: `ref` (e.g. `VRL-7F3K`; the prefix is set under Bookings, default `BOOKING_PREFIX` or `CD`), `public_token_hash` (lookups), `public_token_enc` (sodium-encrypted copy so every email can carry the status link), `provider_id`, `service_id`, `start_at`/`end_at` (UTC).
   - Customer: name, email, phone and timezone, plus `answers` (JSON).
   - Payment: `amount_minor`, `currency`, `payment_method` (upi | razorpay_link | free), `utr`, `gateway_ref`, `gateway_payment_id`.
   - Calendar: `gcal_event_id`, `meet_url`.
