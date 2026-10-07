@@ -181,7 +181,9 @@ final class AdminPaymentActions
         if ($current !== null && $current->keyId !== $keyId) {
             $this->assertNoOpenLinks($providerId);
         }
-        $keepSecret = $current !== null && $current->keyId === $keyId && $current->webhookSecret !== null;
+        // Keys saved over the .env defaults get their own webhook secret, even for the same account.
+        $saved = $this->keys->saved($providerId);
+        $keepSecret = $saved !== null && $saved->keyId === $keyId && $saved->webhookSecret !== null;
         $webhookSecret = $keepSecret ? null : self::randomSecret();
         $this->keys->save($providerId, (string) $keyId, (string) $secret, $webhookSecret);
 

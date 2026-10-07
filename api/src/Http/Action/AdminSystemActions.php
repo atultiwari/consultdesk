@@ -16,10 +16,12 @@ use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Backup;
 use ConsultDesk\Infra\InvalidBackup;
+use ConsultDesk\Infra\RateLimiter;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\UploadedFileInterface;
 use RuntimeException;
+use Slim\Psr7\Stream;
 
 /**
  * The owner's System panel: health, "Run database updates", "Retry failed jobs", and backups:
@@ -33,7 +35,11 @@ final class AdminSystemActions
         private readonly Backup $backups,
         private readonly AdminUsers $users,
         private readonly Passwords $passwords,
+        private readonly RateLimiter $limiter,
     ) {}
+
+    /** Wrong passwords allowed per hour when confirming a backup or restore, per account. */
+    private const REAUTH_FAILURES = 5;
 
     /** Larger than any realistic booking site's compressed backup. */
     private const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -79,20 +85,20 @@ final class AdminSystemActions
         $this->confirmPassword($owner, $input, $input->secret('password', max: Passwords::MAX_LENGTH));
         $input->assertValid();
 
-        // Built in the backups folder and removed once read: downloads aren't kept on the server.
+        self::longRunning();
+        // Built in the backups folder and streamed from there; unlinked at once, so downloads aren't
+        // kept on the server (the open handle still reads it).
         $path = $this->backups->create('backup');
-        try {
-            $contents = file_get_contents($path);
-        } finally {
-            unlink($path);
-        }
-        if ($contents === false) {
+        $handle = fopen($path, 'rb');
+        $size = filesize($path);
+        unlink($path);
+        if ($handle === false) {
             throw new RuntimeException('Could not read the backup that was just made.');
         }
-        $this->audit->record(Actor::user($owner->id), 'admin.backup_downloaded', 'system', null, ['bytes' => strlen($contents)]);
-        $response->getBody()->write($contents);
+        $this->audit->record(Actor::user($owner->id), 'admin.backup_downloaded', 'system', null, ['bytes' => $size]);
 
         return $response
+            ->withBody(new Stream($handle))
             ->withHeader('Content-Type', 'application/gzip')
             ->withHeader('Content-Disposition', sprintf('attachment; filename="%s"', basename($path)))
             ->withHeader('Cache-Control', 'no-store');
@@ -109,36 +115,81 @@ final class AdminSystemActions
             $input->reject('confirm', sprintf('Type %s to confirm.', self::RESTORE_WORD));
         }
         $file = $request->getUploadedFiles()['file'] ?? null;
-        if (!$file instanceof UploadedFileInterface || $file->getError() !== UPLOAD_ERR_OK) {
+        if ($file instanceof UploadedFileInterface && in_array($file->getError(), [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            $input->reject('file', 'This server doesn’t accept files that large (upload_max_filesize). Restore it from the server’s shell instead: php bin/restore.php FILE');
+        } elseif (!$file instanceof UploadedFileInterface || $file->getError() !== UPLOAD_ERR_OK) {
             $input->reject('file', 'Choose a backup file (.sql.gz) made by this site.');
         } elseif (($file->getSize() ?? 0) > self::MAX_UPLOAD_BYTES) {
             $input->reject('file', 'That file is too large to be a backup of this site.');
         }
         $input->assertValid();
 
-        $path = (string) tempnam(sys_get_temp_dir(), 'cdrestore');
+        self::longRunning();
+        $path = sys_get_temp_dir() . '/cdrestore-' . bin2hex(random_bytes(8)) . '.sql.gz';
         try {
             /** @var UploadedFileInterface $file */
-            file_put_contents($path, (string) $file->getStream());
+            self::copyToFile($file, $path);
             $safety = $this->backups->restore($path);
         } catch (InvalidBackup $e) {
+            $this->audit->record(Actor::user($owner->id), 'admin.backup_restore_refused', 'system', null, ['reason' => $e->getMessage()]);
+
             throw new ApiException(422, 'invalid_backup', $e->getMessage());
+        } catch (\Throwable $e) {
+            error_log('ConsultDesk restore failed: ' . $e->getMessage());
+
+            throw new ApiException(500, 'restore_failed', 'The restore didn’t finish, so the data from before it was put back. See the server error log, or restore from the shell with php bin/restore.php.');
         } finally {
-            unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
         $this->audit->record(Actor::user($owner->id), 'admin.backup_restored', 'system', null, ['safety_backup' => basename($safety)]);
 
         return JsonResponse::success($response, ['restored' => true, 'safety_backup' => basename($safety)]);
     }
 
+    /**
+     * Checks the owner's password again. Wrong guesses are limited per account (not per address,
+     * so a stolen session can't be used to guess the password from many places) and audited.
+     */
     private function confirmPassword(AdminUser $owner, Input $input, #[\SensitiveParameter] ?string $password): void
     {
         if ($password === null) {
             return;
         }
+        $subject = 'user:' . $owner->id;
+        if ($this->limiter->exceeded('reauth-failed', $subject, self::REAUTH_FAILURES, 3600)) {
+            throw new ApiException(429, 'rate_limited', 'Too many wrong passwords. Try again in an hour.');
+        }
         $hash = $this->users->findForLogin($owner->email)[1] ?? null;
         if (!$this->passwords->verify($password, $hash)) {
+            $this->limiter->hit('reauth-failed', $subject, self::REAUTH_FAILURES, 3600);
+            $this->audit->record(Actor::user($owner->id), 'admin.reauth_failed', 'user', $owner->id);
             $input->reject('password', 'That isn’t your password.');
         }
+    }
+
+    /** Copies the upload in chunks, so a large backup never sits in memory. */
+    private static function copyToFile(UploadedFileInterface $file, string $path): void
+    {
+        $stream = $file->getStream();
+        if ($stream->isSeekable()) {
+            $stream->rewind();
+        }
+        $out = fopen($path, 'xb') ?: throw new RuntimeException('Could not save the uploaded backup.');
+        try {
+            while (!$stream->eof()) {
+                fwrite($out, $stream->read(1024 * 1024));
+            }
+        } finally {
+            fclose($out);
+        }
+    }
+
+    /** Backups and restores of a large site can take longer than PHP's usual 30 seconds. */
+    private static function longRunning(): void
+    {
+        set_time_limit(0);
+        ignore_user_abort(true);
     }
 }

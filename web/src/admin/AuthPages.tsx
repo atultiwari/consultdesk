@@ -82,7 +82,6 @@ export function LoginPage({ segment }: { segment: string }) {
  */
 export function FirstRunPage({ segment, entry }: { segment: string; entry: AdminEntry }) {
   const create = useFirstRun(segment);
-  const navigate = useNavigate();
   const [name, setName] = useState(entry.owner?.name ?? '');
   const [email, setEmail] = useState(entry.owner?.email ?? '');
   const [password, setPassword] = useState('');
@@ -92,15 +91,12 @@ export function FirstRunPage({ segment, entry }: { segment: string; entry: Admin
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (password.length < MIN_PASSWORD) return;
-    create.mutate(
-      {
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        ...(entry.needs_setup_key ? { setup_key: setupKey.trim() } : {}),
-      },
-      { onSuccess: () => void navigate(`/${segment}/setup`) },
-    );
+    create.mutate({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      ...(entry.needs_setup_key ? { setup_key: setupKey.trim() } : {}),
+    });
   };
 
   return (

@@ -46,6 +46,19 @@ final class RazorpayEnvKeysTest extends AdminTestCase
         self::assertSame(['env', self::ENV_KEY], [$removed['data']['razorpay']['source'], $removed['data']['razorpay']['key_id']]);
     }
 
+    public function testSavingTheSameAccountHereGetsItsOwnWebhookSecretAndLeavesTheEnvOneInEnv(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+
+        [, $saved] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => self::ENV_KEY, 'key_secret' => str_repeat('n', 24)]);
+
+        $fresh = $saved['data']['razorpay']['webhook_secret'] ?? null;
+        self::assertIsString($fresh, 'a new secret to paste into Razorpay');
+        self::assertNotSame(str_repeat('w', 32), $fresh);
+        self::assertSame([$fresh], array_map(static fn($c) => $c->webhookSecret, $this->services()->gatewayKeys()->all()));
+    }
+
     public function testWebhooksSignedWithTheEnvSecretAreRecognised(): void
     {
         $keys = $this->services()->gatewayKeys();

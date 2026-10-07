@@ -68,7 +68,11 @@ final class FirstRun
             return null;
         }
 
-        return $this->create($this->defaults->email, $this->defaults->name, $this->defaults->password, 'admin.first_owner_from_env');
+        try {
+            return $this->create($this->defaults->email, $this->defaults->name, $this->defaults->password, 'admin.first_owner_from_env');
+        } catch (RuntimeException) {
+            return null; // another request holds the lock and is creating the owner right now
+        }
     }
 
     /**

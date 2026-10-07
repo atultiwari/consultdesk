@@ -38,7 +38,7 @@ final class GatewayKeys
      */
     public function orgSource(): ?string
     {
-        return $this->stored(null) !== null ? 'settings' : ($this->defaults !== null ? 'env' : null);
+        return $this->saved(null) !== null ? 'settings' : ($this->defaults !== null ? 'env' : null);
     }
 
     /**
@@ -55,10 +55,13 @@ final class GatewayKeys
      */
     public function find(?int $providerId): ?RazorpayCredentials
     {
-        return $this->stored($providerId) ?? ($providerId === null ? $this->defaults : null);
+        return $this->saved($providerId) ?? ($providerId === null ? $this->defaults : null);
     }
 
-    private function stored(?int $providerId): ?RazorpayCredentials
+    /**
+     * Exactly the keys saved here for this owner (null = the organisation), ignoring .env.
+     */
+    public function saved(?int $providerId): ?RazorpayCredentials
     {
         $statement = $this->pdo->prepare(
             'SELECT provider_id, key_id, secret_enc, webhook_secret_enc FROM payment_gateways
@@ -148,7 +151,8 @@ final class GatewayKeys
      */
     public function save(?int $providerId, string $keyId, #[\SensitiveParameter] string $keySecret, #[\SensitiveParameter] ?string $webhookSecret): bool
     {
-        $current = $this->find($providerId);
+        // Only a secret saved here carries over; one from .env stays in .env.
+        $current = $this->saved($providerId);
         $webhookSecret ??= $current !== null && $current->keyId === $keyId ? $current->webhookSecret : null;
         $this->pdo->beginTransaction();
         try {

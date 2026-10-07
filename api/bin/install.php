@@ -64,6 +64,9 @@ try {
         echo $admin === null
             ? "No accounts yet. Set ADMIN_PATH, then open the admin area to create the owner.\n"
             : "No accounts yet. Open {$admin} to create the owner account.\n";
+        if (str_starts_with($config->appUrl, 'https://') && $config->setupKey === null) {
+            echo "Tip: this site is public. Set SETUP_KEY so only you can create the owner, or do it right away.\n";
+        }
     }
     if ($admin !== null) {
         echo "Admin area: {$admin}\n";

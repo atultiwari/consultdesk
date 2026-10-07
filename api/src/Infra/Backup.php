@@ -19,9 +19,14 @@ final class Backup
 {
     public const FORMAT = 'consultdesk-backup 1';
     private const SIGNATURE_PREFIX = '-- signature: ';
-    private const SKIP_DATA = ['sessions', 'rate_limits', 'login_attempts', 'google_busy_cache', 'google_oauth_states', 'telegram_link_codes'];
-    private const ROWS_PER_INSERT = 200;
+    /** Short-lived or single-use data: sign-ins, reset links, rate limits, caches. */
+    private const SKIP_DATA = ['sessions', 'password_resets', 'rate_limits', 'login_attempts', 'google_busy_cache', 'google_oauth_states', 'telegram_link_codes'];
+    /** Far beyond any booking site's database; stops a tiny gzip from expanding without end. */
+    private const MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024;
+    /** One INSERT stays well under MySQL's default max_allowed_packet (4–64 MB). */
+    private const MAX_INSERT_BYTES = 512 * 1024;
     private const PAGE = 1000;
+    /** Copies kept of each automatic kind ("before-restore", "before-reset"). */
     private const SAFETY_COPIES = 5;
 
     public function __construct(
@@ -41,13 +46,26 @@ final class Backup
     public function create(string $label = 'backup'): string
     {
         $this->ensureDirectory();
-        $path = sprintf('%s/consultdesk-%s-%s.sql.gz', $this->directory, $label, $this->clock->now()->format('Ymd-His'));
-        $gz = gzopen($path, 'wb6') ?: throw new RuntimeException('Could not write the backup file.');
+        $path = sprintf('%s/consultdesk-%s-%s-%s.sql.gz', $this->directory, $label, $this->clock->now()->format('Ymd-His'), bin2hex(random_bytes(2)));
+        $umask = umask(0o077);
+        $gz = gzopen($path, 'wb6');
+        umask($umask);
+        if ($gz === false) {
+            throw new RuntimeException('Could not write the backup file.');
+        }
         $hmac = hash_init('sha256', HASH_HMAC, $this->signingKey());
-        $write = static function (string $line) use ($gz, $hmac): void {
-            hash_update($hmac, $line . "\n");
-            gzwrite($gz, $line . "\n");
+        $put = static function (string $text) use ($gz): void {
+            if (gzwrite($gz, $text) !== strlen($text)) {
+                throw new RuntimeException('Could not write the backup file (is the disk full?).');
+            }
         };
+        $write = static function (string $line) use ($put, $hmac): void {
+            hash_update($hmac, $line . "\n");
+            $put($line . "\n");
+        };
+        // One consistent snapshot: bookings made while the backup runs can't half-appear in it.
+        $this->pdo->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        $this->pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
         try {
             $write('-- ' . self::FORMAT);
             $write('-- version: ' . Version::CURRENT);
@@ -58,11 +76,24 @@ final class Backup
                 $this->dumpTable($table, $write);
             }
             $write('SET FOREIGN_KEY_CHECKS = 1;');
-            gzwrite($gz, self::SIGNATURE_PREFIX . hash_final($hmac) . "\n");
+            $put(self::SIGNATURE_PREFIX . hash_final($hmac) . "\n");
+            if (!gzclose($gz)) {
+                throw new RuntimeException('Could not finish the backup file (is the disk full?).');
+            }
+        } catch (\Throwable $e) {
+            if (is_resource($gz)) {
+                gzclose($gz);
+            }
+            if (is_file($path)) {
+                unlink($path);
+            }
+            throw $e;
         } finally {
-            gzclose($gz);
+            $this->pdo->exec('COMMIT');
         }
-        chmod($path, 0o600);
+        if ($label !== 'backup') {
+            $this->keepNewest($label, self::SAFETY_COPIES);
+        }
 
         return $path;
     }
@@ -79,10 +110,26 @@ final class Backup
     {
         $this->verify($path);
         $safety = $this->create('before-restore');
-        $this->keepNewest('before-restore', self::SAFETY_COPIES);
+        try {
+            $this->load($path);
+            $this->migrator->migrate();
+        } catch (\Throwable $e) {
+            // MySQL can't roll back DDL, so put the previous database back from the safety copy.
+            $this->load($safety);
+            throw new RuntimeException('The restore failed part-way, so the previous data was put back: ' . $e->getMessage(), 0, $e);
+        }
+
+        return $safety;
+    }
+
+    /**
+     * Drops every table, then runs the (verified) backup's statements.
+     */
+    private function load(string $path): void
+    {
         $gz = gzopen($path, 'rb') ?: throw new InvalidBackup('The backup file could not be read.');
         try {
-            // Tables newer than the backup go too, so the migrations below can recreate them cleanly.
+            // Tables newer than the backup go too, so the migrations afterwards recreate them cleanly.
             $this->pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
             foreach ($this->tables() as $table) {
                 $this->pdo->exec('DROP TABLE ' . self::identifier($table));
@@ -97,9 +144,6 @@ final class Backup
             gzclose($gz);
             $this->pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
         }
-        $this->migrator->migrate();
-
-        return $safety;
     }
 
     /**
@@ -117,8 +161,13 @@ final class Backup
         $signature = null;
         $schema = null;
         $first = true;
+        $bytes = 0;
         try {
             while (($line = gzgets($gz)) !== false) {
+                $bytes += strlen($line);
+                if ($bytes > self::MAX_UNPACKED_BYTES) {
+                    throw new InvalidBackup('This file is far too large to be a backup of this site.');
+                }
                 if (str_starts_with($line, self::SIGNATURE_PREFIX)) {
                     $signature = trim(substr($line, strlen(self::SIGNATURE_PREFIX)));
                     break;
@@ -164,15 +213,38 @@ final class Backup
         $order = $this->primaryKey($table);
         for ($offset = 0; ; $offset += self::PAGE) {
             $rows = $this->run(sprintf('SELECT * FROM %s%s LIMIT %d OFFSET %d', $name, $order === '' ? '' : ' ORDER BY ' . $order, self::PAGE, $offset))->fetchAll(PDO::FETCH_ASSOC);
-            foreach (array_chunk($rows, self::ROWS_PER_INSERT) as $chunk) {
-                $columns = implode(', ', array_map(static fn(int|string $c): string => self::identifier((string) $c), array_keys($chunk[0])));
-                $values = implode(', ', array_map(fn(array $row): string => '(' . implode(', ', array_map($this->literal(...), $row)) . ')', $chunk));
-                $write(sprintf('INSERT INTO %s (%s) VALUES %s;', $name, $columns, $values));
-            }
+            $this->writeInserts($name, $rows, $write);
             if (count($rows) < self::PAGE) {
                 return;
             }
         }
+    }
+
+    /**
+     * Rows as INSERT statements of at most MAX_INSERT_BYTES each (a single huge row gets its own).
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param callable(string): void     $write
+     */
+    private function writeInserts(string $name, array $rows, callable $write): void
+    {
+        if ($rows === []) {
+            return;
+        }
+        $prefix = sprintf('INSERT INTO %s (%s) VALUES ', $name, implode(', ', array_map(static fn(int|string $c): string => self::identifier((string) $c), array_keys($rows[0]))));
+        $batch = [];
+        $size = 0;
+        foreach ($rows as $row) {
+            $tuple = '(' . implode(', ', array_map($this->literal(...), $row)) . ')';
+            if ($batch !== [] && $size + strlen($tuple) > self::MAX_INSERT_BYTES) {
+                $write($prefix . implode(', ', $batch) . ';');
+                $batch = [];
+                $size = 0;
+            }
+            $batch[] = $tuple;
+            $size += strlen($tuple) + 2;
+        }
+        $write($prefix . implode(', ', $batch) . ';');
     }
 
     private function literal(mixed $value): string

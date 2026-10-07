@@ -9,7 +9,8 @@ function save(blob: Blob, filename: string): void {
   link.href = url;
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
+  // Some browsers cancel the download if the URL goes away in the same tick.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function useDownloadBackup() {

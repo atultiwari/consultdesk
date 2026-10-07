@@ -49,7 +49,7 @@ final class BackupTest extends AdminTestCase
         $response = $this->admin('POST', '/api/admin/system/backup', ['password' => $this->password])[2];
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('application/gzip', $response->getHeaderLine('Content-Type'));
-        self::assertMatchesRegularExpression('/attachment; filename="consultdesk-backup-\d{8}-\d{6}\.sql\.gz"/', $response->getHeaderLine('Content-Disposition'));
+        self::assertMatchesRegularExpression('/attachment; filename="consultdesk-backup-\d{8}-\d{6}-[0-9a-f]{4}\.sql\.gz"/', $response->getHeaderLine('Content-Disposition'));
         $sql = (string) gzdecode((string) $response->getBody());
         self::assertStringStartsWith("-- consultdesk-backup 1\n", $sql);
         self::assertStringContainsString("'Kept Teacher'", $sql);
@@ -102,6 +102,35 @@ final class BackupTest extends AdminTestCase
 
         $arbitrary = (string) gzencode("-- consultdesk-backup 1\nDROP TABLE providers;\n-- signature: " . str_repeat('0', 64) . "\n");
         self::assertSame(422, $this->restore($arbitrary, $this->password, 'RESTORE')->getStatusCode());
+        self::assertSame(['Kept Teacher'], self::column($this->pdo, 'SELECT name FROM providers'));
+    }
+
+    public function testWrongPasswordsLockBackupsForTheAccountAndAreRecorded(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+
+        for ($i = 0; $i < 5; $i++) {
+            self::assertSame(422, $this->admin('POST', '/api/admin/system/backup', ['password' => 'wrong-guess-' . $i])[0]);
+        }
+        self::assertSame(429, $this->admin('POST', '/api/admin/system/backup', ['password' => $this->password])[0], 'even the right one, once locked');
+        self::assertSame(['5'], self::column($this->pdo, "SELECT COUNT(*) FROM audit_log WHERE action = 'admin.reauth_failed'"));
+    }
+
+    public function testARestoreThatFailsPartWayPutsThePreviousDataBack(): void
+    {
+        $this->createUser('owner@example.test');
+        Fixtures::provider($this->pdo, ['slug' => 'kept', 'name' => 'Kept Teacher']);
+        $this->login('owner@example.test');
+        $body = "-- consultdesk-backup 1\n-- schema: \nSET FOREIGN_KEY_CHECKS = 0;\nTHIS IS NOT SQL;\n";
+        $key = hash_hmac('sha256', 'consultdesk-backup-signing', str_repeat('t', 32), true);
+        $signed = (string) gzencode($body . '-- signature: ' . hash_hmac('sha256', $body, $key) . "\n");
+
+        $response = $this->restore($signed, $this->password, 'RESTORE');
+        self::invalidateSchema();
+
+        self::assertSame(500, $response->getStatusCode());
+        self::assertSame('restore_failed', json_decode((string) $response->getBody(), true)['error']['code'] ?? null);
         self::assertSame(['Kept Teacher'], self::column($this->pdo, 'SELECT name FROM providers'));
     }
 

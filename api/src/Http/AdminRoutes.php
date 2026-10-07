@@ -80,7 +80,7 @@ final class AdminRoutes
             $pdo(),
             $services->config->appUrl,
         );
-        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords());
+        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter());
         $id = self::ID;
 
         $admin->get('/dashboard', static fn($rq, $rs) => $bookings()->dashboard($rq, $rs));

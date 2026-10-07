@@ -266,7 +266,10 @@ Everyone can change their own name and password, and link their own Telegram, un
 password and `RESTORE`. Restoring signs everyone out and first saves what was there to
 `storage/backups/` (the last five are kept). Only backups made by the same site restore: each one is
 signed with a key derived from `APP_KEY`, and saved Razorpay secrets inside it stay encrypted with
-that key, so keep `APP_KEY` with your backups. From the shell: `php bin/backup.php [--out=FILE]`
+that key, so keep `APP_KEY` with your backups. A backup still holds customers' details and
+password hashes, so store it as carefully as the site itself. Restore onto the same kind of
+database server (MySQL or MariaDB) it came from. If a restore fails part-way, the previous data is
+put back automatically. Five wrong passwords in an hour lock backups for that account for the hour. From the shell: `php bin/backup.php [--out=FILE]`
 and `php bin/restore.php FILE`.
 
 **System** also shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
