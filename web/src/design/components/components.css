@@ -342,3 +342,13 @@ textarea.input {
 .phone-input__number {
   min-width: 0;
 }
+
+@media (max-width: 400px) {
+  .phone-input {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .phone-input__country {
+    grid-column: 1 / -1;
+  }
+}

@@ -143,7 +143,7 @@ final class Input
         }
         // E.164: a country code that doesn't start with 0, and at most 15 digits in all.
         if (preg_match('/^\+[1-9][0-9]{7,14}$/', $compact) !== 1) {
-            return $this->fail($field, 'Choose the country code and enter the number, e.g. +91 98765 43210.');
+            return $this->fail($field, 'Choose the country, then enter the number, e.g. +91 98765 43210.');
         }
 
         return $compact;

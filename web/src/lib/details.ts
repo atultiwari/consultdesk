@@ -49,10 +49,7 @@ export function buildDetailsSchema(questions: Question[]) {
       .max(120, 'Must be at most 120 characters.')
       .refine((v) => !NAME_FORBIDDEN.test(v), 'Enter just your name.'),
     email: z.string().trim().pipe(z.email('Enter a valid email address.')),
-    phone: z
-      .string()
-      .trim()
-      .refine(isPossiblePhone, 'Choose your country and enter your WhatsApp number.'),
+    phone: z.string().trim().refine(isPossiblePhone, 'Choose the country, then enter the number.'),
     answers: z.object(Object.fromEntries(questions.map((q) => [q.id, answerSchema(q)]))),
   });
 }

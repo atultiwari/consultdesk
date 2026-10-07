@@ -21,12 +21,22 @@ function flagOf(code: string): string {
 
 let cache: Country[] | null = null;
 
+/** Country names from the browser; just the code where Intl.DisplayNames isn't available. */
+function regionNamer(): (code: string) => string {
+  try {
+    const names = new Intl.DisplayNames(['en'], { type: 'region' });
+    return (code) => names.of(code) ?? code;
+  } catch {
+    return (code) => code;
+  }
+}
+
 export function countries(): Country[] {
   if (cache) return cache;
-  const names = new Intl.DisplayNames(['en'], { type: 'region' });
+  const name = regionNamer();
   const all = getCountries().map((code) => ({
     code,
-    name: names.of(code) ?? code,
+    name: name(code),
     dial: getCountryCallingCode(code),
     flag: flagOf(code),
   }));
