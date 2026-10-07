@@ -1525,3 +1525,14 @@
 .site-mode {
   margin: -0.75rem 0 1.25rem;
 }
+
+/* ---------- System → Backups ---------- */
+.backup {
+  margin-top: 1.5rem;
+  max-width: 42rem;
+}
+
+.backup__title {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+}

@@ -1,6 +1,7 @@
 import { Button } from '../design/components/Button';
 import { Badge, Loading, Notice } from '../design/components/Notice';
 import { visitorTimezone } from '../lib/time';
+import { BackupPanel } from './BackupPanel';
 import { formatWhen } from './format';
 import { useSystem, useSystemAction } from './settingsHooks';
 
@@ -21,6 +22,14 @@ export function SystemPage() {
       {system.isError && (
         <Notice tone="danger" live>
           {system.error.message}
+        </Notice>
+      )}
+      {s?.warnings?.includes('owner_password_in_env') && (
+        <Notice tone="warn" title="OWNER_PASSWORD is still set">
+          <p>
+            The owner’s password is in the server’s .env (or config.php). It’s handy for resetting a
+            test site, but on a real site remove it now that the owner exists.
+          </p>
         </Notice>
       )}
       {s && (
@@ -101,6 +110,7 @@ export function SystemPage() {
           </section>
         </div>
       )}
+      {s && <BackupPanel />}
     </div>
   );
 }

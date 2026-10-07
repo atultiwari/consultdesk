@@ -18,4 +18,7 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/api/public
 RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf \
     && printf '<Directory /var/www/api/public>\n    AllowOverride All\n</Directory>\n' > /etc/apache2/conf-enabled/consultdesk.conf
 
+# Room for restoring a backup and uploading photos (Hostinger's defaults are similar).
+RUN printf 'upload_max_filesize=64M\npost_max_size=64M\nmemory_limit=256M\n' > /usr/local/etc/php/conf.d/consultdesk.ini
+
 WORKDIR /var/www/api

@@ -176,7 +176,24 @@ site's code. Choose something unguessable, and don't link to it from public page
 
 ### First owner
 
-Create the first account from the server's shell (the installer will do this in Phase 8):
+Like WordPress, a site with no accounts yet asks for the owner the first time anyone opens
+`https://<your-booking-site>/<ADMIN_PATH>`: **Create your owner account** (name, email, a password of
+at least 10 characters). The owner is signed in and taken straight to **Set up your site**. The form
+disappears for good once an account exists.
+
+Two optional settings in `.env` (or `config.php`):
+
+| Setting | What it does |
+|---|---|
+| `OWNER_EMAIL`, `OWNER_NAME` | Fill in the form, so you only type the password. |
+| `OWNER_PASSWORD` (with `OWNER_EMAIL`) | Creates the owner automatically on an empty database: handy when you reset a test site often. **System** reminds you to remove it on a real site. |
+| `SETUP_KEY` | The form also asks for this key, so nobody else can claim a freshly uploaded site first. |
+
+`php bin/install.php` applies database updates and creates the owner from `.env` when it can; on
+your own computer, `php bin/install.php --fresh` backs up and then empties the database to start
+again (it refuses on a real `https://` site).
+
+You can also create accounts from the server's shell:
 
 ```bash
 php bin/user.php create --email=you@example.com --role=owner --name="Your Name"
@@ -244,7 +261,18 @@ Everyone can change their own name and password, and link their own Telegram, un
 
 ### System
 
-**System** shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
+**System → Backups** downloads a backup of everything (bookings, teachers, sessions, settings) as a
+`.sql.gz` file, after you type your password again, and restores one: choose the file, type your
+password and `RESTORE`. Restoring signs everyone out and first saves what was there to
+`storage/backups/` (the last five are kept). Only backups made by the same site restore: each one is
+signed with a key derived from `APP_KEY`, and saved Razorpay secrets inside it stay encrypted with
+that key, so keep `APP_KEY` with your backups. A backup still holds customers' details and
+password hashes, so store it as carefully as the site itself. Restore onto the same kind of
+database server (MySQL or MariaDB) it came from. If a restore fails part-way, the previous data is
+put back automatically. Five wrong passwords in an hour lock backups for that account for the hour. From the shell: `php bin/backup.php [--out=FILE]`
+and `php bin/restore.php FILE`.
+
+**System** also shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
 (with **Retry failed jobs**), the version, and any database updates waiting after an upgrade, with a
 **Run database updates** button. Take a backup before running updates. Sign-in keeps working while an
 update is waiting, so you can always reach this page after uploading a new version (or run
@@ -297,6 +325,17 @@ payment goes through.
    Secret; Razorpay shows the secret only once.
 
 ### 2. Add them to ConsultDesk
+
+**Either** put them in `.env` (or `config.php`), where they survive a database reset:
+
+```
+RAZORPAY_KEY_ID=rzp_test_…
+RAZORPAY_KEY_SECRET=…
+RAZORPAY_WEBHOOK_SECRET=…   # any 16+ characters; type the same into the Razorpay webhook (step 3)
+```
+
+The Payments page then shows them as "from the server's .env file". **Or** save them on the
+Payments page as below. Keys saved there win over `.env`; removing them goes back to the `.env` keys.
 
 In the admin panel, **Payments → Razorpay (organisation account)**: paste the Key ID and Key
 Secret and **Save keys**. ConsultDesk stores the secret encrypted, then shows:

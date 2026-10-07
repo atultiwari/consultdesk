@@ -34,7 +34,7 @@ export default function AdminGate({ notFound }: { notFound: ReactNode }) {
         </div>
       }
     >
-      <AdminApp segment={segment} />
+      <AdminApp segment={segment} firstRun={entry.data.first_run === true ? entry.data : null} />
     </Suspense>
   );
 }

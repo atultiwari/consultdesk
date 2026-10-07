@@ -1,7 +1,9 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import { ApiError, apiFetch } from '../api/client';
 import { adminFetch, adminRequest, rememberCsrf } from './api';
 import type {
+  AdminEntry,
   AdminProvider,
   AdminService,
   AdminSession,
@@ -50,7 +52,7 @@ export async function signedOut(client: QueryClient): Promise<void> {
 export function useAdminEntry(segment: string, enabled: boolean) {
   return useQuery({
     queryKey: ['admin-entry', segment],
-    queryFn: ({ signal }) => apiFetch<{ ok: true }>(`/admin/entry/${segment}`, { signal }),
+    queryFn: ({ signal }) => apiFetch<AdminEntry>(`/admin/entry/${segment}`, { signal }),
     enabled,
     retry: noRetryOnClientError,
     staleTime: Infinity,
@@ -82,6 +84,31 @@ export function useLogin(segment: string) {
       rememberCsrf(session.csrf_token);
       forgetAdminData(client);
       client.setQueryData(adminKeys.me, session);
+    },
+  });
+}
+
+export type FirstOwner = { name: string; email: string; password: string; setup_key?: string };
+
+/**
+ * Creates the owner on a site with no accounts yet; the new owner is signed in and taken to
+ * "Set up your site". (Navigating here, not in the form: the form unmounts once signed in.)
+ */
+export function useFirstRun(segment: string) {
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  return useMutation({
+    mutationFn: (owner: FirstOwner) =>
+      apiFetch<AdminSession>('/admin/first-run', {
+        method: 'POST',
+        json: { path: segment, ...owner },
+      }),
+    onSuccess: async (session) => {
+      rememberCsrf(session.csrf_token);
+      forgetAdminData(client);
+      client.setQueryData(adminKeys.me, session);
+      await navigate(`/${segment}/setup`);
+      await client.invalidateQueries({ queryKey: ['admin-entry', segment] });
     },
   });
 }

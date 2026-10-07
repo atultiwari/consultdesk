@@ -46,6 +46,20 @@ final class RateLimiter
     }
 
     /**
+     * Whether this subject is already over the limit in the current window, without counting a hit.
+     */
+    public function exceeded(string $bucket, string $subject, int $limit, int $windowSeconds): bool
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $statement = $this->pdo->prepare(
+            'SELECT hits FROM rate_limits WHERE bucket = :bucket AND subject = :subject AND window_start = :window_start',
+        );
+        $statement->execute($this->key($bucket, $subject, $now - ($now % $windowSeconds)));
+
+        return (int) $statement->fetchColumn() >= $limit;
+    }
+
+    /**
      * Deletes counters for windows that ended more than a day ago.
      */
     public function prune(): int

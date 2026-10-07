@@ -127,6 +127,7 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
   const [replacing, setReplacing] = useState(false);
   const [asking, setAsking] = useState(false);
   const r = settings.razorpay;
+  const fromEnv = r.source === 'env';
   const freshSecret = save.data?.razorpay.webhook_secret ?? rotate.data?.razorpay.webhook_secret;
   const problem = [check, rotate, remove, offer].find((m) => m.isError)?.error;
 
@@ -145,6 +146,19 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
             </Badge>{' '}
             Key ID <span className="mono">{r.key_id}</span>
           </p>
+          {fromEnv ? (
+            <p className="hint">
+              These keys come from the server’s .env file, so they survive a database reset. Save
+              other keys here to use those instead.
+            </p>
+          ) : (
+            r.env_key_id && (
+              <p className="hint">
+                Saved here, so they’re used instead of the keys in the server’s .env file (
+                <span className="mono">{r.env_key_id}</span>). Removing them goes back to those.
+              </p>
+            )
+          )}
           {check.isSuccess && (
             <Notice tone="success" live>
               Razorpay accepted these keys.
@@ -179,13 +193,19 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
             <Button variant="secondary" onClick={() => check.mutate()} disabled={check.isPending}>
               Check connection
             </Button>
-            <Button variant="secondary" onClick={() => rotate.mutate()} disabled={rotate.isPending}>
-              New webhook secret
-            </Button>
+            {!fromEnv && (
+              <Button
+                variant="secondary"
+                onClick={() => rotate.mutate()}
+                disabled={rotate.isPending}
+              >
+                New webhook secret
+              </Button>
+            )}
             <Button variant="ghost" onClick={() => setReplacing(true)}>
-              Replace keys
+              {fromEnv ? 'Use other keys' : 'Replace keys'}
             </Button>
-            {asking ? (
+            {fromEnv ? null : asking ? (
               <>
                 <Button
                   className="btn--danger"

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Infra;
 
+use ConsultDesk\Admin\OwnerDefaults;
 use ConsultDesk\Calendar\GoogleConfig;
+use ConsultDesk\Payments\Razorpay\RazorpayCredentials;
+use ConsultDesk\Payments\Razorpay\RazorpayEnvKeys;
 use ConsultDesk\Telegram\TelegramConfig;
 use InvalidArgumentException;
 
@@ -16,6 +19,7 @@ final class Config
 {
     private const APP_KEY_PREFIX = 'base64:';
     private const MIN_CRON_KEY_LENGTH = 32;
+    private const MIN_SETUP_KEY_LENGTH = 16;
     /** The throwaway value in docker-compose.yml; a public site must never run with it. */
     private const LOCAL_DEV_SECRETS = [
         'CRON_KEY' => 'local-dev-cron-key-not-secret-0000',
@@ -39,6 +43,15 @@ final class Config
         public readonly ?string $adminPath = null,
         /** Where uploaded images live: outside the web root, served by GET /api/media/{name}. */
         public readonly string $mediaPath = '',
+        /** Where safety backups are kept: outside the web root. */
+        public readonly string $backupPath = '',
+        /** The organisation's default Razorpay keys; keys saved in the admin panel override them. */
+        public readonly ?RazorpayCredentials $razorpay = null,
+        /** The first owner's details, used on a fresh install. */
+        public readonly ?OwnerDefaults $owner = null,
+        /** When set, the first-run "create the owner" form also asks for this key. */
+        #[\SensitiveParameter]
+        public readonly ?string $setupKey = null,
     ) {}
 
     /**
@@ -114,7 +127,23 @@ final class Config
             google: GoogleConfig::fromValues($v, $appUrl),
             adminPath: self::adminPath($v['ADMIN_PATH'] ?? '', $appUrl),
             mediaPath: rtrim(($v['MEDIA_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/media' : $v['MEDIA_PATH'], '/'),
+            backupPath: rtrim(($v['BACKUP_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/backups' : $v['BACKUP_PATH'], '/'),
+            razorpay: RazorpayEnvKeys::fromValues($v),
+            owner: OwnerDefaults::fromValues($v),
+            setupKey: self::setupKey($v['SETUP_KEY'] ?? ''),
         );
+    }
+
+    private static function setupKey(#[\SensitiveParameter] string $value): ?string
+    {
+        if ($value === '') {
+            return null;
+        }
+        if (strlen($value) < self::MIN_SETUP_KEY_LENGTH || preg_match('/\s/', $value) === 1) {
+            throw new InvalidArgumentException(sprintf('SETUP_KEY must be at least %d characters without spaces.', self::MIN_SETUP_KEY_LENGTH));
+        }
+
+        return $value;
     }
 
     /**

@@ -56,6 +56,53 @@ describe('admin sign-in', () => {
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
+  it('creates the owner on a brand-new site, then goes to "Set up your site"', async () => {
+    let created = false;
+    const calls = mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/admin/entry/desk-7q2x-placeholder': () =>
+        ok({
+          ok: true,
+          first_run: !created,
+          owner: { email: 'owner@example.test', name: null },
+          needs_setup_key: true,
+        }),
+      'GET /api/admin/me': () =>
+        created ? session() : fail(401, 'unauthenticated', 'Please sign in again.'),
+      'POST /api/admin/first-run': () => {
+        created = true;
+        return session();
+      },
+      'GET /api/admin/setup': ok({
+        mode: null,
+        completed: false,
+        provider: null,
+        template_sets: [],
+      }),
+    });
+    const user = userEvent.setup();
+    renderAt(ADMIN);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Create your owner account' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveValue('owner@example.test');
+    await user.type(screen.getByLabelText('Your name'), 'Site Owner');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.type(screen.getByLabelText('Setup key'), 'setup-key-placeholder');
+    await user.click(screen.getByRole('button', { name: 'Create owner account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Set up your site' })).toBeInTheDocument();
+    expect(path()).toBe(`${ADMIN}/setup`);
+    expect(calls.find((c) => c.path === '/api/admin/first-run')?.body).toEqual({
+      path: 'desk-7q2x-placeholder',
+      name: 'Site Owner',
+      email: 'owner@example.test',
+      password: 'correct horse battery',
+      setup_key: 'setup-key-placeholder',
+    });
+  });
+
   it('explains a failed sign-in', async () => {
     mockApi({
       ...signedOut,

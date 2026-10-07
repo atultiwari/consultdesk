@@ -6,6 +6,7 @@ namespace ConsultDesk\Bootstrap;
 
 use ConsultDesk\Admin\AdminUsers;
 use ConsultDesk\Admin\AuthService;
+use ConsultDesk\Admin\FirstRun;
 use ConsultDesk\Admin\InviteEmailHandler;
 use ConsultDesk\Admin\LoginThrottle;
 use ConsultDesk\Admin\PasswordResetEmailHandler;
@@ -40,6 +41,7 @@ use ConsultDesk\Domain\Catalog\PdoCatalog;
 use ConsultDesk\Http\AdminCookie;
 use ConsultDesk\Http\ClientIp;
 use ConsultDesk\Infra\AuditLog;
+use ConsultDesk\Infra\Backup;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Config;
 use ConsultDesk\Infra\Crypto;
@@ -197,7 +199,7 @@ final class AppServices
 
     public function gatewayKeys(): GatewayKeys
     {
-        return new GatewayKeys($this->pdo(), $this->crypto(), $this->clock);
+        return new GatewayKeys($this->pdo(), $this->crypto(), $this->clock, $this->config->razorpay);
     }
 
     public function razorpayApi(): RazorpayApi
@@ -232,7 +234,7 @@ final class AppServices
 
     public function systemStatus(): SystemStatus
     {
-        return new SystemStatus($this->pdo(), $this->settings(), $this->migrator(), $this->clock);
+        return new SystemStatus($this->pdo(), $this->settings(), $this->migrator(), $this->clock, $this->config->owner?->password !== null);
     }
 
     public function telegramLinks(): TelegramLinks
@@ -243,6 +245,16 @@ final class AppServices
     public function userDirectory(): UserDirectory
     {
         return new UserDirectory($this->pdo(), $this->clock);
+    }
+
+    public function backup(): Backup
+    {
+        return new Backup($this->pdo(), $this->config->appKey, $this->migrator(), $this->clock, $this->config->backupPath);
+    }
+
+    public function firstRun(): FirstRun
+    {
+        return new FirstRun($this->pdo(), $this->adminUsers(), new Passwords(), $this->auditLog(), $this->config->owner, $this->config->setupKey);
     }
 
     public function auditLog(): AuditLog
