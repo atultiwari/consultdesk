@@ -29,6 +29,22 @@ describe('status page', () => {
     expect(screen.getByText('placeholder@upi')).toBeInTheDocument();
   });
 
+  it('shows the coupon that lowered the fee', async () => {
+    mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/bookings/CD-7F3K': ok({
+        ...heldBooking,
+        coupon_code: 'WELCOME20',
+        discount_minor: 59900,
+        discount_display: '₹599',
+      }),
+    });
+    renderAt('/b/CD-7F3K?t=tok');
+
+    expect(await screen.findByText('WELCOME20')).toBeInTheDocument();
+    expect(screen.getByText(/saved you ₹599/)).toBeInTheDocument();
+  });
+
   it('warns in the last ten minutes', async () => {
     vi.setSystemTime(new Date('2026-10-05T00:55:00Z'));
     mockApi({ 'GET /api/site': ok(site), 'GET /api/bookings/CD-7F3K': ok(heldBooking) });

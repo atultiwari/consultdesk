@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
 import type {
   BookingView,
+  CouponQuote,
   CreatedBooking,
   NewBooking,
   ProviderDetail,
@@ -55,6 +56,15 @@ export function useSlots(provider: string, service: string, from: string, to: st
       ),
     staleTime: 30_000,
     placeholderData: (previous) => previous,
+  });
+}
+
+export type CouponCheck = { provider: string; service: string; code: string; email?: string };
+
+export function useCheckCoupon() {
+  return useMutation({
+    mutationFn: (check: CouponCheck) =>
+      apiFetch<CouponQuote>('/coupons/check', { method: 'POST', json: check }),
   });
 }
 

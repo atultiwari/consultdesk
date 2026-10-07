@@ -2,9 +2,16 @@ import type { ProviderProfile, Service } from '../api/types';
 import type { Slot } from '../lib/time';
 import { formatLongDateTime, formatTime } from '../lib/time';
 
-type Props = { provider: ProviderProfile; service: Service; slot: Slot | null; timezone: string };
+type Props = {
+  provider: ProviderProfile;
+  service: Service;
+  slot: Slot | null;
+  timezone: string;
+  /** The price after a coupon, when one is applied. */
+  price?: string;
+};
 
-function Rows({ provider, service, slot, timezone }: Props) {
+function Rows({ provider, service, slot, timezone, price }: Props) {
   return (
     <dl className="summary__rows">
       <div>
@@ -25,7 +32,15 @@ function Rows({ provider, service, slot, timezone }: Props) {
       </div>
       <div>
         <dt>Price</dt>
-        <dd>{service.price_display}</dd>
+        <dd>
+          {price && price !== service.price_display ? (
+            <>
+              <s className="summary__was">{service.price_display}</s> {price}
+            </>
+          ) : (
+            service.price_display
+          )}
+        </dd>
       </div>
     </dl>
   );
@@ -47,7 +62,7 @@ export function BookingSummary(props: Props) {
             {props.slot
               ? formatLongDateTime(props.slot.start, props.timezone)
               : `${props.service.duration_minutes} min`}{' '}
-            · {props.service.price_display}
+            · {props.price ?? props.service.price_display}
           </span>
         </summary>
         <Rows {...props} />

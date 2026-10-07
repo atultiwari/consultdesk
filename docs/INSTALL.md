@@ -295,6 +295,23 @@ updates to run from the web.
 - Changes to a provider's UPI ID, payee name, notification email or WhatsApp number are recorded with
   their old and new values.
 
+## Coupons
+
+**Coupons** in the admin panel makes discount codes customers type at **Review & pay** (behind a
+small "Have a coupon?" link):
+
+- **% off or ₹ off**: percentages take whole rupees off (20% of ₹999 is ₹199); a coupon never takes
+  the price below ₹0. A coupon that makes a session free turns the booking into a free one:
+  confirmed at once, or sent for approval if the session needs it.
+- **Who it's for:** owners and admins make site-wide coupons or ones for one teacher; a teacher makes
+  coupons for their own sessions only and sees the site-wide ones without being able to change them.
+  Either can be limited to some sessions.
+- **Limits:** optional start and end dates, a total number of uses, and once per customer (email).
+  A booking that lapses, is cancelled or is rejected gives its use back. Two customers can't take
+  the last use at the same moment.
+- Turn a coupon off to pause it; deleting it doesn't change bookings that already used it (they keep
+  the code and the discount).
+
 ## How long slots are held
 
 | Situation | Slot held for |

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { keys, useCreateBooking, useProvider } from '../api/hooks';
-import type { PaymentMethod } from '../api/types';
+import type { CouponQuote, PaymentMethod } from '../api/types';
 import { Button } from '../design/components/Button';
 import { Loading, Notice } from '../design/components/Notice';
 import { Stepper } from '../design/components/Stepper';
@@ -11,6 +11,7 @@ import { formFieldForApiField, type DetailsValues } from '../lib/details';
 import type { Slot } from '../lib/time';
 import { formatLongDateTime, visitorTimezone } from '../lib/time';
 import { BookingSummary } from './BookingSummary';
+import { CouponBox } from './CouponBox';
 import { DateSlotPicker } from './DateSlotPicker';
 import { DetailsForm } from './DetailsForm';
 import './booking.css';
@@ -49,6 +50,7 @@ export default function BookingPage() {
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [honeypot, setHoneypot] = useState('');
+  const [coupon, setCoupon] = useState<CouponQuote | null>(null);
 
   if (query.isPending) {
     return (
@@ -68,7 +70,10 @@ export default function BookingPage() {
     );
   }
   const { provider } = query.data;
+  // A full discount makes it free: no payment step, whatever the session normally takes.
+  const freeWithCoupon = coupon !== null && coupon.total_minor === 0;
   const chosenMethod = method ?? service.payment_methods[0] ?? null;
+  const priceDisplay = coupon ? coupon.total_display : service.price_display;
 
   const goTo = (next: number) => {
     setProblem(null);
@@ -88,6 +93,7 @@ export default function BookingPage() {
         customer: { name: details.name, email: details.email, phone: details.phone, timezone },
         answers: details.answers,
         website: honeypot,
+        ...(coupon ? { coupon: coupon.code } : {}),
       },
       {
         onSuccess: (created) => {
@@ -102,6 +108,12 @@ export default function BookingPage() {
             void client.invalidateQueries({ queryKey: ['slots', provider.slug, service.slug] });
             setStep(0);
             return setProblem(`${error.message} Please pick another time.`);
+          }
+          if (error.fields.coupon) {
+            setCoupon(null);
+            return setProblem(
+              `${error.fields.coupon} The coupon was removed; you can book without it.`,
+            );
           }
           const fieldErrors = Object.fromEntries(
             Object.entries(error.fields).flatMap(([apiField, message]) => {
@@ -184,7 +196,21 @@ export default function BookingPage() {
                 We'll email {details.email}.
               </p>
 
-              {service.payment_methods.length > 1 ? (
+              {service.price_minor > 0 && (
+                <CouponBox
+                  provider={provider.slug}
+                  service={service.slug}
+                  email={details.email}
+                  applied={coupon}
+                  onChange={setCoupon}
+                />
+              )}
+
+              {freeWithCoupon ? (
+                <p className="method-single">
+                  <span className="eyebrow">Payment</span> No payment needed with this coupon
+                </p>
+              ) : service.payment_methods.length > 1 ? (
                 <fieldset className="methods">
                   <legend className="field__label">How would you like to pay?</legend>
                   {service.payment_methods.map((m) => (
@@ -210,16 +236,16 @@ export default function BookingPage() {
                 </Notice>
               )}
 
-              {chosenMethod === 'upi' && (
+              {!freeWithCoupon && chosenMethod === 'upi' && (
                 <Notice tone="info" title="What happens next">
                   Your time is held for 30 minutes while you pay. On the next page you'll see the
-                  UPI details; pay {service.price_display} once, then enter the 12-digit UTR from
-                  your UPI app.
+                  UPI details; pay {priceDisplay} once, then enter the 12-digit UTR from your UPI
+                  app.
                 </Notice>
               )}
-              {chosenMethod === 'razorpay_link' && (
+              {!freeWithCoupon && chosenMethod === 'razorpay_link' && (
                 <Notice tone="info" title="What happens next">
-                  Your time is held for 30 minutes. On the next page, pay {service.price_display} on
+                  Your time is held for 30 minutes. On the next page, pay {priceDisplay} on
                   Razorpay's secure page; your booking is confirmed as soon as the payment goes
                   through.
                 </Notice>
@@ -247,8 +273,9 @@ export default function BookingPage() {
                 <Button onClick={submit} disabled={create.isPending || !chosenMethod} large>
                   {create.isPending
                     ? 'Booking…'
-                    : chosenMethod === 'upi' || chosenMethod === 'razorpay_link'
-                      ? `Book and pay ${service.price_display}`
+                    : !freeWithCoupon &&
+                        (chosenMethod === 'upi' || chosenMethod === 'razorpay_link')
+                      ? `Book and pay ${priceDisplay}`
                       : service.requires_approval
                         ? 'Send request'
                         : 'Confirm booking'}
@@ -258,7 +285,13 @@ export default function BookingPage() {
           )}
         </section>
 
-        <BookingSummary provider={provider} service={service} slot={slot} timezone={timezone} />
+        <BookingSummary
+          provider={provider}
+          service={service}
+          slot={slot}
+          timezone={timezone}
+          price={priceDisplay}
+        />
       </div>
     </div>
   );
