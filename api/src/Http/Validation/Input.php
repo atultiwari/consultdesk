@@ -50,11 +50,11 @@ final class Input
     /**
      * A password or similar: taken exactly as sent, spaces included.
      */
-    public function secret(string $field, int $max = 255): ?string
+    public function secret(string $field, int $max = 255, bool $required = true): ?string
     {
         $value = $this->raw($field);
         if ($value === null || $value === '') {
-            return $this->missing($field, true);
+            return $this->missing($field, $required);
         }
         if (!is_string($value)) {
             return $this->fail($field, 'Must be text.');

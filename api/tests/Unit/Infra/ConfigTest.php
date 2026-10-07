@@ -135,4 +135,48 @@ final class ConfigTest extends TestCase
             }
         }
     }
+
+    public function testRazorpayKeysAndTheOwnerCanComeFromTheEnvironment(): void
+    {
+        $config = Config::load('/nonexistent/config.php', [
+            ...self::env(),
+            'RAZORPAY_KEY_ID' => 'rzp_test_' . str_repeat('E', 14),
+            'RAZORPAY_KEY_SECRET' => str_repeat('s', 24),
+            'RAZORPAY_WEBHOOK_SECRET' => str_repeat('w', 32),
+            'OWNER_EMAIL' => ' Owner@Example.test ',
+            'OWNER_NAME' => 'Site Owner',
+            'OWNER_PASSWORD' => str_repeat('p', 12),
+            'SETUP_KEY' => str_repeat('k', 24),
+        ]);
+
+        self::assertNotNull($config->razorpay);
+        self::assertSame('rzp_test_' . str_repeat('E', 14), $config->razorpay->keyId);
+        self::assertSame(str_repeat('w', 32), $config->razorpay->webhookSecret);
+        self::assertNull($config->razorpay->providerId);
+        self::assertSame(['owner@example.test', 'Site Owner', true], [$config->owner?->email, $config->owner?->name, $config->owner?->password !== null]);
+        self::assertSame(str_repeat('k', 24), $config->setupKey);
+
+        $plain = Config::load('/nonexistent/config.php', self::env());
+        self::assertSame([null, null, null], [$plain->razorpay, $plain->owner, $plain->setupKey]);
+    }
+
+    public function testRejectsEnvironmentDefaultsThatCannotWork(): void
+    {
+        $bad = [
+            'RAZORPAY_KEY_ID' => ['RAZORPAY_KEY_ID' => 'rzp_live_' . str_repeat('E', 14), 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24)],
+            'RAZORPAY_KEY_SECRET' => ['RAZORPAY_KEY_ID' => 'rzp_test_' . str_repeat('E', 14)],
+            'RAZORPAY_WEBHOOK_SECRET' => ['RAZORPAY_KEY_ID' => 'rzp_test_' . str_repeat('E', 14), 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24), 'RAZORPAY_WEBHOOK_SECRET' => 'short'],
+            'OWNER_EMAIL' => ['OWNER_EMAIL' => 'not-an-email'],
+            'OWNER_PASSWORD' => ['OWNER_EMAIL' => 'owner@example.test', 'OWNER_PASSWORD' => 'short'],
+            'SETUP_KEY' => ['SETUP_KEY' => 'short'],
+        ];
+        foreach ($bad as $key => $values) {
+            try {
+                Config::load('/nonexistent/config.php', [...self::env(), ...$values]);
+                self::fail("{$key} should be rejected");
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString($key, $e->getMessage());
+            }
+        }
+    }
 }

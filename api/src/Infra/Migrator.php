@@ -98,7 +98,7 @@ final class Migrator
     /**
      * @return list<string>
      */
-    private function available(): array
+    public function available(): array
     {
         $files = is_dir($this->directory) ? scandir($this->directory) : false;
         if ($files === false) {

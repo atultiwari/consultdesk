@@ -77,7 +77,11 @@ final class AppFactory
                 $services->passwordResets(),
                 $services->adminCookie(),
                 $services->clientIp(),
+                $services->firstRun(),
+                $services->adminUsers(),
+                $services->sessions(),
             );
+            $api->post('/admin/first-run', static fn($rq, $rs) => $auth()->firstRun($rq, $rs))->add($limit('admin-first-run', 10, self::HOUR));
             $api->get('/admin/entry/{path}', static fn($rq, $rs, array $a) => $auth()->entry($rq, $rs, $a))->add($limit('admin-entry', 30, self::MINUTE));
             $api->post('/admin/login', static fn($rq, $rs) => $auth()->login($rq, $rs))->add($limit('admin-login', 30, self::MINUTE));
             $api->post('/admin/password/forgot', static fn($rq, $rs) => $auth()->forgot($rq, $rs))->add($limit('admin-forgot', 5, self::HOUR));

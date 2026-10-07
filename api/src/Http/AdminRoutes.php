@@ -80,7 +80,7 @@ final class AdminRoutes
             $pdo(),
             $services->config->appUrl,
         );
-        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog());
+        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords());
         $id = self::ID;
 
         $admin->get('/dashboard', static fn($rq, $rs) => $bookings()->dashboard($rq, $rs));
@@ -150,5 +150,9 @@ final class AdminRoutes
         $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
         $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));
         $admin->post('/system/retry-failed', static fn($rq, $rs) => $system()->retryFailed($rq, $rs));
+        $admin->post('/system/backup', static fn($rq, $rs) => $system()->backup($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-backup', 10, 3600, $services->clientIp()));
+        $admin->post('/system/restore', static fn($rq, $rs) => $system()->restore($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-restore', 5, 3600, $services->clientIp()));
     }
 }

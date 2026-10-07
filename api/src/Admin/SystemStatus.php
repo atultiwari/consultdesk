@@ -28,6 +28,8 @@ final class SystemStatus
         private readonly Settings $settings,
         private readonly Migrator $migrator,
         private readonly Clock $clock,
+        /** OWNER_PASSWORD is set in .env (or config.php): fine for a reset, but best removed once used. */
+        private readonly bool $ownerPasswordInEnv = false,
     ) {}
 
     /**
@@ -48,6 +50,7 @@ final class SystemStatus
                 'healthy' => $lastRunAt !== null && $now->getTimestamp() - $lastRunAt->getTimestamp() <= self::CRON_HEALTHY_SECONDS,
             ],
             'outbox' => $this->outbox(),
+            'warnings' => $this->ownerPasswordInEnv ? ['owner_password_in_env'] : [],
         ];
     }
 

@@ -80,9 +80,7 @@ final class AdminPaymentActions
     public function newWebhookSecret(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
-        if ($this->keys->find(null) === null) {
-            throw self::notConfigured();
-        }
+        $this->assertSavedHere();
         $secret = self::randomSecret();
         $this->keys->setWebhookSecret(null, $secret);
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_webhook_secret_changed', 'settings', null);
@@ -112,6 +110,7 @@ final class AdminPaymentActions
     public function removeOrgKeys(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
+        $this->assertSavedHere();
         $this->assertNoOpenLinks(null);
         $this->keys->delete(null);
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'settings', null);
@@ -205,6 +204,20 @@ final class AdminPaymentActions
         }
     }
 
+    /**
+     * Keys from .env are changed in .env; only keys saved here can be rotated or removed here.
+     */
+    private function assertSavedHere(): void
+    {
+        $source = $this->keys->orgSource();
+        if ($source === null) {
+            throw self::notConfigured();
+        }
+        if ($source === 'env') {
+            throw new ApiException(409, 'env_keys', 'These keys come from the server’s .env file. Change them there, or save your own keys here to use instead.');
+        }
+    }
+
     private function checkAccount(?int $providerId): void
     {
         $credentials = $this->keys->find($providerId) ?? throw self::notConfigured();
@@ -226,6 +239,8 @@ final class AdminPaymentActions
             'configured' => $org !== null,
             'mode' => $org === null ? null : ($org->isTestMode() ? 'test' : 'live'),
             'key_id' => $org?->keyId,
+            'source' => $this->keys->orgSource(),
+            'env_key_id' => $this->keys->defaults()?->keyId,
             'has_webhook_secret' => $org?->webhookSecret !== null,
             'webhook_url' => $this->appUrl . '/api/webhooks/razorpay',
             'live_allowed' => !$this->testKeysOnly,

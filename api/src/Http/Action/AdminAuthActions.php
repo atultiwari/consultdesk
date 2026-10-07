@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace ConsultDesk\Http\Action;
 
 use ConsultDesk\Admin\AdminSession;
+use ConsultDesk\Admin\AdminUsers;
 use ConsultDesk\Admin\AuthService;
+use ConsultDesk\Admin\FirstRun;
 use ConsultDesk\Admin\PasswordResets;
 use ConsultDesk\Admin\Passwords;
+use ConsultDesk\Admin\Sessions;
 use ConsultDesk\Http\AdminCookie;
 use ConsultDesk\Http\ApiException;
 use ConsultDesk\Http\ClientIp;
@@ -31,6 +34,9 @@ final class AdminAuthActions
         private readonly PasswordResets $resets,
         private readonly AdminCookie $cookie,
         private readonly ClientIp $clientIp,
+        private readonly FirstRun $firstRun,
+        private readonly AdminUsers $users,
+        private readonly Sessions $sessions,
     ) {}
 
     /**
@@ -39,8 +45,44 @@ final class AdminAuthActions
     public function entry(Request $request, Response $response, array $args): Response
     {
         $this->assertPath($args['path'] ?? '');
+        $this->firstRun->createFromEnv();
+        $firstRun = $this->firstRun->needed();
 
-        return JsonResponse::success($response, ['ok' => true]);
+        return JsonResponse::success($response, [
+            'ok' => true,
+            'first_run' => $firstRun,
+            'owner' => $firstRun ? $this->firstRun->suggested() : null,
+            'needs_setup_key' => $firstRun && $this->firstRun->needsSetupKey(),
+        ]);
+    }
+
+    /**
+     * Creates the owner on a site with no accounts yet, and signs them in.
+     */
+    public function firstRun(Request $request, Response $response): Response
+    {
+        $input = $this->guarded($request);
+        $name = $input->personName('name');
+        $email = $input->email('email');
+        $password = $input->secret('password', max: Passwords::MAX_LENGTH);
+        if ($password !== null && !Passwords::acceptable($password)) {
+            $input->reject('password', sprintf('Use at least %d characters.', Passwords::MIN_LENGTH));
+        }
+        $setupKey = $input->secret('setup_key', required: false, max: 256);
+        if (!$this->firstRun->needed()) {
+            throw new ApiException(409, 'already_set_up', 'This site already has an owner. Sign in instead.');
+        }
+        if (!$this->firstRun->setupKeyMatches($setupKey)) {
+            throw new ApiException(403, 'setup_key', 'The setup key doesn’t match SETUP_KEY in the server’s settings.');
+        }
+        $input->assertValid();
+
+        $id = $this->firstRun->create((string) $email, $name, (string) $password)
+            ?? throw new ApiException(409, 'already_set_up', 'This site already has an owner. Sign in instead.');
+        $user = $this->users->find($id) ?? throw new RuntimeException('The new owner was not found.');
+        $session = $this->sessions->start($user, $this->clientIp->of($request), $request->getHeaderLine('User-Agent'));
+
+        return $this->cookie->set(JsonResponse::success($response, self::sessionData($session)), $session->token);
     }
 
     public function login(Request $request, Response $response): Response

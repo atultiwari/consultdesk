@@ -10,7 +10,8 @@ use PDO;
 
 /**
  * Razorpay keys in payment_gateways: the organisation's (provider_id NULL) and any provider's own.
- * Secrets are encrypted with sodium and only decrypted to make a request.
+ * Secrets are encrypted with sodium and only decrypted to make a request. Default organisation keys
+ * from .env stand in when none are saved here.
  */
 final class GatewayKeys
 {
@@ -21,7 +22,24 @@ final class GatewayKeys
         private readonly PDO $pdo,
         private readonly Crypto $crypto,
         private readonly Clock $clock,
+        private readonly ?RazorpayCredentials $defaults = null,
     ) {}
+
+    /**
+     * The organisation's keys from .env, if any.
+     */
+    public function defaults(): ?RazorpayCredentials
+    {
+        return $this->defaults;
+    }
+
+    /**
+     * Where the organisation's keys in use come from: "settings" (saved here), "env" or null.
+     */
+    public function orgSource(): ?string
+    {
+        return $this->stored(null) !== null ? 'settings' : ($this->defaults !== null ? 'env' : null);
+    }
 
     /**
      * The account a provider's bookings are paid into: their own if they have one, else the organisation's.
@@ -32,9 +50,15 @@ final class GatewayKeys
     }
 
     /**
-     * Exactly this owner's keys (null = the organisation's), without falling back.
+     * Exactly this owner's keys (null = the organisation's, saved here or else from .env), without
+     * falling back from a provider to the organisation.
      */
     public function find(?int $providerId): ?RazorpayCredentials
+    {
+        return $this->stored($providerId) ?? ($providerId === null ? $this->defaults : null);
+    }
+
+    private function stored(?int $providerId): ?RazorpayCredentials
     {
         $statement = $this->pdo->prepare(
             'SELECT provider_id, key_id, secret_enc, webhook_secret_enc FROM payment_gateways
@@ -56,7 +80,7 @@ final class GatewayKeys
         $statement->execute(['gateway' => self::GATEWAY, 'key' => $keyId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
-        return is_array($row) ? $this->hydrate($row) : null;
+        return is_array($row) ? $this->hydrate($row) : ($this->defaults?->keyId === $keyId ? $this->defaults : null);
     }
 
     /**
@@ -86,7 +110,13 @@ final class GatewayKeys
         $statement = $this->pdo->prepare('SELECT provider_id, key_id, secret_enc, webhook_secret_enc FROM payment_gateways WHERE gateway = :gateway AND active = 1 ORDER BY id');
         $statement->execute(['gateway' => self::GATEWAY]);
 
-        return array_values(array_map($this->hydrate(...), $statement->fetchAll(PDO::FETCH_ASSOC)));
+        $accounts = array_values(array_map($this->hydrate(...), $statement->fetchAll(PDO::FETCH_ASSOC)));
+        $known = array_map(static fn(RazorpayCredentials $c): string => $c->keyId, $accounts);
+        if ($this->defaults !== null && !in_array($this->defaults->keyId, $known, true)) {
+            $accounts[] = $this->defaults;
+        }
+
+        return $accounts;
     }
 
     /**
