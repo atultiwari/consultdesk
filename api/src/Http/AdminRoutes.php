@@ -13,6 +13,7 @@ use ConsultDesk\Admin\ServiceSettings;
 use ConsultDesk\Admin\WeeklyHours;
 use ConsultDesk\Bootstrap\AppServices;
 use ConsultDesk\Http\Action\AdminBookingActions;
+use ConsultDesk\Http\Action\AdminBookingCodeActions;
 use ConsultDesk\Http\Action\AdminCouponActions;
 use ConsultDesk\Http\Action\AdminImageActions;
 use ConsultDesk\Http\Action\AdminIntegrationActions;
@@ -82,6 +83,7 @@ final class AdminRoutes
             $pdo(),
             $services->config->appUrl,
         );
+        $codes = static fn(): AdminBookingCodeActions => new AdminBookingCodeActions($services->bookingRefPrefix(), $services->auditLog());
         $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
         $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter());
         $id = self::ID;
@@ -151,6 +153,8 @@ final class AdminRoutes
         $admin->post('/setup/sessions', static fn($rq, $rs) => $setup()->addSessions($rq, $rs));
         $admin->post('/setup/complete', static fn($rq, $rs) => $setup()->complete($rq, $rs));
 
+        $admin->get('/booking-codes', static fn($rq, $rs) => $codes()->show($rq, $rs));
+        $admin->put('/booking-codes', static fn($rq, $rs) => $codes()->save($rq, $rs));
         $admin->get('/coupons', static fn($rq, $rs) => $coupons()->list($rq, $rs));
         $admin->post('/coupons', static fn($rq, $rs) => $coupons()->create($rq, $rs));
         $admin->patch("/coupons/{$id}", static fn($rq, $rs, array $a) => $coupons()->update($rq, $rs, $a));
