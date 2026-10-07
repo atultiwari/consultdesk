@@ -1,8 +1,8 @@
+import { isPossiblePhone } from './phone';
 import { z } from 'zod';
 import type { Question } from '../api/types';
 
 // Mirrors the API's checks so most mistakes are caught before submitting; the API stays the authority.
-const PHONE = /^\+?[0-9][0-9 ()-]{5,19}$/;
 const NAME_FORBIDDEN = /:\/\/|www\.|[<>]/i;
 const TEXT_MAX: Record<Question['type'], number> = {
   text: 500,
@@ -49,10 +49,7 @@ export function buildDetailsSchema(questions: Question[]) {
       .max(120, 'Must be at most 120 characters.')
       .refine((v) => !NAME_FORBIDDEN.test(v), 'Enter just your name.'),
     email: z.string().trim().pipe(z.email('Enter a valid email address.')),
-    phone: z
-      .string()
-      .trim()
-      .regex(PHONE, 'Enter a WhatsApp number with country code, e.g. +91 98765 43210.'),
+    phone: z.string().trim().refine(isPossiblePhone, 'Choose the country, then enter the number.'),
     answers: z.object(Object.fromEntries(questions.map((q) => [q.id, answerSchema(q)]))),
   });
 }

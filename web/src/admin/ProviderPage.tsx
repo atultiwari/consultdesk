@@ -30,7 +30,7 @@ function panel(tab: Tab, provider: AdminProvider): ReactNode {
     case 'connections':
       return <ConnectionsPanel providerId={provider.id} />;
     default:
-      return <ProfileForm provider={provider} />;
+      return <ProfileForm key={provider.id} provider={provider} />;
   }
 }
 

@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import type { Question } from '../api/types';
 import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
+import { PhoneInput } from '../design/components/PhoneInput';
 import { buildDetailsSchema, type DetailsValues } from '../lib/details';
 
 type Props = {
@@ -58,19 +59,19 @@ export function DetailsForm({ questions, initial, serverErrors, onBack, onSubmit
           {...register('email')}
         />
       </Field>
-      <Field
-        label="WhatsApp number"
-        hint="With country code, e.g. +91 98765 43210."
-        error={error('phone')}
-      >
-        <input
-          className="input"
-          type="tel"
-          autoComplete="tel"
-          inputMode="tel"
-          {...register('phone')}
-        />
-      </Field>
+      <Controller
+        control={form.control}
+        name="phone"
+        render={({ field }) => (
+          <Field
+            label="WhatsApp number"
+            hint="Choose your country, then type the number."
+            error={error('phone')}
+          >
+            <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
+          </Field>
+        )}
+      />
 
       {questions.map((q) =>
         q.type === 'checkbox' ? (

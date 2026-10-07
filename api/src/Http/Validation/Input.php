@@ -127,14 +127,26 @@ final class Input
         return $value;
     }
 
+    /**
+     * A phone number with its country code, stored as "+" and digits (E.164), e.g. +919876543210.
+     * "00" in front counts as "+"; a number without a country code is refused as ambiguous.
+     */
     public function phone(string $field, bool $required = true): ?string
     {
-        $value = $this->string($field, $required, 20);
-        if ($value !== null && preg_match('/^\+?[0-9][0-9 ()-]{5,19}$/', $value) !== 1) {
-            return $this->fail($field, 'Enter a phone number with country code, e.g. +91 98765 43210.');
+        $value = $this->string($field, $required, 24);
+        if ($value === null) {
+            return null;
+        }
+        $compact = (string) preg_replace('/[\s().-]/', '', $value);
+        if (str_starts_with($compact, '00')) {
+            $compact = '+' . substr($compact, 2);
+        }
+        // E.164: a country code that doesn't start with 0, and at most 15 digits in all.
+        if (preg_match('/^\+[1-9][0-9]{7,14}$/', $compact) !== 1) {
+            return $this->fail($field, 'Choose the country, then enter the number, e.g. +91 98765 43210.');
         }
 
-        return $value;
+        return $compact;
     }
 
     public function timezone(string $field, bool $required = true): ?string

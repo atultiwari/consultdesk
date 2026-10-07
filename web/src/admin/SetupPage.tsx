@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
+import { PhoneInput } from '../design/components/PhoneInput';
 import { Loading, Notice } from '../design/components/Notice';
 import { visitorTimezone } from '../lib/time';
 import { useAdmin } from './context';
@@ -167,7 +168,10 @@ function TeacherStep({ state, onDone }: { state: SetupState; onDone: () => void 
             hint="Optional. Customers can message it about a payment."
             error={errors.whatsapp}
           >
-            <input className="input" type="tel" value={form.whatsapp} onChange={set('whatsapp')} />
+            <PhoneInput
+              value={form.whatsapp}
+              onChange={(v) => setForm((f) => ({ ...f, whatsapp: v }))}
+            />
           </Field>
           <Field
             label="UPI ID"
