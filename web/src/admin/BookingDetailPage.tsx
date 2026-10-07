@@ -40,6 +40,14 @@ function Facts({ booking }: { booking: BookingDetail }) {
         <dt>Payment</dt>
         <dd>
           {booking.amount_minor > 0 ? formatMoney(booking.amount_minor, booking.currency) : 'Free'}
+          {booking.coupon_code && (
+            <span className="cell-sub">
+              coupon <span className="mono">{booking.coupon_code}</span>
+              {booking.discount_minor
+                ? ` (−${formatMoney(booking.discount_minor, booking.currency)})`
+                : ''}
+            </span>
+          )}
           {booking.payment_method === 'upi' && <span className="cell-sub">by UPI</span>}
           {booking.payment_method === 'razorpay_link' && (
             <span className="cell-sub">

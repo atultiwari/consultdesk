@@ -1536,3 +1536,34 @@
   margin: 0.5rem 0 0;
   font-size: 1rem;
 }
+
+/* ---------- Coupons ---------- */
+.row--muted td {
+  color: var(--ink-3);
+}
+
+.cell-actions {
+  white-space: nowrap;
+}
+
+.choice-row {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+}
+
+.stack-tight {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

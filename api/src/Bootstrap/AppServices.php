@@ -38,6 +38,7 @@ use ConsultDesk\Domain\Booking\PdoBookingRepository;
 use ConsultDesk\Domain\Booking\PdoBookingViews;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
 use ConsultDesk\Domain\Catalog\PdoCatalog;
+use ConsultDesk\Domain\Coupon\Coupons;
 use ConsultDesk\Http\AdminCookie;
 use ConsultDesk\Http\ClientIp;
 use ConsultDesk\Infra\AuditLog;
@@ -117,7 +118,13 @@ final class AppServices
             new OutboxBookingEvents($this->outbox()),
             $this->crypto(),
             $this->busyTime(),
+            coupons: $this->coupons(),
         );
+    }
+
+    public function coupons(): Coupons
+    {
+        return new Coupons($this->pdo());
     }
 
     public function bookingViews(): PdoBookingViews

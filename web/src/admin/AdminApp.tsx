@@ -13,6 +13,7 @@ import { SystemPage } from './SystemPage';
 import { UsersPage } from './UsersPage';
 import { FirstRunPage, ForgotPage, LoginPage, ResetPage } from './AuthPages';
 import { BlockedPage } from './BlockedPage';
+import { CouponsPage } from './CouponsPage';
 import { BookingDetailPage } from './BookingDetailPage';
 import { BookingsPage } from './BookingsPage';
 import { AdminContext } from './context';
@@ -113,6 +114,7 @@ export default function AdminApp({
           <Route path="bookings/:id" element={<BookingDetailPage />} />
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="providers/:id" element={<ProviderPage />} />
+          <Route path="coupons" element={<CouponsPage />} />
           <Route path="blocked" element={<BlockedPage />} />
           <Route path="account" element={<AccountPage />} />
           {context.user.role === 'owner' && (

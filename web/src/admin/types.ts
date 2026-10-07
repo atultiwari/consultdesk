@@ -43,6 +43,9 @@ export type BookingRow = {
   customer_name: string;
   customer_email: string;
   amount_minor: number;
+  /** The coupon used and what it took off (amount_minor is already after it). */
+  coupon_code?: string | null;
+  discount_minor?: number;
   currency: string;
   utr: string | null;
   hold_expires_at: string | null;
@@ -234,4 +237,42 @@ export type SetupState = {
     description: string;
     templates: StarterTemplate[];
   }[];
+};
+
+export type CouponKind = 'percent' | 'amount';
+
+export type AdminCoupon = {
+  id: number;
+  code: string;
+  /** null: every teacher (site-wide) */
+  provider_id: number | null;
+  provider_name: string | null;
+  kind: CouponKind;
+  /** percent: 1–100; amount: paise */
+  value: number;
+  /** null: every session the coupon covers */
+  service_ids: number[] | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  max_uses: number | null;
+  once_per_email: boolean;
+  active: boolean;
+  note: string | null;
+  /** Bookings using it now (lapsed, cancelled and rejected ones give their use back); null when not yours. */
+  uses: number | null;
+  /** false for a site-wide coupon shown to a teacher */
+  editable: boolean;
+};
+
+export type CouponInput = {
+  code: string;
+  kind: CouponKind;
+  value: number;
+  provider_id: number | null;
+  service_ids: number[] | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  max_uses: number | null;
+  once_per_email: boolean;
+  note: string | null;
 };

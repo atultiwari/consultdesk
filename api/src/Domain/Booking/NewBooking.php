@@ -26,6 +26,10 @@ final class NewBooking
         public readonly PaymentMethod $paymentMethod,
         public readonly DateTimeImmutable $holdExpiresAt,
         public readonly DateTimeImmutable $createdAt,
+        public readonly ?int $couponId = null,
+        public readonly ?string $couponCode = null,
+        public readonly int $discountMinor = 0,
+        public readonly ?string $couponEmail = null,
     ) {}
 
     public function withRef(string $ref): self
@@ -44,6 +48,10 @@ final class NewBooking
             $this->paymentMethod,
             $this->holdExpiresAt,
             $this->createdAt,
+            $this->couponId,
+            $this->couponCode,
+            $this->discountMinor,
+            $this->couponEmail,
         );
     }
 }

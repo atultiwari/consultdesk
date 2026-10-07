@@ -53,6 +53,9 @@ final class BookingView
         public readonly ?string $gatewayUrl = null,
         public readonly ?string $gatewayKeyId = null,
         public readonly ?string $gatewayPaymentId = null,
+        /** The discount code used, and how much it took off amountMinor's original price. */
+        public readonly ?string $couponCode = null,
+        public readonly int $discountMinor = 0,
     ) {}
 
     /**

@@ -96,6 +96,65 @@ describe('booking flow', () => {
     });
   });
 
+  it('takes a coupon quietly tucked under the price', async () => {
+    const calls = mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/providers/demo': ok({ provider, services: [thesis] }),
+      'GET /api/providers/demo/services/thesis/slots': ok(slots),
+      'POST /api/coupons/check': (init) =>
+        JSON.parse(String(init?.body)).code === 'WELCOME20'
+          ? ok({
+              code: 'WELCOME20',
+              discount_minor: 59900,
+              discount_display: '₹599',
+              total_minor: 240000,
+              total_display: '₹2,400',
+            })
+          : fail(422, 'validation_failed', 'Check the highlighted fields.', {
+              code: 'That code isn’t valid for this session.',
+            }),
+      'POST /api/bookings': ok(
+        {
+          ref: 'CD-7F3K',
+          token: 'tok',
+          status_url: 'https://x/b/CD-7F3K?t=tok',
+          booking: heldBooking,
+        },
+        201,
+      ),
+      'GET /api/bookings/CD-7F3K': ok(heldBooking),
+    });
+    const user = userEvent.setup();
+    renderAt('/p/demo/thesis');
+
+    await user.click(await screen.findByRole('radio', { name: '10:00 AM' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await fillDetails(user);
+
+    await user.click(await screen.findByRole('button', { name: 'Have a coupon?' }));
+    await user.type(screen.getByLabelText('Coupon code'), 'NOPE');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByText('That code isn’t valid for this session.')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Coupon code'));
+    await user.type(screen.getByLabelText('Coupon code'), 'welcome20');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect((await screen.findByRole('button', { name: 'Remove' })).closest('p')).toHaveTextContent(
+      'WELCOME20 applied: −₹599',
+    );
+    expect(
+      calls.find(
+        (c) => c.path === '/api/coupons/check' && (c.body as { code: string }).code === 'WELCOME20',
+      )?.body,
+    ).toEqual({ provider: 'demo', service: 'thesis', code: 'WELCOME20' });
+
+    await user.click(screen.getByRole('button', { name: 'Book and pay ₹2,400' }));
+    await waitFor(() => expect(path()).toBe('/b/CD-7F3K?t=tok'));
+    expect(calls.find((c) => c.path === '/api/bookings')?.body).toMatchObject({
+      coupon: 'WELCOME20',
+    });
+  });
+
   it('goes back to the time step when the slot was just taken', async () => {
     mockApi({
       'GET /api/site': ok(site),

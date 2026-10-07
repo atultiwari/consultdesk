@@ -30,7 +30,7 @@ final class AdminBookings
     private const SQL = 'Y-m-d H:i:s';
     private const ISO = 'Y-m-d\TH:i:s\Z';
     private const SELECT = 'SELECT b.id, b.ref, b.status, b.payment_method, b.start_at, b.end_at, b.customer_name,
-            b.customer_email, b.amount_minor, b.currency, b.utr, b.hold_expires_at,
+            b.customer_email, b.amount_minor, b.coupon_code, b.discount_minor, b.currency, b.utr, b.hold_expires_at,
             p.id AS provider_id, p.name AS provider_name, s.title AS service_title
         FROM bookings b
         JOIN providers p ON p.id = b.provider_id
@@ -265,6 +265,8 @@ final class AdminBookings
             'customer_name' => (string) $r['customer_name'],
             'customer_email' => (string) $r['customer_email'],
             'amount_minor' => (int) $r['amount_minor'],
+            'coupon_code' => $r['coupon_code'],
+            'discount_minor' => (int) $r['discount_minor'],
             'currency' => (string) $r['currency'],
             'utr' => $r['utr'],
             'hold_expires_at' => self::iso($r['hold_expires_at']),

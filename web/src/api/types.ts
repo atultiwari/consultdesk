@@ -94,6 +94,10 @@ export type BookingView = {
   amount_minor: number;
   currency: string;
   amount_display: string;
+  /** The coupon used, if any; amount_minor is already after its discount. */
+  coupon_code?: string | null;
+  discount_minor?: number;
+  discount_display?: string | null;
   hold_expires_at: string | null;
   utr: string | null;
   meet_url: string | null;
@@ -124,4 +128,14 @@ export type NewBooking = {
   customer: { name: string; email: string; phone: string; timezone: string };
   answers: Record<string, string | boolean>;
   website: string;
+  coupon?: string;
+};
+
+/** What a coupon takes off one session's price. */
+export type CouponQuote = {
+  code: string;
+  discount_minor: number;
+  discount_display: string;
+  total_minor: number;
+  total_display: string;
 };

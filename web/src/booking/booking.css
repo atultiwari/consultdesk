@@ -553,3 +553,66 @@
   height: 1px;
   overflow: hidden;
 }
+
+/* ---------- coupon: a quiet link that opens into a code field ---------- */
+.coupon {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+
+.coupon--applied {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+}
+
+.coupon--form {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
+.coupon__label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.coupon__row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.coupon__input {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--ink);
+}
+
+.link-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.summary__was {
+  color: var(--ink-3);
+  margin-right: 0.25rem;
+}

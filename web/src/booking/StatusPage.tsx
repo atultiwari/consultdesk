@@ -129,6 +129,15 @@ function Slip({ booking }: { booking: BookingView }) {
           <dt>Fee</dt>
           <dd className="mono">{booking.amount_display}</dd>
         </div>
+        {booking.coupon_code && booking.discount_display && (
+          <div>
+            <dt>Coupon</dt>
+            <dd>
+              <span className="mono">{booking.coupon_code}</span> saved you{' '}
+              {booking.discount_display}
+            </dd>
+          </div>
+        )}
       </dl>
       <div className="slip__perforation" aria-hidden="true" />
       <p className="slip__foot muted">Keep this page: its link is in your email too.</p>

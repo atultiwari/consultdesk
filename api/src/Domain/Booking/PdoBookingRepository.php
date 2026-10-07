@@ -150,11 +150,11 @@ final class PdoBookingRepository implements BookingRepository
             $this->pdo->prepare(
                 'INSERT INTO bookings (ref, public_token_hash, public_token_enc, provider_id, service_id, start_at, end_at,
                     customer_name, customer_email, customer_phone, customer_timezone, answers,
-                    amount_minor, currency, payment_method, status, hold_expires_at,
+                    amount_minor, coupon_id, coupon_code, discount_minor, coupon_email, currency, payment_method, status, hold_expires_at,
                     status_changed_at, created_at, updated_at)
                  VALUES (:ref, :token_hash, :token_enc, :provider, :service, :start_at, :end_at,
                     :name, :email, :phone, :timezone, :answers,
-                    :amount, :currency, :method, :status, :hold_expires_at,
+                    :amount, :coupon_id, :coupon_code, :discount, :coupon_email, :currency, :method, :status, :hold_expires_at,
                     :status_changed_at, :created_at, :updated_at)',
             )->execute([
                 'ref' => $booking->ref,
@@ -170,6 +170,10 @@ final class PdoBookingRepository implements BookingRepository
                 'timezone' => $booking->customer->timezone,
                 'answers' => json_encode((object) $booking->answers, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 'amount' => $booking->amountMinor,
+                'coupon_id' => $booking->couponId,
+                'coupon_code' => $booking->couponCode,
+                'discount' => $booking->discountMinor,
+                'coupon_email' => $booking->couponEmail,
                 'currency' => $booking->currency,
                 'method' => $booking->paymentMethod->value,
                 'status' => BookingStatus::Held->value,

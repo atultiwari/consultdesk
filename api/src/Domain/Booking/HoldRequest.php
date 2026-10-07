@@ -21,6 +21,8 @@ final class HoldRequest
         public readonly Customer $customer,
         public readonly PaymentMethod $paymentMethod,
         public readonly array $answers = [],
+        /** A discount code the customer entered, checked again inside the booking transaction. */
+        public readonly ?string $couponCode = null,
     ) {
         $this->start = $start->setTimezone(new DateTimeZone('UTC'));
     }

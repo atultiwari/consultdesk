@@ -82,6 +82,22 @@ final class Fixtures
         ], $overrides));
     }
 
+    /**
+     * @param array<string, scalar|null> $overrides
+     */
+    public static function coupon(PDO $pdo, string $code, array $overrides = []): int
+    {
+        return self::insert($pdo, 'coupons', array_merge([
+            'code' => $code,
+            'kind' => 'percent',
+            'value' => 20,
+            'once_per_email' => 1,
+            'active' => 1,
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+        ], $overrides));
+    }
+
     public static function user(PDO $pdo, string $role = 'admin', ?int $providerId = null, ?string $email = null): int
     {
         static $n = 0;
