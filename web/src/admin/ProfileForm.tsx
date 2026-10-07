@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
+import { PhoneInput } from '../design/components/PhoneInput';
 import { Notice } from '../design/components/Notice';
 import { isStaff, useAdmin } from './context';
 import { fieldErrors, orNull, timezones } from './forms';
@@ -117,7 +118,7 @@ export function ProfileForm({ provider }: { provider: AdminProvider }) {
           hint="Customers can message this number about a payment."
           error={errors.whatsapp}
         >
-          <input {...text('whatsapp')} type="tel" placeholder="+91 …" />
+          <PhoneInput value={draft.whatsapp} onChange={(v) => set('whatsapp', v)} />
         </Field>
       </fieldset>
 
