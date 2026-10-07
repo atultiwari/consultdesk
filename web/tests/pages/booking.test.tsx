@@ -88,7 +88,7 @@ describe('booking flow', () => {
       customer: {
         name: 'Asha Placeholder',
         email: 'asha@example.test',
-        phone: '+91 00000 00000',
+        phone: '+910000000000',
         timezone: 'Asia/Kolkata',
       },
       answers: { goal: 'Feedback', consent: true },

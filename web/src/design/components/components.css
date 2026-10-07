@@ -320,3 +320,25 @@ textarea.input {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ---------- phone: country picker + number ---------- */
+.phone-input {
+  display: grid;
+  grid-template-columns: minmax(0, 9.5rem) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.phone-input__country {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.phone-input__dial {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.phone-input__number {
+  min-width: 0;
+}

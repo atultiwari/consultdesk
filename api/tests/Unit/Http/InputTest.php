@@ -88,4 +88,22 @@ final class InputTest extends TestCase
 
         self::assertSame(['name', 'n'], array_keys($input->errors()));
     }
+
+    public function testPhoneNumbersAreStoredWithTheirCountryCodeInOneForm(): void
+    {
+        $input = new Input([
+            'spaced' => '+91 98765-43210',
+            'zeros' => '0091 98765 43210',
+            'plain' => '+14155550123',
+            'local' => '09876543210',
+            'short' => '+91 123',
+        ]);
+
+        self::assertSame('+919876543210', $input->phone('spaced'));
+        self::assertSame('+919876543210', $input->phone('zeros'), '00 is the same as +');
+        self::assertSame('+14155550123', $input->phone('plain'));
+        self::assertNull($input->phone('local'), 'a number without its country code is ambiguous');
+        self::assertNull($input->phone('short'));
+        self::assertSame(['local', 'short'], array_keys($input->errors()));
+    }
 }

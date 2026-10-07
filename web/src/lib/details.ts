@@ -1,8 +1,8 @@
+import { isPossiblePhone } from './phone';
 import { z } from 'zod';
 import type { Question } from '../api/types';
 
 // Mirrors the API's checks so most mistakes are caught before submitting; the API stays the authority.
-const PHONE = /^\+?[0-9][0-9 ()-]{5,19}$/;
 const NAME_FORBIDDEN = /:\/\/|www\.|[<>]/i;
 const TEXT_MAX: Record<Question['type'], number> = {
   text: 500,
@@ -52,7 +52,7 @@ export function buildDetailsSchema(questions: Question[]) {
     phone: z
       .string()
       .trim()
-      .regex(PHONE, 'Enter a WhatsApp number with country code, e.g. +91 98765 43210.'),
+      .refine(isPossiblePhone, 'Choose your country and enter your WhatsApp number.'),
     answers: z.object(Object.fromEntries(questions.map((q) => [q.id, answerSchema(q)]))),
   });
 }
