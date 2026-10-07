@@ -30,6 +30,9 @@ use ConsultDesk\Calendar\GoogleOAuth;
 use ConsultDesk\Calendar\HttpGoogleApi;
 use ConsultDesk\Calendar\NullGoogleApi;
 use ConsultDesk\Cron\CronRunner;
+use ConsultDesk\Customer\CustomerAccess;
+use ConsultDesk\Customer\CustomerBookings;
+use ConsultDesk\Customer\CustomerLinkEmailHandler;
 use ConsultDesk\Domain\Availability\BusyTimeSource;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotFinder;
@@ -39,8 +42,10 @@ use ConsultDesk\Domain\Booking\PdoBookingViews;
 use ConsultDesk\Domain\Booking\RandomRefGenerator;
 use ConsultDesk\Domain\Catalog\PdoCatalog;
 use ConsultDesk\Domain\Coupon\Coupons;
+use ConsultDesk\Http\Action\CustomerActions;
 use ConsultDesk\Http\AdminCookie;
 use ConsultDesk\Http\ClientIp;
+use ConsultDesk\Http\CustomerCookie;
 use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Backup;
 use ConsultDesk\Infra\Clock;
@@ -181,6 +186,13 @@ final class AppServices
                 $this->config->adminPath,
             );
         }
+        $handlers[CustomerAccess::EMAIL_JOB] = new CustomerLinkEmailHandler(
+            $this->customerAccess(),
+            $this->mailer(),
+            $this->config->appUrl,
+            $this->catalog()->siteSettings()->orgName,
+        );
+        $customers = $this->customerAccess();
         $settings = $this->settings();
         $clock = $this->clock;
         $cache = new GoogleBusyCache($this->pdo(), $this->clock);
@@ -199,6 +211,7 @@ final class AppServices
                 static fn(): int => $sessions->prune(),
                 static fn(): int => $throttle->prune(),
                 static fn(): int => $resets->prune(),
+                static fn(): int => $customers->prune(),
             ],
             static fn() => $settings->put(SystemStatus::CRON_KEY, ['last_run_at' => $clock->now()->format('Y-m-d H:i:s')]),
         );
@@ -217,6 +230,22 @@ final class AppServices
     public function razorpayCheckout(): RazorpayCheckout
     {
         return new RazorpayCheckout($this->db(), $this->gatewayKeys(), $this->razorpayApi(), $this->bookingService(), $this->bookingViews(), $this->clock, $this->config->appUrl);
+    }
+
+    public function customerAccess(): CustomerAccess
+    {
+        return new CustomerAccess($this->pdo(), $this->outbox(), $this->clock);
+    }
+
+    public function customerActions(): CustomerActions
+    {
+        return new CustomerActions(
+            $this->customerAccess(),
+            new CustomerBookings($this->pdo(), $this->bookingViews(), $this->crypto(), $this->config->appUrl),
+            $this->bookingService(),
+            new CustomerCookie(str_starts_with($this->config->appUrl, 'https://')),
+            $this->clock,
+        );
     }
 
     public function siteSetup(): SiteSetup

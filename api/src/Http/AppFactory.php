@@ -56,6 +56,12 @@ final class AppFactory
                 $services->coupons(),
             );
 
+            $my = static fn(): \ConsultDesk\Http\Action\CustomerActions => $services->customerActions();
+            $api->post('/my/link', static fn($rq, $rs) => $my()->requestLink($rq, $rs))->add($limit('my-link', 10, self::HOUR));
+            $api->post('/my/session', static fn($rq, $rs) => $my()->signIn($rq, $rs))->add($limit('my-session', 30, self::HOUR));
+            $api->get('/my/bookings', static fn($rq, $rs) => $my()->list($rq, $rs))->add($limit('my', 120, self::MINUTE));
+            $api->post('/my/bookings/{ref}/cancel', static fn($rq, $rs, array $a) => $my()->cancel($rq, $rs, $a))->add($limit('my-cancel', 20, self::HOUR));
+            $api->post('/my/logout', static fn($rq, $rs) => $my()->signOut($rq, $rs))->add($limit('my', 120, self::MINUTE));
             $api->post('/coupons/check', static fn($rq, $rs) => $bookings()->checkCoupon($rq, $rs))->add($limit('coupon', 30, self::HOUR));
             $api->get('/site', static fn($rq, $rs) => $providers()->site($rq, $rs))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers', static fn($rq, $rs) => $providers()->list($rq, $rs))->add($limit('read', 120, self::MINUTE));
