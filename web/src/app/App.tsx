@@ -9,6 +9,7 @@ const HomePage = lazy(() => import('../booking/HomePage'));
 const ProviderPage = lazy(() => import('../booking/ProviderPage'));
 const BookingPage = lazy(() => import('../booking/BookingPage'));
 const StatusPage = lazy(() => import('../booking/StatusPage'));
+const MyBookingsPage = lazy(() => import('../booking/MyBookingsPage'));
 const NotFoundPage = lazy(() => import('../booking/NotFoundPage'));
 const AdminGate = lazy(() => import('../admin/AdminGate'));
 
@@ -36,6 +37,7 @@ export function AppRoutes() {
         <Route path="/p/:provider" element={<ProviderPage />} />
         <Route path="/p/:provider/:service" element={<BookingPage />} />
         <Route path="/b/:ref" element={<StatusPage />} />
+        <Route path="/my-bookings" element={<MyBookingsPage />} />
       </Route>
       {/* Any other first segment might be the secret admin path; the gate asks the API. */}
       <Route

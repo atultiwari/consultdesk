@@ -106,3 +106,21 @@
 .site-footer__by {
   white-space: nowrap;
 }
+
+.site-header__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.site-header__link {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.site-header__link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

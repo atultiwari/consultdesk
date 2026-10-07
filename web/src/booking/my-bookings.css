@@ -1,0 +1,67 @@
+.my-bookings {
+  max-width: 46rem;
+  padding-block: 2rem 4rem;
+}
+
+.my-bookings__title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(1.8rem, 1.4rem + 1.5vw, 2.4rem);
+}
+
+.my-bookings__form {
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+}
+
+.my-bookings__who {
+  margin: 0 0 1.5rem;
+}
+
+.my-bookings__section {
+  margin: 2rem 0 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.my-bookings__list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-booking {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.my-booking__main p {
+  margin: 0;
+}
+
+.my-booking__when {
+  font-weight: 650;
+}
+
+.my-booking__meta {
+  margin-top: 0.35rem !important;
+  font-size: 0.9rem;
+}
+
+.my-booking__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

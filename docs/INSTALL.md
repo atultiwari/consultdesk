@@ -312,6 +312,17 @@ small "Have a coupon?" link):
 - Turn a coupon off to pause it; deleting it doesn't change bookings that already used it (they keep
   the code and the discount).
 
+## My bookings (for customers)
+
+Customers open **My bookings** (top right of the booking site, `/my-bookings`), enter the email they
+booked with and get a sign-in link: no password. The link works once, for 15 minutes; signing in
+lasts 30 days on that browser. The page answers the same whether or not the address has bookings,
+and sends at most three links an hour to one address.
+
+Signed in, they see upcoming and past bookings with a link to each one's status page (to pay, send a
+UTR or join the call). They can cancel a booking they haven't paid for yet; anything paid goes
+through the teacher, who can refund.
+
 ## How long slots are held
 
 | Situation | Slot held for |
