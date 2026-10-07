@@ -6,15 +6,17 @@ namespace ConsultDesk\Domain\Booking;
 
 final class RandomRefGenerator implements RefGenerator
 {
-    private const PREFIX = 'CD-';
     private const LENGTH = 4;
     /** Crockford-style: no 0/O, 1/I/L, so refs survive being read aloud or copied by hand. */
     private const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
     private const TOKEN_BYTES = 24;
 
+    /** @param string $prefix e.g. "VRL" for VRL-7F3K (see BookingRefPrefix) */
+    public function __construct(private readonly string $prefix = BookingRefPrefix::FALLBACK) {}
+
     public function next(): string
     {
-        $ref = self::PREFIX;
+        $ref = $this->prefix . '-';
         $last = strlen(self::ALPHABET) - 1;
         for ($i = 0; $i < self::LENGTH; $i++) {
             $ref .= self::ALPHABET[random_int(0, $last)];

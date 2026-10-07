@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Button } from '../design/components/Button';
 import { Badge, Loading, Notice } from '../design/components/Notice';
 import { visitorTimezone } from '../lib/time';
+import { BookingCodes } from './BookingCodes';
 import { isStaff, useAdmin } from './context';
 import { formatMoney, formatWhen, STATUS_LABEL, STATUS_TONE, statusLabel } from './format';
 import { useAdminProviders, useBookingList } from './hooks';
@@ -67,6 +68,7 @@ export function BookingsPage() {
     <div className="page">
       <header className="page__head">
         <h1>Bookings</h1>
+        {isStaff(user) && <BookingCodes />}
       </header>
       <form className="filters" role="search" onSubmit={submitSearch}>
         <label className="filter filter--grow">
