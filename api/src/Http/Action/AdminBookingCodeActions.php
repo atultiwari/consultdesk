@@ -44,7 +44,9 @@ final class AdminBookingCodeActions
 
         $before = $this->prefix->current();
         $this->prefix->save($prefix);
-        $this->audit->record(Actor::user($user->id), 'admin.booking_prefix_changed', 'settings', null, ['from' => $before, 'to' => $this->prefix->current()]);
+        if ($before !== $this->prefix->current()) {
+            $this->audit->record(Actor::user($user->id), 'admin.booking_prefix_changed', 'settings', null, ['from' => $before, 'to' => $this->prefix->current()]);
+        }
 
         return JsonResponse::success($response, $this->state());
     }
