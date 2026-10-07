@@ -12,7 +12,7 @@ use PDO;
 final class ServiceSettings
 {
     public const COLUMNS = [
-        'slug', 'title', 'tagline', 'description', 'audience', 'duration_min', 'price_minor',
+        'slug', 'title', 'tagline', 'description', 'audience', 'highlight', 'duration_min', 'price_minor',
         'requires_approval', 'payment_methods', 'questions', 'active', 'sort_order',
     ];
 
@@ -39,6 +39,37 @@ final class ServiceSettings
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
         return is_array($row) ? self::present($row) : null;
+    }
+
+    /**
+     * Puts a provider's sessions in this order (every one of their sessions, each once).
+     *
+     * @param list<int> $ids
+     *
+     * @return bool false when the list isn't exactly this provider's sessions
+     */
+    public function reorder(int $providerId, array $ids): bool
+    {
+        $mine = array_map(static fn(array $s): int => (int) $s['id'], $this->forProvider($providerId));
+        $sorted = $ids;
+        sort($sorted);
+        sort($mine);
+        if ($sorted !== $mine) {
+            return false;
+        }
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('UPDATE services SET sort_order = :order WHERE id = :id AND provider_id = :provider');
+            foreach ($ids as $i => $id) {
+                $statement->execute(['order' => $i + 1, 'id' => $id, 'provider' => $providerId]);
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        return true;
     }
 
     public function slugTaken(int $providerId, string $slug, ?int $exceptId = null): bool
@@ -118,6 +149,7 @@ final class ServiceSettings
             'tagline' => $r['tagline'],
             'description' => $r['description'],
             'audience' => $r['audience'],
+            'highlight' => $r['highlight'] ?? null,
             'duration_min' => (int) $r['duration_min'],
             'price_minor' => (int) $r['price_minor'],
             'currency' => (string) $r['currency'],

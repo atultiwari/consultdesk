@@ -19,6 +19,7 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
   const [tagline, setTagline] = useState(service?.tagline ?? '');
   const [description, setDescription] = useState(service?.description ?? '');
   const [audience, setAudience] = useState(service?.audience ?? '');
+  const [highlight, setHighlight] = useState(service?.highlight ?? '');
   const [duration, setDuration] = useState(String(service?.duration_min ?? 60));
   const [price, setPrice] = useState(service ? String(service.price_minor / 100) : '0');
   const [methods, setMethods] = useState<PaymentMethod[]>(
@@ -52,6 +53,7 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
           tagline: orNull(tagline),
           description: orNull(description),
           audience: orNull(audience),
+          highlight: highlight.trim(),
           duration_min: /^\d+$/.test(duration) ? Number(duration) : duration,
           price_minor: priceMinor,
           payment_methods: paid ? methods : ['free'],
@@ -103,6 +105,7 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
         <Field label="Who it's for" hint="e.g. residents, PhD scholars" error={errors.audience}>
           <input className="input" value={audience} onChange={(e) => setAudience(e.target.value)} />
         </Field>
+        <HighlightField value={highlight} onChange={setHighlight} error={errors.highlight} />
         <div className="form-row">
           <Field label="Length (minutes)" error={errors.duration_min}>
             <input
@@ -176,5 +179,58 @@ export function ServiceEditor({ providerId, service, onClose }: Props) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+const HIGHLIGHTS = ['Most popular', 'New', 'Best value', 'Recommended', 'Limited spots'];
+const OWN = '__own__';
+
+/** A ready-made label, your own (up to 24 characters), or none. */
+function HighlightField({
+  value,
+  onChange,
+  error,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const [own, setOwn] = useState(value !== '' && !HIGHLIGHTS.includes(value));
+  return (
+    <div className="form-row">
+      <Field
+        label="Highlight"
+        hint="A small label on the booking site."
+        error={own ? undefined : error}
+      >
+        <select
+          className="input"
+          value={own ? OWN : value}
+          onChange={(e) => {
+            const next = e.target.value;
+            setOwn(next === OWN);
+            onChange(next === OWN ? '' : next);
+          }}
+        >
+          <option value="">None</option>
+          {HIGHLIGHTS.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+          <option value={OWN}>Your own words…</option>
+        </select>
+      </Field>
+      {own && (
+        <Field label="Your label" error={error}>
+          <input
+            className="input"
+            maxLength={24}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </Field>
+      )}
+    </div>
   );
 }

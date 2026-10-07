@@ -1567,3 +1567,38 @@
   padding: 0;
   border: 0;
 }
+
+/* ---------- session order ---------- */
+.order-buttons {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.order-button {
+  width: 1.75rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.order-button:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+.order-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.order-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

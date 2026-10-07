@@ -114,6 +114,7 @@ export const thesisService = {
   tagline: null,
   description: null,
   audience: null,
+  highlight: null,
   duration_min: 60,
   price_minor: 299900,
   currency: 'INR',

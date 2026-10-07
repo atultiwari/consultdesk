@@ -14,7 +14,7 @@ final class PdoCatalog implements CatalogRepository
     private const PROVIDER_COLUMNS = "id, slug, name, title, bio, photo_path, timezone, upi_vpa,
         EXISTS (SELECT 1 FROM payment_gateways g WHERE g.gateway = 'razorpay' AND g.active = 1
             AND (g.provider_id = providers.id OR g.provider_id IS NULL)) AS razorpay_ready";
-    private const SERVICE_COLUMNS = 'id, provider_id, slug, title, tagline, description, audience, duration_min,
+    private const SERVICE_COLUMNS = 'id, provider_id, slug, title, tagline, description, audience, highlight, duration_min,
         price_minor, currency, requires_approval, payment_methods, questions';
 
     public function __construct(
@@ -117,6 +117,7 @@ final class PdoCatalog implements CatalogRepository
             tagline: self::nullable($r['tagline']),
             description: self::nullable($r['description']),
             audience: self::nullable($r['audience']),
+            highlight: self::nullable($r['highlight'] ?? null),
             durationMinutes: (int) $r['duration_min'],
             priceMinor: (int) $r['price_minor'],
             currency: (string) $r['currency'],

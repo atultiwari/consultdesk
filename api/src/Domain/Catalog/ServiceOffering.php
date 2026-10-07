@@ -26,6 +26,8 @@ final class ServiceOffering
         public readonly bool $requiresApproval,
         public readonly array $paymentMethods,
         public readonly QuestionSet $questions,
+        /** A short label such as "Most popular", shown on the booking site. */
+        public readonly ?string $highlight = null,
     ) {}
 
     /**
@@ -62,6 +64,7 @@ final class ServiceOffering
             'tagline' => $this->tagline,
             'description' => $this->description,
             'audience' => $this->audience,
+            'highlight' => $this->highlight,
             'duration_minutes' => $this->durationMinutes,
             'price_minor' => $this->priceMinor,
             'currency' => $this->currency,

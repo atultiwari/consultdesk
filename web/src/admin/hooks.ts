@@ -256,6 +256,32 @@ export function useSaveService(providerId: number) {
   });
 }
 
+/** Puts a teacher's sessions in this order (shown immediately; the server's answer replaces it). */
+export function useReorderServices(providerId: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) =>
+      adminFetch<AdminService[]>(`/providers/${providerId}/services/order`, {
+        method: 'PUT',
+        json: { ids },
+      }),
+    onMutate: (ids) => {
+      const before = client.getQueryData<AdminService[]>(adminKeys.services(providerId));
+      if (before) {
+        client.setQueryData(
+          adminKeys.services(providerId),
+          ids.flatMap((id) => before.filter((s) => s.id === id)),
+        );
+      }
+      return { before };
+    },
+    onError: (_error, _ids, context) => {
+      if (context?.before) client.setQueryData(adminKeys.services(providerId), context.before);
+    },
+    onSuccess: (saved) => client.setQueryData(adminKeys.services(providerId), saved),
+  });
+}
+
 export function useHours(providerId: number) {
   return useQuery({
     queryKey: adminKeys.hours(providerId),

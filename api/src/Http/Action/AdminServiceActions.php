@@ -42,6 +42,27 @@ final class AdminServiceActions
     }
 
     /**
+     * The order sessions are listed in, on the booking site and here.
+     *
+     * @param array<string, string> $args
+     */
+    public function reorder(Request $request, Response $response, array $args): Response
+    {
+        $providerId = (int) AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0))['id'];
+        $input = new Input(JsonInput::decode($request));
+        $ids = $input->list('ids', required: true, max: 200) ?? [];
+        $input->assertValid();
+        $ids = array_values(array_map('intval', array_filter($ids, 'is_numeric')));
+        if (!$this->services->reorder($providerId, $ids)) {
+            $input->reject('ids', 'Send every one of this teacher’s sessions, once each.');
+            $input->assertValid();
+        }
+        $this->audit->record(Actor::user(AdminScope::user($request)->id), 'admin.services_reordered', 'provider', $providerId, ['ids' => $ids]);
+
+        return JsonResponse::success($response, $this->services->forProvider($providerId));
+    }
+
+    /**
      * @param array<string, string> $args
      */
     public function create(Request $request, Response $response, array $args): Response
@@ -113,6 +134,13 @@ final class AdminServiceActions
         }
         if ($wants('price_minor')) {
             $values['price_minor'] = $input->int('price_minor', min: 0, max: self::MAX_PRICE_MINOR);
+        }
+        if ($input->has('highlight')) {
+            $highlight = $input->string('highlight', required: false, max: 24);
+            if ($highlight !== null && preg_match('/[<>]|:\/\/|www\./i', $highlight) === 1) {
+                $input->reject('highlight', 'Use a few plain words, e.g. Most popular.');
+            }
+            $values['highlight'] = $highlight;
         }
         if ($input->has('requires_approval')) {
             $values['requires_approval'] = $input->bool('requires_approval', required: true);

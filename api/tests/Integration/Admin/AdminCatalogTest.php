@@ -104,6 +104,35 @@ final class AdminCatalogTest extends AdminTestCase
         self::assertSame(['thesis'], array_column($list['data'], 'slug'));
     }
 
+    public function testTeachersOrderTheirSessionsAndHighlightAny(): void
+    {
+        $a = Fixtures::service($this->pdo, $this->demo, ['slug' => 'a', 'title' => 'First', 'sort_order' => 1]);
+        $b = Fixtures::service($this->pdo, $this->demo, ['slug' => 'b', 'title' => 'Second', 'sort_order' => 2]);
+        $c = Fixtures::service($this->pdo, $this->demo, ['slug' => 'c', 'title' => 'Third', 'sort_order' => 3]);
+        $theirs = Fixtures::service($this->pdo, $this->other, ['slug' => 'x']);
+        $this->createUser('demo@example.test', 'provider', $this->demo);
+        $this->login('demo@example.test');
+
+        [$status, $ordered] = $this->admin('PUT', "/api/admin/providers/{$this->demo}/services/order", ['ids' => [$c, $a, $b]]);
+        self::assertSame(200, $status, json_encode($ordered) ?: '');
+        self::assertSame(['Third', 'First', 'Second'], array_column($ordered['data'], 'title'));
+        self::assertSame(422, $this->admin('PUT', "/api/admin/providers/{$this->demo}/services/order", ['ids' => [$c, $a]])[0], 'every session, once');
+        self::assertSame(422, $this->admin('PUT', "/api/admin/providers/{$this->demo}/services/order", ['ids' => [$c, $a, $theirs]])[0]);
+        self::assertSame(404, $this->admin('PUT', "/api/admin/providers/{$this->other}/services/order", ['ids' => [$theirs]])[0]);
+
+        [, $popular] = $this->admin('PATCH', "/api/admin/services/{$a}", ['highlight' => ' Most popular ']);
+        self::assertSame('Most popular', $popular['data']['highlight']);
+        $this->admin('PATCH', "/api/admin/services/{$b}", ['highlight' => 'New']);
+        self::assertSame(422, $this->admin('PATCH', "/api/admin/services/{$c}", ['highlight' => str_repeat('x', 25)])[0]);
+        self::assertSame(422, $this->admin('PATCH', "/api/admin/services/{$c}", ['highlight' => '<b>hi</b>'])[0]);
+
+        $public = $this->call('GET', '/api/providers/demo')[1]['data']['services'];
+        self::assertSame([['Third', null], ['First', 'Most popular'], ['Second', 'New']], array_map(static fn($s) => [$s['title'], $s['highlight']], $public));
+
+        [, $cleared] = $this->admin('PATCH', "/api/admin/services/{$a}", ['highlight' => '']);
+        self::assertNull($cleared['data']['highlight']);
+    }
+
     public function testWeeklyAvailabilityIsReplacedAsAWhole(): void
     {
         $this->createUser('demo@example.test', 'provider', $this->demo);
