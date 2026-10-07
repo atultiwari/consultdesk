@@ -87,6 +87,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!hash_equals($_SESSION['csrf'], (string) ($_POST['csrf'] ?? ''))) {
         $errors['install'] = 'This form expired. Please try again.';
     } elseif (!$installer->codeMatches((string) ($_POST['setup_code'] ?? ''))) {
+        sleep(2); // guessing stays slow
         $errors['setup_code'] = 'That isn’t the code in consultdesk-app/install-code.txt.';
     } else {
         try {
@@ -118,7 +119,7 @@ $field = static function (string $name, string $label, string $hint = '', string
         . '<input id="' . $name . '" name="' . $name . '" type="' . $type . '" value="' . ($type === 'password' ? '' : $e($form[$name] ?? '')) . '" ' . $extra . '>'
         . (isset($errors[$name]) ? '<p class="err">' . $e($errors[$name]) . '</p>' : '');
 };
-$codePath = $app . '/install-code.txt';
+$codePath = 'consultdesk-app/install-code.txt';
 $enc = $form['smtp_encryption'];
 
 $page('Install', '<h1>Install ConsultDesk</h1><p>About five minutes. Have hPanel open in another tab for the database and email details.</p>'

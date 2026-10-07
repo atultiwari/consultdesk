@@ -22,7 +22,7 @@ final class InstallerTest extends IntegrationTestCase
 
     protected function tearDown(): void
     {
-        foreach (['config.php', 'install-code.txt'] as $file) {
+        foreach (['config.php', 'install-code.txt', '.installed'] as $file) {
             if (is_file($this->app . '/' . $file)) {
                 unlink($this->app . '/' . $file);
             }
@@ -71,6 +71,8 @@ final class InstallerTest extends IntegrationTestCase
         self::assertFileDoesNotExist($this->app . '/install-code.txt');
         self::assertContains('migrations', self::column($this->pdo, 'SHOW TABLES'));
         self::assertTrue($installer->installed());
+        unlink($this->app . '/config.php');
+        self::assertTrue($installer->installed(), 'stays locked even if config.php goes missing later');
 
         $this->expectException(InstallFailed::class);
         $installer->install($this->form());
@@ -93,6 +95,18 @@ final class InstallerTest extends IntegrationTestCase
             self::fail('should refuse a database it cannot reach');
         } catch (InstallFailed $e) {
             self::assertSame(['db_password'], array_keys($e->errors));
+        }
+        self::assertFileDoesNotExist($this->app . '/config.php');
+    }
+
+    public function testDatabaseAndEmailFieldsTakeOnlySafeCharacters(): void
+    {
+        $installer = $this->installer();
+        try {
+            $installer->install([...$this->form(), 'db_name' => 'x;unix_socket=/tmp/evil', 'db_host' => 'db host', 'db_port' => '99999', 'embed_sites' => 'not-a-site']);
+            self::fail('should refuse');
+        } catch (InstallFailed $e) {
+            self::assertSame(['db_name', 'db_host', 'db_port', 'embed_sites'], array_keys($e->errors));
         }
         self::assertFileDoesNotExist($this->app . '/config.php');
     }

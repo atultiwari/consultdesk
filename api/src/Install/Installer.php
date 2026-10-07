@@ -22,6 +22,10 @@ use Throwable;
 final class Installer
 {
     private const CODE_FILE = 'install-code.txt';
+    /** Written when installation finishes; the installer stays off even if config.php goes missing. */
+    private const LOCK_FILE = '.installed';
+    private const DB_IDENTIFIER = '/^[A-Za-z0-9_$-]{1,64}$/';
+    private const HOSTNAME = '/^[A-Za-z0-9.-]{1,253}$/';
     private const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     private const MIN_PHP = '8.1.0';
 
@@ -32,7 +36,7 @@ final class Installer
 
     public function installed(): bool
     {
-        return is_file($this->configPath());
+        return is_file($this->configPath()) || is_file($this->appDir . '/' . self::LOCK_FILE);
     }
 
     /**
@@ -63,7 +67,11 @@ final class Installer
     public function ensureSetupCode(): void
     {
         $path = $this->appDir . '/' . self::CODE_FILE;
-        if (is_file($path) || $this->installed()) {
+        if ($this->installed()) {
+            @unlink($path); // a leftover code must never be usable again
+            return;
+        }
+        if (is_file($path)) {
             return;
         }
         $parts = [];
@@ -99,14 +107,17 @@ final class Installer
         }
         $values = $this->values($form);
         $this->testDatabase($values);
-        $this->writeConfig($values);
+        // Tables first, settings last: if anything stops half-way, nothing is locked and the
+        // installer can simply be run again.
         try {
             $db = Db::connect(DbConfig::fromEnv($values));
             (new Migrator($db->pdo(), $this->migrationsDir ?? $this->appDir . '/migrations', new SystemClock()))->migrate();
         } catch (Throwable $e) {
-            unlink($this->configPath()); // try again from the start
-            throw new InstallFailed(['db_name' => 'The tables couldn’t be created: ' . $e->getMessage()]);
+            error_log('[consultdesk] install: creating the tables failed: ' . $e->getMessage());
+            throw new InstallFailed(['db_name' => 'The tables couldn’t be created. Check that this database user may create tables, then try again (details are in the server’s error log).']);
         }
+        $this->writeConfig($values);
+        self::writePrivate($this->appDir . '/' . self::LOCK_FILE, gmdate(DATE_ATOM) . "\n");
         @unlink($this->appDir . '/' . self::CODE_FILE);
 
         return [
@@ -123,6 +134,25 @@ final class Installer
      */
     public function allowEmbedding(string $htaccess, string $sites): void
     {
+        $origins = self::embedOrigins($sites);
+        $contents = is_file($htaccess) ? (string) file_get_contents($htaccess) : '';
+        // Only inside the Content-Security-Policy header, never a comment that mentions it.
+        $updated = preg_replace('/(Content-Security-Policy "[^"]*?)frame-ancestors [^;"]*;/', '$1frame-ancestors ' . implode(' ', ["'self'", ...$origins]) . ';', $contents, 1, $count);
+        $temp = $htaccess . '.tmp';
+        if ($count !== 1 || $updated === null || file_put_contents($temp, $updated) === false || !rename($temp, $htaccess)) {
+            throw new InstallFailed(['embed_sites' => 'Couldn’t update the web folder’s .htaccess; edit its frame-ancestors line by hand.']);
+        }
+    }
+
+    /**
+     * "https://a.com\nhttps://b.com/" → ['https://a.com', 'https://b.com'].
+     *
+     * @return list<string>
+     *
+     * @throws InstallFailed
+     */
+    public static function embedOrigins(string $sites): array
+    {
         $origins = [];
         foreach (preg_split('/[\s,]+/', trim($sites)) ?: [] as $site) {
             if ($site === '') {
@@ -134,12 +164,8 @@ final class Installer
             }
             $origins[strtolower($origin)] = true;
         }
-        $contents = is_file($htaccess) ? (string) file_get_contents($htaccess) : '';
-        // Only inside the Content-Security-Policy header, never a comment that mentions it.
-        $updated = preg_replace('/(Content-Security-Policy "[^"]*?)frame-ancestors [^;"]*;/', '$1frame-ancestors ' . implode(' ', ["'self'", ...array_keys($origins)]) . ';', $contents, 1, $count);
-        if ($count !== 1 || $updated === null || file_put_contents($htaccess, $updated) === false) {
-            throw new InstallFailed(['embed_sites' => 'Couldn’t update the web folder’s .htaccess; edit its frame-ancestors line by hand.']);
-        }
+
+        return array_keys($origins);
     }
 
     /**
@@ -161,7 +187,8 @@ final class Installer
      */
     private function values(array $form): array
     {
-        $field = static fn(string $key): string => trim((string) ($form[$key] ?? ''));
+        // Control characters (line breaks…) never belong in these settings or email headers.
+        $field = static fn(string $key): string => trim((string) preg_replace('/[\x00-\x1F\x7F]/', '', (string) ($form[$key] ?? '')));
         $errors = [];
         $values = [
             'APP_URL' => rtrim($field('app_url'), '/'),
@@ -172,12 +199,12 @@ final class Installer
             'DB_PORT' => $field('db_port') === '' ? '3306' : $field('db_port'),
             'DB_NAME' => $field('db_name'),
             'DB_USER' => $field('db_user'),
-            'DB_PASSWORD' => (string) ($form['db_password'] ?? ''),
+            'DB_PASSWORD' => (string) preg_replace('/[\x00-\x1F\x7F]/', '', (string) ($form['db_password'] ?? '')),
             'SMTP_HOST' => $field('smtp_host'),
             'SMTP_PORT' => $field('smtp_port') === '' ? '465' : $field('smtp_port'),
             'SMTP_ENCRYPTION' => in_array($field('smtp_encryption'), ['ssl', 'tls', 'none'], true) ? $field('smtp_encryption') : 'ssl',
             'SMTP_USER' => $field('smtp_user'),
-            'SMTP_PASSWORD' => (string) ($form['smtp_password'] ?? ''),
+            'SMTP_PASSWORD' => (string) preg_replace('/[\x00-\x1F\x7F]/', '', (string) ($form['smtp_password'] ?? '')),
             'MAIL_FROM' => $field('mail_from'),
             'MAIL_FROM_NAME' => $field('mail_from_name') === '' ? 'Bookings' : $field('mail_from_name'),
         ];
@@ -205,6 +232,25 @@ final class Installer
         }
         if ($values['SMTP_HOST'] === '') {
             $errors['smtp_host'] = 'For Hostinger email: smtp.hostinger.com.';
+        }
+        foreach (['db_name' => 'DB_NAME', 'db_user' => 'DB_USER'] as $key => $name) {
+            if ($values[$name] !== '' && preg_match(self::DB_IDENTIFIER, $values[$name]) !== 1) {
+                $errors[$key] = 'Only letters, digits, "_", "$" and "-", as shown in hPanel.';
+            }
+        }
+        if (preg_match(self::HOSTNAME, $values['DB_HOST']) !== 1) {
+            $errors['db_host'] = 'A host name such as localhost.';
+        }
+        if (!ctype_digit($values['DB_PORT']) || (int) $values['DB_PORT'] < 1 || (int) $values['DB_PORT'] > 65535) {
+            $errors['db_port'] = 'A port number such as 3306.';
+        }
+        if ($values['SMTP_HOST'] !== '' && preg_match(self::HOSTNAME, $values['SMTP_HOST']) !== 1) {
+            $errors['smtp_host'] = 'A host name such as smtp.hostinger.com.';
+        }
+        try {
+            self::embedOrigins((string) ($form['embed_sites'] ?? ''));
+        } catch (InstallFailed $e) {
+            $errors += $e->errors;
         }
         if ($errors !== []) {
             throw new InstallFailed($errors);
@@ -240,7 +286,12 @@ final class Installer
         $php = "<?php\n\n// Written by the ConsultDesk installer. Keep this file private: it holds your keys.\n"
             . "// Optional settings (Razorpay, Telegram, Google, PAYMENTS_LIVE…): see config.example.php.\n\n"
             . 'return ' . var_export($values, true) . ";\n";
-        self::writePrivate($this->configPath(), $php);
+        $temp = $this->configPath() . '.tmp';
+        self::writePrivate($temp, $php);
+        if (!rename($temp, $this->configPath())) {
+            @unlink($temp);
+            throw new InstallFailed(['install' => 'Couldn’t save config.php into the consultdesk-app folder. Check its permissions (755).']);
+        }
     }
 
     private function configPath(): string
