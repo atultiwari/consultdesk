@@ -17,6 +17,7 @@ function ServiceCard({
   return (
     <li className="service-item rise-in" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
       <Link to={`/p/${providerSlug}/${service.slug}`} className="card service-card">
+        {service.highlight && <span className="service-card__ribbon">{service.highlight}</span>}
         <span className="service-card__head">
           <span className="service-card__title">{service.title}</span>
           <span className="service-card__price">{service.price_display}</span>

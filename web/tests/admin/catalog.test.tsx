@@ -143,6 +143,38 @@ describe('admin providers', () => {
     ]);
   });
 
+  it('reorders sessions and highlights one as most popular', async () => {
+    const intro = { ...thesisService, id: 22, slug: 'intro', title: 'Intro call', sort_order: 1 };
+    let list = [thesisService, intro];
+    const calls = mockApi({
+      ...signedIn(),
+      ...providerRoutes,
+      'GET /api/admin/providers/7/services': () => ok(list),
+      'PUT /api/admin/providers/7/services/order': (init) => {
+        const ids = JSON.parse(String(init?.body)).ids as number[];
+        list = ids.map((id) => list.find((s) => s.id === id) as typeof thesisService);
+        return ok(list);
+      },
+      'PATCH /api/admin/services/22': (init) => ok({ ...intro, ...JSON.parse(String(init?.body)) }),
+    });
+    const user = userEvent.setup();
+    renderAt(`${ADMIN}/providers/7`);
+
+    await user.click(await screen.findByRole('tab', { name: 'Sessions' }));
+    await user.click(await screen.findByRole('button', { name: 'Move Intro call up' }));
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ ids: [22, 21] });
+    expect(await screen.findByRole('button', { name: 'Move Intro call down' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Move Intro call up' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Edit Intro call' }));
+    const editor = screen.getByRole('dialog', { name: 'Edit session' });
+    await user.selectOptions(within(editor).getByLabelText('Highlight'), 'Most popular');
+    await user.click(within(editor).getByRole('button', { name: 'Save session' }));
+    expect(calls.find((c) => c.method === 'PATCH')?.body).toMatchObject({
+      highlight: 'Most popular',
+    });
+  });
+
   it('edits the weekly hours and saves them in one go', async () => {
     const calls = mockApi({
       ...signedIn(),

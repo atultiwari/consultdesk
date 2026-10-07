@@ -97,6 +97,7 @@ final class AdminRoutes
 
         $admin->get("/providers/{$id}/services", static fn($rq, $rs, array $a) => $catalog()->list($rq, $rs, $a));
         $admin->post("/providers/{$id}/services", static fn($rq, $rs, array $a) => $catalog()->create($rq, $rs, $a));
+        $admin->put("/providers/{$id}/services/order", static fn($rq, $rs, array $a) => $catalog()->reorder($rq, $rs, $a));
         $admin->patch("/services/{$id}", static fn($rq, $rs, array $a) => $catalog()->update($rq, $rs, $a));
 
         $admin->get("/providers/{$id}/availability", static fn($rq, $rs, array $a) => $schedule()->availability($rq, $rs, $a));

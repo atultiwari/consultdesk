@@ -38,6 +38,8 @@ export type Service = {
   tagline: string | null;
   description: string | null;
   audience: string | null;
+  /** A short label the teacher chose, e.g. "Most popular". */
+  highlight?: string | null;
   duration_minutes: number;
   price_minor: number;
   currency: string;

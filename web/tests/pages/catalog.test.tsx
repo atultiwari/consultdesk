@@ -50,6 +50,20 @@ describe('home and provider pages', () => {
     expect(card).toHaveTextContent('For residents');
   });
 
+  it('shows the label a teacher put on a session', async () => {
+    mockApi({
+      'GET /api/site': ok(site),
+      'GET /api/providers/demo': ok({
+        provider,
+        services: [{ ...thesis, highlight: 'Most popular' }],
+      }),
+    });
+    renderAt('/p/demo');
+
+    const card = (await screen.findByText('Most popular')).closest('a') as HTMLElement;
+    expect(card).toHaveTextContent('Thesis guidance');
+  });
+
   it('handles an unknown provider', async () => {
     mockApi({
       'GET /api/site': ok(site),

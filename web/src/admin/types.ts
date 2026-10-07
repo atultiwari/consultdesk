@@ -113,6 +113,8 @@ export type AdminService = {
   tagline: string | null;
   description: string | null;
   audience: string | null;
+  /** A short label on the booking site, e.g. "Most popular". */
+  highlight: string | null;
   duration_min: number;
   price_minor: number;
   currency: string;
