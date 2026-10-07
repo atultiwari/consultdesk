@@ -161,7 +161,7 @@ final class Config
         if (!str_starts_with($appUrl, 'https://') && !$local) {
             throw new InvalidArgumentException('APP_URL must start with https:// when the admin area is on (ADMIN_PATH).');
         }
-        if (preg_match('/^[a-z0-9][a-z0-9-]{7,63}$/', $value) !== 1 || in_array($value, ['api', 'embed-js', 'install', 'assets'], true)) {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{7,63}$/', $value) !== 1 || in_array($value, ['api', 'embed-js', 'install', 'assets', 'my-bookings'], true)) {
             throw new InvalidArgumentException('ADMIN_PATH must be 8–64 lowercase letters, digits or "-", and hard to guess.');
         }
 

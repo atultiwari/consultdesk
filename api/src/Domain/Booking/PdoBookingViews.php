@@ -35,6 +35,14 @@ final class PdoBookingViews implements BookingViewRepository
         return $this->findOne(self::SELECT . ' WHERE b.ref = :value', $ref);
     }
 
+    public function findByEmail(string $email, int $limit): array
+    {
+        $statement = $this->pdo->prepare(self::SELECT . ' WHERE b.customer_email = :email ORDER BY b.start_at DESC LIMIT ' . max(1, $limit));
+        $statement->execute(['email' => $email]);
+
+        return array_values(array_map(self::hydrate(...), $statement->fetchAll(PDO::FETCH_ASSOC)));
+    }
+
     public function staffEmails(BookingView $booking): array
     {
         return $this->staffEmailsFor($booking->providerNotifyEmail);

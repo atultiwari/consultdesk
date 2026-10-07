@@ -139,3 +139,13 @@ export type CouponQuote = {
   total_minor: number;
   total_display: string;
 };
+
+/** One booking on the customer's "My bookings" page. */
+export type MyBooking = BookingView & {
+  /** The status page, as linked from the booking emails. */
+  status_url: string | null;
+  /** Unpaid holds only; anything paid goes through the teacher. */
+  can_cancel: boolean;
+};
+
+export type MyBookings = { email: string; upcoming: MyBooking[]; past: MyBooking[] };

@@ -1,29 +1,15 @@
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useBooking } from '../api/hooks';
-import type { BookingState, BookingView } from '../api/types';
+import type { BookingView } from '../api/types';
 import { ButtonAnchor, ButtonLink } from '../design/components/Button';
 import { Badge, Loading, Notice } from '../design/components/Notice';
 import { safeHttpsUrl } from '../lib/safeUrl';
 import { formatLongDateTime, formatTime, timezoneLabel } from '../lib/time';
 import { PaymentPanel } from './PaymentPanel';
 import { RazorpayReturn } from './RazorpayReturn';
+import { STATUS } from './statusLabels';
 import './booking.css';
 import './status.css';
-
-const STATUS: Record<
-  BookingState,
-  { label: string; tone: 'brand' | 'accent' | 'success' | 'warn' | 'danger' }
-> = {
-  held: { label: 'Awaiting payment', tone: 'warn' },
-  awaiting_verification: { label: 'Verifying payment', tone: 'brand' },
-  confirmed: { label: 'Confirmed', tone: 'success' },
-  rejected: { label: 'Not confirmed', tone: 'danger' },
-  expired: { label: 'Expired', tone: 'danger' },
-  cancelled: { label: 'Cancelled', tone: 'danger' },
-  completed: { label: 'Completed', tone: 'success' },
-  no_show: { label: 'Missed', tone: 'danger' },
-  rescheduled: { label: 'Rescheduled', tone: 'brand' },
-};
 
 function Outcome({ booking }: { booking: BookingView }) {
   switch (booking.status) {

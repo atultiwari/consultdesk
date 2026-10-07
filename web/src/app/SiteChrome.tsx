@@ -37,7 +37,12 @@ export function SiteChrome({ children }: { children: ReactNode }) {
               )}
               <span>{site.org_name}</span>
             </Link>
-            <ThemeToggle />
+            <div className="site-header__tools">
+              <Link to="/my-bookings" className="site-header__link">
+                My bookings
+              </Link>
+              <ThemeToggle />
+            </div>
           </div>
         </header>
       )}
