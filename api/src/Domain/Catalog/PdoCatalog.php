@@ -17,14 +17,18 @@ final class PdoCatalog implements CatalogRepository
     private const SERVICE_COLUMNS = 'id, provider_id, slug, title, tagline, description, audience, duration_min,
         price_minor, currency, requires_approval, payment_methods, questions';
 
-    public function __construct(private readonly PDO $pdo) {}
+    public function __construct(
+        private readonly PDO $pdo,
+        /** The organisation's Razorpay keys come from .env, so every teacher can take online payment. */
+        private readonly bool $razorpayDefaults = false,
+    ) {}
 
     public function activeProviders(): array
     {
         $switches = $this->switches();
 
         return array_map(
-            static fn(array $r): ProviderProfile => self::provider($r, $switches),
+            fn(array $r): ProviderProfile => $this->provider($r, $switches),
             $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE active = 1 ORDER BY sort_order, name', []),
         );
     }
@@ -33,7 +37,7 @@ final class PdoCatalog implements CatalogRepository
     {
         $rows = $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE slug = :slug AND active = 1', ['slug' => $slug]);
 
-        return $rows === [] ? null : self::provider($rows[0], $this->switches());
+        return $rows === [] ? null : $this->provider($rows[0], $this->switches());
     }
 
     public function siteSettings(): SiteSettings
@@ -83,7 +87,7 @@ final class PdoCatalog implements CatalogRepository
     /**
      * @param array<string, mixed> $r
      */
-    private static function provider(array $r, PaymentSwitches $switches): ProviderProfile
+    private function provider(array $r, PaymentSwitches $switches): ProviderProfile
     {
         return new ProviderProfile(
             (int) $r['id'],
@@ -94,7 +98,7 @@ final class PdoCatalog implements CatalogRepository
             self::nullable($r['photo_path']),
             (string) $r['timezone'],
             $switches->upiEnabled && self::nullable($r['upi_vpa']) !== null,
-            $switches->razorpayEnabled && (bool) $r['razorpay_ready'],
+            $switches->razorpayEnabled && ($this->razorpayDefaults || (bool) $r['razorpay_ready']),
         );
     }
 

@@ -139,7 +139,7 @@ final class AppServices
 
     public function catalog(): PdoCatalog
     {
-        return new PdoCatalog($this->pdo());
+        return new PdoCatalog($this->pdo(), $this->config->razorpay !== null);
     }
 
     public function slotFinder(): SlotFinder

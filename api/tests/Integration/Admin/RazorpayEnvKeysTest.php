@@ -59,6 +59,16 @@ final class RazorpayEnvKeysTest extends AdminTestCase
         self::assertSame([$fresh], array_map(static fn($c) => $c->webhookSecret, $this->services()->gatewayKeys()->all()));
     }
 
+    public function testCustomersAreOfferedOnlinePaymentWithOnlyTheEnvKeys(): void
+    {
+        $demo = \ConsultDesk\Tests\Integration\Support\Fixtures::provider($this->pdo, ['slug' => 'demo']);
+        \ConsultDesk\Tests\Integration\Support\Fixtures::service($this->pdo, $demo, ['slug' => 'thesis', 'price_minor' => 99900, 'payment_methods' => '["upi","razorpay_link"]']);
+
+        $services = $this->call('GET', '/api/providers/demo')[1]['data']['services'];
+
+        self::assertSame(['upi', 'razorpay_link'], $services[0]['payment_methods']);
+    }
+
     public function testWebhooksSignedWithTheEnvSecretAreRecognised(): void
     {
         $keys = $this->services()->gatewayKeys();
