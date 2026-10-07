@@ -258,8 +258,8 @@ export type AdminCoupon = {
   once_per_email: boolean;
   active: boolean;
   note: string | null;
-  /** Bookings using it now (lapsed, cancelled and rejected ones give their use back). */
-  uses: number;
+  /** Bookings using it now (lapsed, cancelled and rejected ones give their use back); null when not yours. */
+  uses: number | null;
   /** false for a site-wide coupon shown to a teacher */
   editable: boolean;
 };

@@ -78,13 +78,40 @@ final class Coupon
     public function discountFor(int $priceMinor): int
     {
         if ($this->kind === self::AMOUNT) {
-            return min($this->value, $priceMinor);
-        }
-        if ($this->value >= 100) {
-            return $priceMinor;
+            $discount = min($this->value, $priceMinor);
+        } elseif ($this->value >= 100) {
+            $discount = $priceMinor;
+        } else {
+            $discount = min($priceMinor, intdiv(intdiv($priceMinor * $this->value, 100), self::ROUND_TO) * self::ROUND_TO);
         }
 
-        return min($priceMinor, intdiv(intdiv($priceMinor * $this->value, 100), self::ROUND_TO) * self::ROUND_TO);
+        // Less than ₹1 left can't be paid online (Razorpay's minimum), so that becomes free.
+        return $priceMinor - $discount < self::ROUND_TO ? $priceMinor : $discount;
+    }
+
+    /**
+     * The address used for "once per customer": lower case, without a +tag, and without dots for
+     * Gmail, so name+1@ and n.ame@gmail.com count as the same person.
+     */
+    public static function emailKey(string $email): string
+    {
+        $email = strtolower(trim($email));
+        $at = strrpos($email, '@');
+        if ($at === false) {
+            return $email;
+        }
+        $local = substr($email, 0, $at);
+        $domain = substr($email, $at + 1);
+        $plus = strpos($local, '+');
+        if ($plus !== false) {
+            $local = substr($local, 0, $plus);
+        }
+        if (in_array($domain, ['gmail.com', 'googlemail.com'], true)) {
+            $local = str_replace('.', '', $local);
+            $domain = 'gmail.com';
+        }
+
+        return $local . '@' . $domain;
     }
 
     private static function time(mixed $value): ?DateTimeImmutable

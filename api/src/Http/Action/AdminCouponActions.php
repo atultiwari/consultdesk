@@ -40,7 +40,7 @@ final class AdminCouponActions
 
     public function create(Request $request, Response $response): Response
     {
-        $user = AdminScope::user($request);
+        $user = self::manager($request);
         $input = new Input(JsonInput::decode($request));
         $values = $this->read($input, $user, null);
         $input->assertValid();
@@ -56,14 +56,22 @@ final class AdminCouponActions
      */
     public function update(Request $request, Response $response, array $args): Response
     {
-        $user = AdminScope::user($request);
+        $user = self::manager($request);
         $current = $this->editable($user, (int) ($args['id'] ?? 0));
         $input = new Input(JsonInput::decode($request));
         $values = $this->read($input, $user, $current);
         $input->assertValid();
 
         $this->coupons->update((int) $current['id'], $values);
-        $this->audit->record(Actor::user($user->id), 'admin.coupon_updated', 'coupon', (int) $current['id'], ['fields' => array_keys($values)]);
+        $changes = [];
+        foreach ($values as $field => $value) {
+            $before = $current[$field] ?? null;
+            $after = is_array($value) ? json_encode($value) : $value;
+            if ((string) $before !== (string) (is_bool($after) ? (int) $after : $after)) {
+                $changes[$field] = ['from' => $before, 'to' => $after];
+            }
+        }
+        $this->audit->record(Actor::user($user->id), 'admin.coupon_updated', 'coupon', (int) $current['id'], ['code' => $current['code'], 'changes' => $changes]);
 
         return JsonResponse::success($response, $this->presented((int) $current['id'], $user));
     }
@@ -73,12 +81,26 @@ final class AdminCouponActions
      */
     public function delete(Request $request, Response $response, array $args): Response
     {
-        $user = AdminScope::user($request);
+        $user = self::manager($request);
         $current = $this->editable($user, (int) ($args['id'] ?? 0));
         $this->coupons->delete((int) $current['id']);
         $this->audit->record(Actor::user($user->id), 'admin.coupon_deleted', 'coupon', (int) $current['id'], ['code' => $current['code']]);
 
         return JsonResponse::success($response, ['ok' => true]);
+    }
+
+    /**
+     * Staff, or a teacher account linked to a teacher (an unlinked one can't make coupons at all,
+     * so it can never end up with a site-wide one).
+     */
+    private static function manager(Request $request): AdminUser
+    {
+        $user = AdminScope::user($request);
+        if (!$user->isStaff() && $user->providerId === null) {
+            throw ApiException::forbidden();
+        }
+
+        return $user;
     }
 
     /**
@@ -122,7 +144,9 @@ final class AdminCouponActions
         }
 
         if (!$user->isStaff()) {
-            $values['provider_id'] = $user->providerId;
+            if ($creating) {
+                $values['provider_id'] = $user->providerId;
+            }
         } elseif ($creating || $input->has('provider_id')) {
             $values['provider_id'] = $input->int('provider_id', required: false, min: 1);
             if ($values['provider_id'] !== null && !$this->coupons->providerExists($values['provider_id'])) {
@@ -141,6 +165,11 @@ final class AdminCouponActions
                 : $input->int('value', min: 1, max: 100);
         }
 
+        $teacherChanged = !$creating && array_key_exists('provider_id', $values)
+            && (string) $values['provider_id'] !== (string) ($current['provider_id'] ?? '');
+        if ($teacherChanged && !$input->has('service_ids')) {
+            $values['service_ids'] = null; // the old teacher's sessions can't apply to the new one
+        }
         if ($creating || $input->has('service_ids')) {
             $ids = $input->list('service_ids', max: self::MAX_SERVICES);
             $ids = $ids === null || $ids === [] ? null : array_values(array_unique(array_map('intval', array_filter($ids, 'is_numeric'))));
@@ -155,8 +184,8 @@ final class AdminCouponActions
                 $values[$field] = $input->dateTime($field, required: false)?->format('Y-m-d H:i:s');
             }
         }
-        $from = $values['valid_from'] ?? ($current['valid_from'] ?? null);
-        $until = $values['valid_until'] ?? ($current['valid_until'] ?? null);
+        $from = array_key_exists('valid_from', $values) ? $values['valid_from'] : ($current['valid_from'] ?? null);
+        $until = array_key_exists('valid_until', $values) ? $values['valid_until'] : ($current['valid_until'] ?? null);
         if ($from !== null && $until !== null && $until < $from) {
             $input->reject('valid_until', 'The end date must be after the start date.');
         }

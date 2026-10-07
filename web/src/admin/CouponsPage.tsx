@@ -95,7 +95,11 @@ export function CouponsPage() {
                   <td>{scope(c)}</td>
                   <td>{validity(c, tz)}</td>
                   <td>
-                    {c.max_uses === null ? c.uses : `${c.uses} of ${c.max_uses}`}
+                    {c.uses === null
+                      ? '—'
+                      : c.max_uses === null
+                        ? c.uses
+                        : `${c.uses} of ${c.max_uses}`}
                     {c.once_per_email && <span className="cell-sub">once per customer</span>}
                   </td>
                   <td className="cell-actions">

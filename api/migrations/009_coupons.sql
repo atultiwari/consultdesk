@@ -28,5 +28,7 @@ ALTER TABLE bookings
     ADD COLUMN coupon_id BIGINT UNSIGNED NULL AFTER amount_minor,
     ADD COLUMN coupon_code VARCHAR(32) NULL AFTER coupon_id,
     ADD COLUMN discount_minor INT UNSIGNED NOT NULL DEFAULT 0 AFTER coupon_code,
-    ADD KEY idx_bookings_coupon (coupon_id, customer_email),
+    -- The customer's email with +tags (and Gmail dots) removed, for "once per customer".
+    ADD COLUMN coupon_email VARCHAR(254) NULL AFTER discount_minor,
+    ADD KEY idx_bookings_coupon (coupon_id, coupon_email),
     ADD CONSTRAINT fk_bookings_coupon FOREIGN KEY (coupon_id) REFERENCES coupons (id) ON DELETE SET NULL;

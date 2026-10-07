@@ -59,7 +59,7 @@ export function useSlots(provider: string, service: string, from: string, to: st
   });
 }
 
-export type CouponCheck = { provider: string; service: string; code: string; email?: string };
+export type CouponCheck = { provider: string; service: string; code: string };
 
 export function useCheckCoupon() {
   return useMutation({

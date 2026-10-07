@@ -7,7 +7,6 @@ import { Button } from '../design/components/Button';
 type Props = {
   provider: string;
   service: string;
-  email: string;
   applied: CouponQuote | null;
   onChange: (quote: CouponQuote | null) => void;
 };
@@ -16,9 +15,11 @@ type Props = {
  * A small "Have a coupon?" link that opens into a code field. Deliberately quiet: most customers
  * won't have one, and it shouldn't send them off hunting for codes.
  */
-export function CouponBox({ provider, service, email, applied, onChange }: Props) {
+export function CouponBox({ provider, service, applied, onChange }: Props) {
   const check = useCheckCoupon();
   const [open, setOpen] = useState(false);
+  // Each state appears only after the person acted, so it can take focus without surprising anyone.
+  const [acted, setActed] = useState(false);
   const [code, setCode] = useState('');
   const error =
     check.error instanceof ApiError
@@ -33,7 +34,16 @@ export function CouponBox({ provider, service, email, applied, onChange }: Props
         <span>
           <strong className="mono">{applied.code}</strong> applied: −{applied.discount_display}
         </span>
-        <button type="button" className="link-button" onClick={() => onChange(null)}>
+        <button
+          type="button"
+          className="link-button"
+          autoFocus={acted}
+          onClick={() => {
+            setOpen(false);
+            setCode('');
+            onChange(null);
+          }}
+        >
           Remove
         </button>
       </p>
@@ -43,7 +53,15 @@ export function CouponBox({ provider, service, email, applied, onChange }: Props
   if (!open) {
     return (
       <p className="coupon">
-        <button type="button" className="link-button" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="link-button"
+          autoFocus={acted}
+          onClick={() => {
+            setActed(true);
+            setOpen(true);
+          }}
+        >
           Have a coupon?
         </button>
       </p>
@@ -54,7 +72,7 @@ export function CouponBox({ provider, service, email, applied, onChange }: Props
     event.preventDefault();
     if (code.trim() === '') return;
     check.mutate(
-      { provider, service, code: code.trim().toUpperCase(), email },
+      { provider, service, code: code.trim().toUpperCase() },
       { onSuccess: (quote) => onChange(quote) },
     );
   };
@@ -72,6 +90,7 @@ export function CouponBox({ provider, service, email, applied, onChange }: Props
           autoCapitalize="characters"
           spellCheck={false}
           maxLength={32}
+          autoFocus
           value={code}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'coupon-error' : undefined}

@@ -200,7 +200,6 @@ export default function BookingPage() {
                 <CouponBox
                   provider={provider.slug}
                   service={service.slug}
-                  email={details.email}
                   applied={coupon}
                   onChange={setCoupon}
                 />

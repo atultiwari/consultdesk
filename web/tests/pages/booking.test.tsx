@@ -146,11 +146,7 @@ describe('booking flow', () => {
       calls.find(
         (c) => c.path === '/api/coupons/check' && (c.body as { code: string }).code === 'WELCOME20',
       )?.body,
-    ).toMatchObject({
-      provider: 'demo',
-      service: 'thesis',
-      email: 'asha@example.test',
-    });
+    ).toEqual({ provider: 'demo', service: 'thesis', code: 'WELCOME20' });
 
     await user.click(screen.getByRole('button', { name: 'Book and pay ₹2,400' }));
     await waitFor(() => expect(path()).toBe('/b/CD-7F3K?t=tok'));

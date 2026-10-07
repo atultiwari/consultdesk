@@ -60,12 +60,12 @@ final class BookingActions
         $input = JsonInput::from($request);
         [$provider, $service] = $this->resolve($input);
         $code = $input->string('code', max: 64);
-        $email = $input->email('email', required: false);
         $input->assertValid();
 
+        // No email here: whether someone has used a code is only checked when they book.
         try {
             $applied = ($this->coupons ?? throw CouponRejected::notValid())
-                ->apply((string) $code, $provider->id, $service->id, $service->priceMinor, $email, $this->clock->now());
+                ->apply((string) $code, $provider->id, $service->id, $service->priceMinor, null, $this->clock->now());
         } catch (CouponRejected $e) {
             throw new ValidationFailed(['code' => $e->getMessage()]);
         }

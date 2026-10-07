@@ -48,6 +48,34 @@ final class AdminCouponsTest extends AdminTestCase
         self::assertSame([], $this->admin('GET', '/api/admin/coupons')[1]['data']);
     }
 
+    public function testEditsCanClearDatesAndMovingACouponToAnotherTeacherDropsTheOldSessions(): void
+    {
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+        [, $made] = $this->admin('POST', '/api/admin/coupons', [
+            'code' => 'MOVEME', 'kind' => 'percent', 'value' => 10, 'provider_id' => $this->demo, 'service_ids' => [$this->thesis],
+            'valid_from' => '2026-10-01T00:00:00Z', 'valid_until' => '2026-10-31T00:00:00Z',
+        ]);
+        $id = (int) $made['data']['id'];
+
+        [$status, $cleared] = $this->admin('PATCH', "/api/admin/coupons/{$id}", ['valid_until' => null, 'valid_from' => '2026-11-15T00:00:00Z']);
+        self::assertSame(200, $status, json_encode($cleared) ?: '');
+        self::assertNull($cleared['data']['valid_until']);
+
+        [, $moved] = $this->admin('PATCH', "/api/admin/coupons/{$id}", ['provider_id' => $this->other]);
+        self::assertSame([$this->other, null], [$moved['data']['provider_id'], $moved['data']['service_ids']]);
+        $changes = json_decode((string) self::column($this->pdo, "SELECT data FROM audit_log WHERE action = 'admin.coupon_updated' ORDER BY id DESC LIMIT 1")[0], true)['changes'];
+        self::assertSame((string) $this->other, (string) $changes['provider_id']['to']);
+    }
+
+    public function testATeacherAccountNotLinkedToATeacherCantMakeCoupons(): void
+    {
+        $this->createUser('loose@example.test', 'provider');
+        $this->login('loose@example.test');
+
+        self::assertSame(403, $this->admin('POST', '/api/admin/coupons', ['code' => 'SITEWIDE', 'kind' => 'percent', 'value' => 50])[0]);
+    }
+
     public function testValuesAreChecked(): void
     {
         $this->createUser('owner@example.test');
@@ -81,6 +109,7 @@ final class AdminCouponsTest extends AdminTestCase
 
         $list = $this->admin('GET', '/api/admin/coupons')[1]['data'];
         self::assertSame(['MYSTUDENTS' => true, 'SITEWIDE' => false], array_column($list, 'editable', 'code'), 'site-wide ones are shown read-only; other teachers’ are hidden');
+        self::assertNull(array_column($list, 'uses', 'code')['SITEWIDE'], 'not how often other teachers’ customers used it');
 
         $siteWide = (int) self::column($this->pdo, "SELECT id FROM coupons WHERE code = 'SITEWIDE'")[0];
         $theirs = (int) self::column($this->pdo, "SELECT id FROM coupons WHERE code = 'THEIRS'")[0];

@@ -34,7 +34,7 @@ final class CouponSettings
             . ($scope === null ? '' : ' WHERE c.provider_id = :scope OR c.provider_id IS NULL')
             . ' ORDER BY c.active DESC, c.created_at DESC, c.id DESC',
         );
-        $statement->execute([...self::usingParams(), ...($scope === null ? [] : ['scope' => $scope])]);
+        $statement->execute([...$this->usingParams(), ...($scope === null ? [] : ['scope' => $scope])]);
 
         return array_values(array_map(fn(array $r): array => $this->present($r, $viewer), $statement->fetchAll(PDO::FETCH_ASSOC)));
     }
@@ -48,7 +48,7 @@ final class CouponSettings
             'SELECT c.*, p.name AS provider_name, (' . self::usesSql() . ') AS uses FROM coupons c
              LEFT JOIN providers p ON p.id = c.provider_id WHERE c.id = :id',
         );
-        $statement->execute([...self::usingParams(), 'id' => $id]);
+        $statement->execute([...$this->usingParams(), 'id' => $id]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
         return is_array($row) ? $row : null;
@@ -161,8 +161,9 @@ final class CouponSettings
             'max_uses' => $r['max_uses'] === null ? null : (int) $r['max_uses'],
             'once_per_email' => (bool) $r['once_per_email'],
             'active' => (bool) $r['active'],
-            'note' => $r['note'],
-            'uses' => (int) ($r['uses'] ?? 0),
+            // A teacher sees site-wide coupons, but not their notes or how often other teachers' customers used them.
+            'note' => self::canEdit($viewer, $r) ? $r['note'] : null,
+            'uses' => self::canEdit($viewer, $r) ? (int) ($r['uses'] ?? 0) : null,
             'editable' => self::canEdit($viewer, $r),
         ];
     }
@@ -190,15 +191,16 @@ final class CouponSettings
     {
         $placeholders = implode(', ', array_map(static fn(int $i): string => ':u' . $i, array_keys(Coupons::USING)));
 
-        return "SELECT COUNT(*) FROM bookings b WHERE b.coupon_id = c.id AND b.status IN ({$placeholders})";
+        return "SELECT COUNT(*) FROM bookings b WHERE b.coupon_id = c.id AND b.status IN ({$placeholders})
+            AND (b.status <> 'held' OR b.hold_expires_at > :u_now)";
     }
 
     /**
      * @return array<string, string>
      */
-    private static function usingParams(): array
+    private function usingParams(): array
     {
-        $params = [];
+        $params = ['u_now' => $this->clock->now()->format(self::SQL)];
         foreach (Coupons::USING as $i => $status) {
             $params['u' . $i] = $status;
         }

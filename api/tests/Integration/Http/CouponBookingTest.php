@@ -73,6 +73,33 @@ final class CouponBookingTest extends ApiTestCase
         self::assertSame([422, 'You’ve already used this code.'], [$status, $body['error']['fields']['coupon'] ?? null]);
     }
 
+    public function testPlusTagsAndGmailDotsCountAsTheSameCustomer(): void
+    {
+        Fixtures::coupon($this->pdo, 'FIRSTTIME');
+
+        self::assertSame(201, $this->book('2026-10-07T04:30:00Z', 'FIRSTTIME', 'asha.p@gmail.com')[0]);
+        self::assertSame(422, $this->book('2026-10-07T06:30:00Z', 'FIRSTTIME', 'ashap+again@gmail.com')[0]);
+    }
+
+    public function testAHoldThatHasLapsedNoLongerUsesTheCoupon(): void
+    {
+        Fixtures::coupon($this->pdo, 'ONCE', ['max_uses' => 1, 'once_per_email' => 0]);
+        self::assertSame(201, $this->book('2026-10-07T04:30:00Z', 'ONCE')[0]);
+
+        $this->pdo->exec("UPDATE bookings SET hold_expires_at = '2026-10-04 23:00:00'"); // lapsed, not yet swept
+
+        self::assertSame(201, $this->book('2026-10-07T08:30:00Z', 'ONCE')[0]);
+    }
+
+    public function testLessThanARupeeLeftBecomesFree(): void
+    {
+        Fixtures::coupon($this->pdo, 'ALMOST', ['kind' => 'amount', 'value' => 99850]);
+
+        [, $check] = $this->call('POST', '/api/coupons/check', ['provider' => 'demo', 'service' => 'thesis', 'code' => 'ALMOST']);
+
+        self::assertSame(0, $check['data']['total_minor']);
+    }
+
     public function testCodesThatDontFitAreRefusedWithoutBooking(): void
     {
         $other = Fixtures::provider($this->pdo, ['slug' => 'other']);

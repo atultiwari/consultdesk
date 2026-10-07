@@ -10,6 +10,7 @@ use ConsultDesk\Domain\Availability\Interval;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotEngine;
 use ConsultDesk\Domain\Availability\SlotRequest;
+use ConsultDesk\Domain\Coupon\Coupon;
 use ConsultDesk\Domain\Coupon\CouponRejected;
 use ConsultDesk\Domain\Coupon\Coupons;
 use ConsultDesk\Infra\Clock;
@@ -113,6 +114,7 @@ final class BookingService
                 $coupon?->coupon->id,
                 $coupon?->coupon->code,
                 $coupon === null ? 0 : $coupon->discountMinor,
+                $coupon === null ? null : Coupon::emailKey($request->customer->email),
             ));
 
             $this->bookings->audit(Actor::customer(), 'booking.held', $id, [
