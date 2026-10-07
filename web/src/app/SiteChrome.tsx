@@ -6,6 +6,7 @@ import { overrideCss } from './theme';
 import { ThemeToggle } from './ThemeToggle';
 import { useSiteTheme } from './useSiteTheme';
 import './chrome.css';
+import { BrandMark } from '../design/components/BrandMark';
 
 export function SiteChrome({ children }: { children: ReactNode }) {
   const site = useSiteTheme();
@@ -33,7 +34,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
                   className="site-header__logo"
                 />
               ) : (
-                <span className="site-header__mark" aria-hidden="true" />
+                <BrandMark size={26} />
               )}
               <span>{site.org_name}</span>
             </Link>

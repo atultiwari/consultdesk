@@ -5,6 +5,7 @@ import { useSite } from '../api/hooks';
 import { isStaff, useAdmin } from './context';
 import { useAdminProviders, useLogout } from './hooks';
 import { useSetup } from './setupHooks';
+import { BrandMark } from '../design/components/BrandMark';
 
 function AccountMenu() {
   const { user } = useAdmin();
@@ -105,7 +106,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       </a>
       <aside className="admin__rail">
         <p className="admin__brand">
-          <span className="admin__mark" aria-hidden="true" />
+          <BrandMark size={30} />
           <span>
             {site?.org_name ?? 'ConsultDesk'}
             <span className="admin__brand-sub">Admin</span>

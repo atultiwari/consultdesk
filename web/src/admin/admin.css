@@ -52,16 +52,6 @@
   color: var(--ink-3);
 }
 
-.admin__mark,
-.auth__mark {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  background:
-    radial-gradient(circle at 30% 30%, var(--accent) 0 28%, transparent 30%), var(--brand);
-}
-
 .admin__nav {
   display: flex;
   flex-direction: column;

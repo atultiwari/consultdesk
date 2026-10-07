@@ -6,6 +6,7 @@ import { Notice } from '../design/components/Notice';
 import { ThemeToggle } from '../app/ThemeToggle';
 import { useFirstRun, useForgotPassword, useLogin, useResetPassword } from './hooks';
 import type { AdminEntry } from './types';
+import { BrandMark } from '../design/components/BrandMark';
 
 const MIN_PASSWORD = 10;
 
@@ -14,7 +15,7 @@ function AuthCard({ title, children }: { title: string; children: ReactNode }) {
     <main className="auth" id="main">
       <div className="auth__card">
         <p className="auth__eyebrow">
-          <span className="auth__mark" aria-hidden="true" />
+          <BrandMark size={28} />
           Admin
         </p>
         <h1 className="auth__title">{title}</h1>
