@@ -25,7 +25,7 @@ final class CustomerLinkEmailHandler implements JobHandler
     public function handle(array $payload): void
     {
         $email = PayloadReader::string($payload, 'email');
-        $token = $this->access->issue($email);
+        $token = $this->access->prepare($email);
         if ($token === null) {
             return;
         }
@@ -38,5 +38,6 @@ final class CustomerLinkEmailHandler implements JobHandler
             ->note('If you didn’t ask for this, you can ignore this email.');
 
         $this->mailer->send(new EmailMessage([$email], 'Your bookings', $body->toText(), $body->toHtml()));
+        $this->access->record($email, $token);
     }
 }

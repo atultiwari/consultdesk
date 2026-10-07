@@ -83,6 +83,29 @@ final class CustomerAccessTest extends ApiTestCase
         self::assertSame(401, $this->mine('GET', '/api/my/bookings')[0]);
     }
 
+    public function testOneAddressCantBeFloodedWithLinkEmails(): void
+    {
+        for ($i = 0; $i < 12; $i++) {
+            // From many addresses, so the per-IP limit isn't what stops it.
+            [$status] = $this->call('POST', '/api/my/link', ['email' => 'victim@example.test'], '198.51.100.' . ($i + 1));
+            self::assertSame(200, $status, 'always the same answer');
+        }
+
+        self::assertSame(['10'], self::column($this->pdo, "SELECT COUNT(*) FROM outbox_jobs WHERE type = 'email.customer_link'"));
+    }
+
+    public function testThePastIsARecordWithoutStatusLinksAndNothingIsCached(): void
+    {
+        $old = $this->book('2026-10-07T04:30:00Z', 'asha@example.test');
+        $this->pdo->exec("UPDATE bookings SET status = 'cancelled' WHERE ref = '{$old}'");
+        $this->signIn('asha@example.test');
+
+        [, $list, $response] = $this->mine('GET', '/api/my/bookings');
+
+        self::assertSame([[$old], null], [array_column($list['data']['past'], 'ref'), $list['data']['past'][0]['status_url']]);
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+    }
+
     public function testAnExpiredLinkDoesNotWork(): void
     {
         $this->book('2026-10-07T04:30:00Z', 'asha@example.test');

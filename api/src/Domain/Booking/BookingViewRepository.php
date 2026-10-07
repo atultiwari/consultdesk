@@ -11,6 +11,13 @@ interface BookingViewRepository
     public function findByRef(string $ref): ?BookingView;
 
     /**
+     * One customer's bookings, newest first.
+     *
+     * @return list<BookingView>
+     */
+    public function findByEmail(string $email, int $limit): array;
+
+    /**
      * Who gets provider-side emails: the provider's notification email plus every owner, de-duplicated.
      *
      * @return list<string>

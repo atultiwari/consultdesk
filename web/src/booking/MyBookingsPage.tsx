@@ -52,7 +52,8 @@ export default function MyBookingsPage() {
   return (
     <div className="container my-bookings">
       <h1 className="my-bookings__title">Your bookings</h1>
-      {signIn.isPending || (bookings.isPending && !signedOut) ? (
+      {/* Also while the list reloads after signing in, so the sign-in form doesn't flash up. */}
+      {signIn.isPending || (!bookings.data && bookings.isFetching) ? (
         <Loading />
       ) : bookings.data ? (
         <BookingLists data={bookings.data} />
@@ -199,7 +200,7 @@ function BookingCard({ booking }: { booking: MyBooking }) {
               >
                 Yes, cancel it
               </Button>
-              <Button variant="ghost" onClick={() => setAsking(false)}>
+              <Button variant="ghost" autoFocus onClick={() => setAsking(false)}>
                 Keep it
               </Button>
             </>

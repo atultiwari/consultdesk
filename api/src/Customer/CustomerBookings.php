@@ -10,7 +10,6 @@ use ConsultDesk\Domain\Booking\BookingViewRepository;
 use ConsultDesk\Http\BookingPresenter;
 use ConsultDesk\Infra\Crypto;
 use DateTimeImmutable;
-use PDO;
 
 /**
  * Everything booked with one email address, split into upcoming and past, each with the link to its
@@ -22,7 +21,6 @@ final class CustomerBookings
     private const OPEN = [BookingStatus::Held, BookingStatus::AwaitingVerification, BookingStatus::Confirmed];
 
     public function __construct(
-        private readonly PDO $pdo,
         private readonly BookingViewRepository $views,
         private readonly Crypto $crypto,
         private readonly string $appUrl,
@@ -33,21 +31,16 @@ final class CustomerBookings
      */
     public function for(string $email, DateTimeImmutable $now): array
     {
-        $statement = $this->pdo->prepare('SELECT ref FROM bookings WHERE customer_email = :email ORDER BY start_at DESC LIMIT ' . self::LIMIT);
-        $statement->execute(['email' => $email]);
         $upcoming = [];
         $past = [];
-        foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $ref) {
-            $view = $this->views->findByRef((string) $ref);
-            if ($view === null) {
-                continue;
-            }
+        foreach ($this->views->findByEmail($email, self::LIMIT) as $view) {
+            $open = in_array($view->status, self::OPEN, true) && !$view->holdLapsed($now) && $view->slot->end > $now;
             $item = [
                 ...BookingPresenter::present($view, $now),
-                'status_url' => $this->statusUrl($view),
+                // Only what's still ahead links to its status page (to pay or join); the rest is a record.
+                'status_url' => $open ? $this->statusUrl($view) : null,
                 'can_cancel' => self::canCancel($view, $now),
             ];
-            $open = in_array($view->status, self::OPEN, true) && !$view->holdLapsed($now) && $view->slot->end > $now;
             if ($open) {
                 $upcoming[] = $item;
             } else {

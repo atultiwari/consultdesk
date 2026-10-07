@@ -241,10 +241,11 @@ final class AppServices
     {
         return new CustomerActions(
             $this->customerAccess(),
-            new CustomerBookings($this->pdo(), $this->bookingViews(), $this->crypto(), $this->config->appUrl),
+            new CustomerBookings($this->bookingViews(), $this->crypto(), $this->config->appUrl),
             $this->bookingService(),
             new CustomerCookie(str_starts_with($this->config->appUrl, 'https://')),
             $this->clock,
+            $this->rateLimiter(),
         );
     }
 

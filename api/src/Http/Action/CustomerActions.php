@@ -13,6 +13,7 @@ use ConsultDesk\Http\CustomerCookie;
 use ConsultDesk\Http\JsonInput;
 use ConsultDesk\Http\JsonResponse;
 use ConsultDesk\Infra\Clock;
+use ConsultDesk\Infra\RateLimiter;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -29,7 +30,10 @@ final class CustomerActions
         private readonly BookingService $service,
         private readonly CustomerCookie $cookie,
         private readonly Clock $clock,
+        private readonly RateLimiter $limiter,
     ) {}
+
+    private const LINK_REQUESTS_PER_DAY = 10;
 
     /**
      * Always the same answer, so it can't be used to find out who has booked.
@@ -40,7 +44,10 @@ final class CustomerActions
         $email = $input->email('email');
         $input->assertValid();
 
-        $this->access->requestLink((string) $email);
+        // Per address as well as per IP: nobody can flood someone's inbox (or our queue) with links.
+        if ($this->limiter->hit('my-link-email', strtolower((string) $email), self::LINK_REQUESTS_PER_DAY, 86400) === null) {
+            $this->access->requestLink((string) $email);
+        }
 
         return JsonResponse::success($response, ['ok' => true]);
     }
@@ -61,7 +68,8 @@ final class CustomerActions
     {
         $email = $this->signedIn($request);
 
-        return JsonResponse::success($response, ['email' => $email, ...$this->bookings->for($email, $this->clock->now())]);
+        return JsonResponse::success($response, ['email' => $email, ...$this->bookings->for($email, $this->clock->now())])
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     /**
@@ -72,10 +80,9 @@ final class CustomerActions
         $email = $this->signedIn($request);
         JsonInput::from($request); // a JSON body only: plain cross-site forms can't send one
         $booking = $this->bookings->find($email, (string) ($args['ref'] ?? '')) ?? throw ApiException::notFound('Booking not found.');
-        if (!CustomerBookings::canCancel($booking, $this->clock->now())) {
+        if (!$this->service->cancelUnpaid($booking->id, Actor::customer())) {
             throw new ApiException(409, 'contact_teacher', sprintf('This booking can’t be cancelled here. Please contact %s.', $booking->providerName));
         }
-        $this->service->cancel($booking->id, Actor::customer());
 
         return JsonResponse::success($response, ['email' => $email, ...$this->bookings->for($email, $this->clock->now())]);
     }

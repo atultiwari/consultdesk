@@ -11,13 +11,13 @@ use PDO;
 /**
  * Customer sign-in by email link. Asking for a link never says whether the address has bookings;
  * the email job makes the token (so it's never stored in the queue) and sends nothing to an address
- * without bookings. A link works once, for 15 minutes; a session lasts 30 days.
+ * without bookings. A link works once, for 15 minutes; a session lasts 14 days.
  */
 final class CustomerAccess
 {
     public const EMAIL_JOB = 'email.customer_link';
     public const LINK_MINUTES = 15;
-    private const SESSION_DAYS = 30;
+    private const SESSION_DAYS = 14;
     /** Links one address can be sent per hour, however often it's asked for. */
     private const LINKS_PER_HOUR = 3;
     private const SQL = 'Y-m-d H:i:s';
@@ -34,17 +34,27 @@ final class CustomerAccess
     }
 
     /**
-     * Called by the email job: a new link token, or null when the address has no bookings or has
-     * had enough links this hour.
+     * Called by the email job: a new link token to send, or null when the address has no bookings or
+     * has had enough links this hour. Call record() once the email is sent, so a failed send (and
+     * its retry) doesn't count.
      */
-    public function issue(string $email): ?string
+    public function prepare(string $email): ?string
+    {
+        $email = self::normalise($email);
+        if (!$this->hasBookings($email) || $this->linksSince($email, $this->clock->now()->modify('-1 hour')) >= self::LINKS_PER_HOUR) {
+            return null;
+        }
+
+        return self::token();
+    }
+
+    /**
+     * Makes a sent link usable.
+     */
+    public function record(string $email, #[\SensitiveParameter] string $token): void
     {
         $email = self::normalise($email);
         $now = $this->clock->now();
-        if (!$this->hasBookings($email) || $this->linksSince($email, $now->modify('-1 hour')) >= self::LINKS_PER_HOUR) {
-            return null;
-        }
-        $token = self::token();
         $this->pdo->prepare(
             'INSERT INTO customer_links (email, token_hash, expires_at, created_at) VALUES (:email, :hash, :expires, :created)',
         )->execute([
@@ -53,8 +63,6 @@ final class CustomerAccess
             'expires' => $now->modify(sprintf('+%d minutes', self::LINK_MINUTES))->format(self::SQL),
             'created' => $now->format(self::SQL),
         ]);
-
-        return $token;
     }
 
     /**
@@ -65,6 +73,23 @@ final class CustomerAccess
     public function signIn(#[\SensitiveParameter] string $linkToken): ?array
     {
         $now = $this->clock->now();
+        $this->pdo->beginTransaction();
+        try {
+            $session = $this->claim($linkToken, $now);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        return $session;
+    }
+
+    /**
+     * @return array{token: string, email: string}|null
+     */
+    private function claim(#[\SensitiveParameter] string $linkToken, \DateTimeImmutable $now): ?array
+    {
         // The UPDATE claims the link, so two clicks on the same link can't both sign in.
         $claim = $this->pdo->prepare(
             'UPDATE customer_links SET used_at = :now WHERE token_hash = :hash AND used_at IS NULL AND expires_at > :now2',

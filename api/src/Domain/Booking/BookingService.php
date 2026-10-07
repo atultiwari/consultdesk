@@ -233,6 +233,28 @@ final class BookingService
     }
 
     /**
+     * The customer cancels a booking they haven't paid for. Checked again under the booking lock, so
+     * a payment confirmed a moment earlier wins and nothing paid is cancelled here.
+     *
+     * @return bool false when it's no longer an unpaid, live hold
+     */
+    public function cancelUnpaid(int $bookingId, Actor $actor): bool
+    {
+        return $this->db->transaction(function () use ($bookingId, $actor): bool {
+            $booking = $this->lockBooking($bookingId);
+            $now = $this->clock->now();
+            if ($booking->status !== BookingStatus::Held || $booking->holdLapsed($now) || $booking->startAt <= $now) {
+                return false;
+            }
+            $this->bookings->setStatus($bookingId, BookingStatus::Cancelled, $now);
+            $this->bookings->audit($actor, 'booking.cancelled', $bookingId, [], $now);
+            $this->events->record(BookingEvent::Cancelled, $bookingId);
+
+            return true;
+        });
+    }
+
+    /**
      * @throws SessionNotStarted
      */
     public function complete(int $bookingId, Actor $actor): void
