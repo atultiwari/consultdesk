@@ -76,7 +76,7 @@ describe('payments settings', () => {
     await user.type(within(section).getByLabelText('Key ID'), 'rzp_live_x');
     await user.type(within(section).getByLabelText('Key Secret'), crypto.randomUUID());
     await user.click(within(section).getByRole('button', { name: 'Save keys' }));
-    expect(await within(section).findByText(/Only Test Mode keys/)).toBeInTheDocument();
+    expect(await within(section).findByText(/can be used for now/)).toBeInTheDocument();
 
     await user.clear(within(section).getByLabelText('Key ID'));
     await user.type(within(section).getByLabelText('Key ID'), keyId);

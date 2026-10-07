@@ -1,0 +1,49 @@
+# ConsultDesk: the booking site's web folder (Apache / LiteSpeed, e.g. Hostinger).
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Always HTTPS.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+  # The API: everything under /api goes to api/index.php.
+  RewriteRule ^api(/.*)?$ api/index.php [QSA,L]
+
+  # Real files (assets, embed.js, icons, the installer) are served as they are.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Every other path is a page of the app (booking pages, status pages, the admin area).
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # Sites allowed to show booking pages in a frame (embed.js): add them after 'self', e.g.
+  #   frame-ancestors 'self' https://atultiwari.com https://www.atultiwari.com
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"
+  Header always set Referrer-Policy "no-referrer"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+
+  # The app shell is checked on every visit; built assets have hashed names and never change.
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(js|css|woff2?|svg|png|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "^(embed\.js|favicon\.(svg|ico)|site\.webmanifest|apple-touch-icon\.png)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>
