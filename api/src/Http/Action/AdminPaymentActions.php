@@ -170,7 +170,7 @@ final class AdminPaymentActions
         if ($keyId !== null && preg_match(self::KEY_ID, $keyId) !== 1) {
             $input->reject('key_id', 'Paste the Key ID from Razorpay → Settings → API Keys; it starts with rzp_test_.');
         } elseif ($keyId !== null && $this->testKeysOnly && !str_starts_with($keyId, 'rzp_test_')) {
-            $input->reject('key_id', 'Only Test Mode keys (rzp_test_…) can be used for now.');
+            $input->reject('key_id', 'Only Test Mode keys (rzp_test_…) can be used for now. For real payments, set PAYMENTS_LIVE=1 in the server’s config.php.');
         }
         if ($secret !== null && (strlen($secret) < 16 || preg_match('/\s/', $secret) === 1)) {
             $input->reject('key_secret', 'Paste the Key Secret exactly as Razorpay showed it.');

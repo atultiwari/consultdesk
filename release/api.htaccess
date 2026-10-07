@@ -1,0 +1,6 @@
+# The API sends its own headers (a stricter policy, no framing); don't let the site's page policy
+# replace them here.
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+  Header always set X-Frame-Options "DENY"
+</IfModule>

@@ -11,6 +11,12 @@ final class AdminPaymentsTest extends AdminTestCase
 {
     private int $demo;
     private FakeRazorpayApi $fake;
+    private bool $live = false;
+
+    protected function extraEnv(): array
+    {
+        return [...parent::extraEnv(), ...($this->live ? ['PAYMENTS_LIVE' => '1'] : [])];
+    }
 
     protected function setUp(): void
     {
@@ -125,6 +131,18 @@ final class AdminPaymentsTest extends AdminTestCase
 
         self::assertSame(403, $this->admin('GET', '/api/admin/payments')[0]);
         self::assertSame(403, $this->admin('PUT', "/api/admin/providers/{$this->demo}/razorpay", ['key_id' => 'rzp_test_' . str_repeat('A', 14), 'key_secret' => str_repeat('s', 24)])[0]);
+    }
+
+    public function testLiveKeysAreAcceptedOnceTheServerSaysPaymentsAreLive(): void
+    {
+        $this->live = true;
+        $this->createUser('owner@example.test');
+        $this->login('owner@example.test');
+
+        [$status, $body] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => 'rzp_live_' . str_repeat('L', 14), 'key_secret' => str_repeat('s', 24)]);
+
+        self::assertSame(200, $status, json_encode($body) ?: '');
+        self::assertSame(['live', true], [$body['data']['razorpay']['mode'], $body['data']['razorpay']['live_allowed']]);
     }
 
     /**

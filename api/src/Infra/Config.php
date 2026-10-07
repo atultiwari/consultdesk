@@ -53,6 +53,8 @@ final class Config
         /** When set, the first-run "create the owner" form also asks for this key. */
         #[\SensitiveParameter]
         public readonly ?string $setupKey = null,
+        /** Real-money Razorpay keys (rzp_live_…) are accepted only when this is on. */
+        public readonly bool $paymentsLive = false,
         /** What booking codes start with until staff choose (VRL → VRL-7F3K). */
         public readonly string $bookingPrefix = BookingRefPrefix::FALLBACK,
     ) {}
@@ -131,7 +133,8 @@ final class Config
             adminPath: self::adminPath($v['ADMIN_PATH'] ?? '', $appUrl),
             mediaPath: rtrim(($v['MEDIA_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/media' : $v['MEDIA_PATH'], '/'),
             backupPath: rtrim(($v['BACKUP_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/backups' : $v['BACKUP_PATH'], '/'),
-            razorpay: RazorpayEnvKeys::fromValues($v),
+            razorpay: RazorpayEnvKeys::fromValues($v, ($v['PAYMENTS_LIVE'] ?? '0') === '1'),
+            paymentsLive: ($v['PAYMENTS_LIVE'] ?? '0') === '1',
             owner: OwnerDefaults::fromValues($v),
             setupKey: self::setupKey($v['SETUP_KEY'] ?? ''),
             bookingPrefix: self::bookingPrefix($v['BOOKING_PREFIX'] ?? ''),

@@ -232,9 +232,17 @@ export function OrgRazorpay({ settings }: { settings: PaymentSettings }) {
           onSave={(keys) => save.mutate(keys, { onSuccess: () => setReplacing(false) })}
         />
       )}
-      {!r.live_allowed && (
+      {r.live_allowed ? (
+        r.mode === 'test' && (
+          <p className="hint">
+            Real payments are switched on for this server: replace these with your Live Mode keys
+            (rzp_live_…) when you’re ready.
+          </p>
+        )
+      ) : (
         <p className="hint">
-          Live keys are switched off for now; only Test Mode keys are accepted.
+          Only Test Mode keys (rzp_test_…) are accepted. To take real payments, add PAYMENTS_LIVE=1
+          to the server’s config.php (see the deployment guide).
         </p>
       )}
     </section>

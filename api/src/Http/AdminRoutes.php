@@ -82,6 +82,7 @@ final class AdminRoutes
             $services->auditLog(),
             $pdo(),
             $services->config->appUrl,
+            testKeysOnly: !$services->config->paymentsLive,
         );
         $codes = static fn(): AdminBookingCodeActions => new AdminBookingCodeActions($services->bookingRefPrefix(), $services->auditLog());
         $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
