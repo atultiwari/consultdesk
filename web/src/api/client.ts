@@ -46,6 +46,25 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<{ data: T; meta: Meta }> {
+  const body = await readEnvelope<T>(await send(path, options));
+  return { data: body.data, meta: body.meta ?? null };
+}
+
+/** A file the API sends back (e.g. a backup); errors still arrive as the JSON envelope. */
+export async function apiDownload(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await send(path, options);
+  if (!response.ok || (response.headers.get('Content-Type') ?? '').includes('application/json')) {
+    await readEnvelope<never>(response);
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'download';
+  return { blob: await response.blob(), filename };
+}
+
+async function send(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
   if (options.json !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -67,7 +86,13 @@ export async function apiRequest<T>(
   }
 
   recordServerDate(response.headers.get('Date'));
+  return response;
+}
 
+/** The success envelope, or an ApiError with the server's message and field errors. */
+async function readEnvelope<T>(
+  response: Response,
+): Promise<{ success: true; data: T; error: null; meta?: Meta }> {
   let body: Envelope<T>;
   try {
     body = (await response.json()) as Envelope<T>;
@@ -88,5 +113,5 @@ export async function apiRequest<T>(
     );
   }
 
-  return { data: body.data, meta: body.meta ?? null };
+  return body;
 }

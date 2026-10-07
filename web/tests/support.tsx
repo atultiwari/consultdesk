@@ -4,7 +4,10 @@ import { useEffect } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { AppRoutes } from '../src/app/App';
 
-type Handler = (init: RequestInit | undefined, url: URL) => { status?: number; body: unknown };
+type Handler = (
+  init: RequestInit | undefined,
+  url: URL,
+) => { status?: number; body: unknown } | Response;
 export type Routes = Record<string, Handler | { status?: number; body: unknown }>;
 
 /** Mocks fetch: keys are "METHOD /api/path" (query string ignored). Unmatched requests fail the test. */
@@ -21,7 +24,10 @@ export function mockApi(routes: Routes) {
     });
     const route = routes[key];
     if (!route) throw new Error(`Unmocked request: ${key}`);
-    const { status = 200, body } = typeof route === 'function' ? route(init, url) : route;
+    const answer = typeof route === 'function' ? route(init, url) : route;
+    // A raw Response (e.g. a file download) goes back as it is.
+    if (answer instanceof Response) return answer;
+    const { status = 200, body } = answer;
     return new Response(JSON.stringify(body), {
       status,
       headers: { 'Content-Type': 'application/json' },

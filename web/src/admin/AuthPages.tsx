@@ -4,7 +4,8 @@ import { Button } from '../design/components/Button';
 import { Field } from '../design/components/Field';
 import { Notice } from '../design/components/Notice';
 import { ThemeToggle } from '../app/ThemeToggle';
-import { useForgotPassword, useLogin, useResetPassword } from './hooks';
+import { useFirstRun, useForgotPassword, useLogin, useResetPassword } from './hooks';
+import type { AdminEntry } from './types';
 
 const MIN_PASSWORD = 10;
 
@@ -70,6 +71,98 @@ export function LoginPage({ segment }: { segment: string }) {
         <Link className="auth__link" to={`/${segment}/forgot`}>
           Forgot your password?
         </Link>
+      </form>
+    </AuthCard>
+  );
+}
+
+/**
+ * WordPress-style first run: on a site with no accounts yet, the first person at the secret admin
+ * path creates the owner, then goes straight to "Set up your site".
+ */
+export function FirstRunPage({ segment, entry }: { segment: string; entry: AdminEntry }) {
+  const create = useFirstRun(segment);
+  const navigate = useNavigate();
+  const [name, setName] = useState(entry.owner?.name ?? '');
+  const [email, setEmail] = useState(entry.owner?.email ?? '');
+  const [password, setPassword] = useState('');
+  const [setupKey, setSetupKey] = useState('');
+  const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (password.length < MIN_PASSWORD) return;
+    create.mutate(
+      {
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        ...(entry.needs_setup_key ? { setup_key: setupKey.trim() } : {}),
+      },
+      { onSuccess: () => void navigate(`/${segment}/setup`) },
+    );
+  };
+
+  return (
+    <AuthCard title="Create your owner account">
+      <form className="auth__form" onSubmit={submit} noValidate>
+        <p className="auth__text">
+          This site has no accounts yet. The owner can do everything, including adding teachers and
+          staff later.
+        </p>
+        {create.isError && (
+          <Notice tone="danger" live>
+            {create.error.message}
+          </Notice>
+        )}
+        <Field label="Your name">
+          <input
+            className="input"
+            autoComplete="name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            className="input"
+            type="email"
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Password"
+          hint={`At least ${MIN_PASSWORD} characters. A short phrase works well.`}
+          error={tooShort ? `Use at least ${MIN_PASSWORD} characters.` : undefined}
+        >
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={MIN_PASSWORD}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {entry.needs_setup_key && (
+          <Field label="Setup key" hint="SETUP_KEY from the server’s .env or config.php.">
+            <input
+              className="input"
+              autoComplete="off"
+              required
+              value={setupKey}
+              onChange={(e) => setSetupKey(e.target.value)}
+            />
+          </Field>
+        )}
+        <Button type="submit" block large disabled={create.isPending}>
+          {create.isPending ? 'Creating…' : 'Create owner account'}
+        </Button>
       </form>
     </AuthCard>
   );

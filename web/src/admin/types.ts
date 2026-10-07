@@ -12,6 +12,14 @@ export type AdminUser = {
 
 export type AdminSession = { user: AdminUser; csrf_token: string };
 
+/** The secret-path check; on a site with no accounts yet it also offers the first-run form. */
+export type AdminEntry = {
+  ok: true;
+  first_run?: boolean;
+  owner?: { email: string; name: string | null } | null;
+  needs_setup_key?: boolean;
+};
+
 export type BookingStatus =
   | 'held'
   | 'awaiting_verification'
@@ -176,6 +184,8 @@ export type SystemSnapshot = {
   migrations_pending: string[];
   cron: { last_run_at: string | null; healthy: boolean };
   outbox: { pending: number; failed: number; last_error: string | null };
+  /** e.g. "owner_password_in_env" */
+  warnings?: string[];
 };
 
 export type PaymentSettings = {
@@ -187,6 +197,10 @@ export type PaymentSettings = {
     has_webhook_secret: boolean;
     webhook_url: string;
     live_allowed: boolean;
+    /** "env": the default keys from the server's .env; "settings": keys saved here (they win). */
+    source: 'settings' | 'env' | null;
+    /** The .env default's Key ID, if there is one: what removing saved keys falls back to. */
+    env_key_id: string | null;
     /** Only in the answer that made it: shown once, to paste into Razorpay. */
     webhook_secret?: string;
   };

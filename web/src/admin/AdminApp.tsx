@@ -11,13 +11,14 @@ import { PaymentsPage } from './PaymentsPage';
 import { SetupPage } from './SetupPage';
 import { SystemPage } from './SystemPage';
 import { UsersPage } from './UsersPage';
-import { ForgotPage, LoginPage, ResetPage } from './AuthPages';
+import { FirstRunPage, ForgotPage, LoginPage, ResetPage } from './AuthPages';
 import { BlockedPage } from './BlockedPage';
 import { BookingDetailPage } from './BookingDetailPage';
 import { BookingsPage } from './BookingsPage';
 import { AdminContext } from './context';
 import { DashboardPage } from './DashboardPage';
 import { isUnauthenticated, signedOut, useMe } from './hooks';
+import type { AdminEntry } from './types';
 import { ProviderPage } from './ProviderPage';
 import { ProvidersPage } from './ProvidersPage';
 import '../app/chrome.css';
@@ -48,7 +49,14 @@ function useSessionExpiry() {
   }, [client]);
 }
 
-export default function AdminApp({ segment }: { segment: string }) {
+export default function AdminApp({
+  segment,
+  firstRun = null,
+}: {
+  segment: string;
+  /** Set on a site with no accounts yet: show "Create your owner account" instead of sign-in. */
+  firstRun?: AdminEntry | null;
+}) {
   const base = `/${segment}`;
   useSiteTheme('Admin');
   useSessionExpiry();
@@ -82,7 +90,16 @@ export default function AdminApp({ segment }: { segment: string }) {
         <Route path="forgot" element={<ForgotPage segment={segment} />} />
         <Route path="reset" element={<ResetPage segment={segment} />} />
         <Route path="welcome" element={<ResetPage segment={segment} welcome />} />
-        <Route path="*" element={<LoginPage segment={segment} />} />
+        <Route
+          path="*"
+          element={
+            firstRun ? (
+              <FirstRunPage segment={segment} entry={firstRun} />
+            ) : (
+              <LoginPage segment={segment} />
+            )
+          }
+        />
       </Routes>
     );
   }

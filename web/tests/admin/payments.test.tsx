@@ -14,6 +14,8 @@ const blank = {
     has_webhook_secret: false,
     webhook_url: 'https://book.example.test/api/webhooks/razorpay',
     live_allowed: false,
+    source: null,
+    env_key_id: null,
   },
   overrides: [],
 };
@@ -26,6 +28,7 @@ const configured = {
     mode: 'test',
     key_id: keyId,
     has_webhook_secret: true,
+    source: 'settings',
   },
 };
 
@@ -90,6 +93,24 @@ describe('payments settings', () => {
 
     await user.click(within(section).getByRole('button', { name: 'Check connection' }));
     expect(await within(section).findByText('Razorpay accepted these keys.')).toBeInTheDocument();
+  });
+
+  it('says when the keys come from the server’s .env, and what removing saved keys does', async () => {
+    const envKey = `rzp_test_${'E'.repeat(14)}`;
+    mockApi({
+      ...signedIn(),
+      'GET /api/admin/providers': ok([demoProvider]),
+      'GET /api/admin/payments': ok({
+        ...configured,
+        razorpay: { ...configured.razorpay, key_id: envKey, source: 'env', env_key_id: envKey },
+      }),
+    });
+    renderAt(`${ADMIN}/payments`);
+
+    expect(await screen.findByText(/from the server’s .env file/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove keys' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New webhook secret' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use other keys' })).toBeInTheDocument();
   });
 
   it('offers online payment on every eligible session at once', async () => {
