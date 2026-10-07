@@ -176,7 +176,8 @@ site's code. Choose something unguessable, and don't link to it from public page
 
 ### First owner
 
-Like WordPress, a site with no accounts yet asks for the owner the first time anyone opens
+On a server, the web installer (`/install`, see [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md)) writes
+`config.php` and creates the tables first. Then, like WordPress, a site with no accounts yet asks for the owner the first time anyone opens
 `https://<your-booking-site>/<ADMIN_PATH>`: **Create your owner account** (name, email, a password of
 at least 10 characters). The owner is signed in and taken straight to **Set up your site**. The form
 disappears for good once an account exists.

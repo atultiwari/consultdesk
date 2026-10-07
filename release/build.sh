@@ -20,6 +20,8 @@ cp -R "$ROOT/web/dist/." "$OUT/public/"
 cp "$ROOT/release/public.htaccess" "$OUT/public/.htaccess"
 cp "$ROOT/release/api-index.php" "$OUT/public/api/index.php"
 cp "$ROOT/release/api.htaccess" "$OUT/public/api/.htaccess"
+mkdir -p "$OUT/public/install"
+cp "$ROOT/release/install-index.php" "$OUT/public/install/index.php"
 
 echo "› Copying the API"
 APP="$OUT/consultdesk-app"
