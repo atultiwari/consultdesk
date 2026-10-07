@@ -7,7 +7,7 @@ declare(strict_types=1);
 // somewhere else, set CONSULTDESK_APP to its full path in the hosting panel or .htaccess (SetEnv).
 
 $app = getenv('CONSULTDESK_APP') ?: '';
-for ($dir = __DIR__, $i = 0; $app === '' && $i < 6; $i++) {
+for ($dir = __DIR__, $i = 0; $app === '' && $i < 4; $i++) {
     $dir = dirname($dir);
     if (is_file($dir . '/consultdesk-app/http.php')) {
         $app = $dir . '/consultdesk-app';

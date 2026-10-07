@@ -19,6 +19,7 @@ echo "› Building the web app"
 cp -R "$ROOT/web/dist/." "$OUT/public/"
 cp "$ROOT/release/public.htaccess" "$OUT/public/.htaccess"
 cp "$ROOT/release/api-index.php" "$OUT/public/api/index.php"
+cp "$ROOT/release/api.htaccess" "$OUT/public/api/.htaccess"
 
 echo "› Copying the API"
 APP="$OUT/consultdesk-app"
