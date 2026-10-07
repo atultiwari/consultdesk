@@ -10,6 +10,8 @@ use ConsultDesk\Domain\Availability\Interval;
 use ConsultDesk\Domain\Availability\NoBusyTime;
 use ConsultDesk\Domain\Availability\SlotEngine;
 use ConsultDesk\Domain\Availability\SlotRequest;
+use ConsultDesk\Domain\Coupon\CouponRejected;
+use ConsultDesk\Domain\Coupon\Coupons;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\Crypto;
 use ConsultDesk\Infra\Db;
@@ -41,6 +43,7 @@ final class BookingService
         private readonly Crypto $crypto,
         private readonly BusyTimeSource $busy = new NoBusyTime(),
         private readonly SlotEngine $slotEngine = new SlotEngine(),
+        private readonly ?Coupons $coupons = null,
     ) {}
 
     /**
@@ -53,7 +56,10 @@ final class BookingService
      * With $confirmImmediately (free services that need no approval) the booking is confirmed in
      * the same transaction, so a failure can never leave a stray hold behind.
      *
-     * @throws ServiceNotBookable|PaymentMethodNotAllowed|SlotUnavailable|DailyLimitReached|TooManyOpenBookings
+     * A coupon lowers the price; one that brings it to nothing makes this a free booking (confirmed
+     * at once unless the session needs approval), whatever way to pay was asked for.
+     *
+     * @throws ServiceNotBookable|PaymentMethodNotAllowed|SlotUnavailable|DailyLimitReached|TooManyOpenBookings|CouponRejected
      */
     public function hold(HoldRequest $request, bool $confirmImmediately = false): HeldBooking
     {
@@ -72,7 +78,15 @@ final class BookingService
             if ($service === null || $service->providerId !== $provider->id) {
                 throw new ServiceNotBookable();
             }
-            $this->assertPaymentMethod($service, $request->paymentMethod);
+            $coupon = $request->couponCode === null ? null : ($this->coupons ?? throw CouponRejected::notValid())
+                ->apply($request->couponCode, $provider->id, $service->id, $service->priceMinor, $request->customer->email, $now, lock: true);
+            $method = $request->paymentMethod;
+            if ($coupon !== null && $coupon->totalMinor() === 0) {
+                $method = PaymentMethod::Free;
+                $confirmImmediately = !$service->requiresApproval;
+            } else {
+                $this->assertPaymentMethod($service, $method);
+            }
             if ($this->bookings->countOpenForEmail($request->customer->email, $now) >= self::MAX_OPEN_PER_EMAIL) {
                 throw new TooManyOpenBookings();
             }
@@ -81,7 +95,7 @@ final class BookingService
             $this->assertOffered($provider, $service, $slot, $now, $busy);
 
             $token = $this->refs->token();
-            $holdExpiresAt = min($now->modify(sprintf('+%d minutes', HoldPolicy::holdMinutes($request->paymentMethod))), $slot->start);
+            $holdExpiresAt = min($now->modify(sprintf('+%d minutes', HoldPolicy::holdMinutes($method))), $slot->start);
             [$id, $ref] = $this->insertWithUniqueRef(new NewBooking(
                 $this->refs->next(),
                 RandomRefGenerator::hashToken($token),
@@ -91,17 +105,21 @@ final class BookingService
                 $slot,
                 $request->customer,
                 $request->answers,
-                $service->priceMinor,
+                $coupon?->totalMinor() ?? $service->priceMinor,
                 $service->currency,
-                $request->paymentMethod,
+                $method,
                 $holdExpiresAt,
                 $now,
+                $coupon?->coupon->id,
+                $coupon?->coupon->code,
+                $coupon === null ? 0 : $coupon->discountMinor,
             ));
 
             $this->bookings->audit(Actor::customer(), 'booking.held', $id, [
                 'ref' => $ref,
                 'start_at' => $slot->start->format(DATE_ATOM),
-                'payment_method' => $request->paymentMethod->value,
+                'payment_method' => $method->value,
+                ...($coupon === null ? [] : ['coupon' => $coupon->coupon->code, 'discount_minor' => $coupon->discountMinor]),
             ], $now);
             if ($confirmImmediately) {
                 $this->bookings->markConfirmed($id, null, $now);

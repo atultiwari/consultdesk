@@ -6,12 +6,14 @@ namespace ConsultDesk\Http;
 
 use ConsultDesk\Admin\AdminBookings;
 use ConsultDesk\Admin\BlockedTimes;
+use ConsultDesk\Admin\CouponSettings;
 use ConsultDesk\Admin\Passwords;
 use ConsultDesk\Admin\ProviderSettings;
 use ConsultDesk\Admin\ServiceSettings;
 use ConsultDesk\Admin\WeeklyHours;
 use ConsultDesk\Bootstrap\AppServices;
 use ConsultDesk\Http\Action\AdminBookingActions;
+use ConsultDesk\Http\Action\AdminCouponActions;
 use ConsultDesk\Http\Action\AdminImageActions;
 use ConsultDesk\Http\Action\AdminIntegrationActions;
 use ConsultDesk\Http\Action\AdminMeActions;
@@ -80,6 +82,7 @@ final class AdminRoutes
             $pdo(),
             $services->config->appUrl,
         );
+        $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
         $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter());
         $id = self::ID;
 
@@ -147,6 +150,10 @@ final class AdminRoutes
         $admin->post('/setup/sessions', static fn($rq, $rs) => $setup()->addSessions($rq, $rs));
         $admin->post('/setup/complete', static fn($rq, $rs) => $setup()->complete($rq, $rs));
 
+        $admin->get('/coupons', static fn($rq, $rs) => $coupons()->list($rq, $rs));
+        $admin->post('/coupons', static fn($rq, $rs) => $coupons()->create($rq, $rs));
+        $admin->patch("/coupons/{$id}", static fn($rq, $rs, array $a) => $coupons()->update($rq, $rs, $a));
+        $admin->delete("/coupons/{$id}", static fn($rq, $rs, array $a) => $coupons()->delete($rq, $rs, $a));
         $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
         $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));
         $admin->post('/system/retry-failed', static fn($rq, $rs) => $system()->retryFailed($rq, $rs));

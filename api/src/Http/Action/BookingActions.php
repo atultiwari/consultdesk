@@ -15,6 +15,8 @@ use ConsultDesk\Domain\Booking\PaymentMethodNotAllowed;
 use ConsultDesk\Domain\Catalog\CatalogRepository;
 use ConsultDesk\Domain\Catalog\ProviderProfile;
 use ConsultDesk\Domain\Catalog\ServiceOffering;
+use ConsultDesk\Domain\Coupon\CouponRejected;
+use ConsultDesk\Domain\Coupon\Coupons;
 use ConsultDesk\Http\ApiException;
 use ConsultDesk\Http\BookingPresenter;
 use ConsultDesk\Http\JsonInput;
@@ -23,13 +25,15 @@ use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Http\Validation\ValidationFailed;
 use ConsultDesk\Infra\Clock;
 use ConsultDesk\Infra\RateLimiter;
+use ConsultDesk\Notify\Money;
 use ConsultDesk\Payments\Razorpay\RazorpayCheckout;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use RuntimeException;
 
 /**
- * Public booking endpoints: create a booking, read its status, submit a UPI reference.
+ * Public booking endpoints: check a discount code, create a booking, read its status, submit a UPI
+ * reference.
  */
 final class BookingActions
 {
@@ -45,7 +49,35 @@ final class BookingActions
         private readonly RateLimiter $rateLimiter,
         private readonly string $appUrl,
         private readonly ?RazorpayCheckout $razorpay = null,
+        private readonly ?Coupons $coupons = null,
     ) {}
+
+    /**
+     * What a code takes off a session's price, before booking. The booking checks it again.
+     */
+    public function checkCoupon(Request $request, Response $response): Response
+    {
+        $input = JsonInput::from($request);
+        [$provider, $service] = $this->resolve($input);
+        $code = $input->string('code', max: 64);
+        $email = $input->email('email', required: false);
+        $input->assertValid();
+
+        try {
+            $applied = ($this->coupons ?? throw CouponRejected::notValid())
+                ->apply((string) $code, $provider->id, $service->id, $service->priceMinor, $email, $this->clock->now());
+        } catch (CouponRejected $e) {
+            throw new ValidationFailed(['code' => $e->getMessage()]);
+        }
+
+        return JsonResponse::success($response, [
+            'code' => $applied->coupon->code,
+            'discount_minor' => $applied->discountMinor,
+            'discount_display' => Money::format($applied->discountMinor, $service->currency),
+            'total_minor' => $applied->totalMinor(),
+            'total_display' => Money::format($applied->totalMinor(), $service->currency),
+        ]);
+    }
 
     public function create(Request $request, Response $response): Response
     {
@@ -58,6 +90,7 @@ final class BookingActions
         $start = $input->dateTime('start');
         $method = $input->oneOf('payment_method', array_map(static fn(PaymentMethod $m): string => $m->value, PaymentMethod::cases()), required: false);
         $customer = $this->customer($input->nested('customer'));
+        $coupon = $input->string('coupon', required: false, max: 64);
         $answers = $service->questions->validate($input->map('answers'));
         foreach ($answers->errors as $question => $message) {
             $input->reject("answers.{$question}", $message);
@@ -66,15 +99,21 @@ final class BookingActions
         $this->limitPerEmail($customer);
 
         $paymentMethod = $this->paymentMethod($service, $provider, $method);
-        $held = $this->bookings->hold(new HoldRequest(
-            $provider->id,
-            $service->id,
-            $start ?? throw new RuntimeException('Start was validated as required.'),
-            $customer ?? throw new RuntimeException('Customer was validated as required.'),
-            $paymentMethod,
-            $answers->answers,
-        ), confirmImmediately: $paymentMethod === PaymentMethod::Free && !$service->requiresApproval);
-        if ($paymentMethod === PaymentMethod::RazorpayLink) {
+        try {
+            $held = $this->bookings->hold(new HoldRequest(
+                $provider->id,
+                $service->id,
+                $start ?? throw new RuntimeException('Start was validated as required.'),
+                $customer ?? throw new RuntimeException('Customer was validated as required.'),
+                $paymentMethod,
+                $answers->answers,
+                $coupon,
+            ), confirmImmediately: $paymentMethod === PaymentMethod::Free && !$service->requiresApproval);
+        } catch (CouponRejected $e) {
+            throw new ValidationFailed(['coupon' => $e->getMessage()]);
+        }
+        // A full discount turns the booking free, whatever way to pay was picked.
+        if ($this->view($held->ref)->paymentMethod === PaymentMethod::RazorpayLink) {
             // Made straight away so the customer can pay at once; if Razorpay is down, the status
             // page offers to try again.
             try {

@@ -53,8 +53,10 @@ final class AppFactory
                 $services->rateLimiter(),
                 $services->config->appUrl,
                 $services->razorpayCheckout(),
+                $services->coupons(),
             );
 
+            $api->post('/coupons/check', static fn($rq, $rs) => $bookings()->checkCoupon($rq, $rs))->add($limit('coupon', 30, self::HOUR));
             $api->get('/site', static fn($rq, $rs) => $providers()->site($rq, $rs))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers', static fn($rq, $rs) => $providers()->list($rq, $rs))->add($limit('read', 120, self::MINUTE));
             $api->get('/providers/{provider}', static fn($rq, $rs, array $a) => $providers()->show($rq, $rs, $a))->add($limit('read', 120, self::MINUTE));
