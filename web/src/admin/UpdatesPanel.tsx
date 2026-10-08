@@ -88,7 +88,7 @@ function Available({ status }: { status: UpdateStatus }) {
     <div className="stack">
       <h3 className="updates__title">Version {latest.version} is available</h3>
       {latest.notes.trim() !== '' && <pre className="updates__notes">{latest.notes.trim()}</pre>}
-      {latest.page_url && (
+      {latest.page_url.startsWith('https://github.com/') && (
         <p>
           <a href={latest.page_url} target="_blank" rel="noreferrer">
             Full release notes on GitHub

@@ -39,7 +39,7 @@ final class UpdaterTest extends IntegrationTestCase
         }
         mkdir($this->public . '/assets', 0o777, true);
         $this->copyMigrations($this->app . '/migrations');
-        file_put_contents($this->app . '/src/Version.php', "<?php // CURRENT = '1.0.0'");
+        file_put_contents($this->app . '/src/Version.php', "<?php final class Version { public const CURRENT = '1.0.0'; }");
         file_put_contents($this->app . '/vendor/autoload.php', '<?php // old');
         file_put_contents($this->app . '/http.php', '<?php // old');
         file_put_contents($this->app . '/config.php', "<?php return ['APP_URL' => 'mine'];");
@@ -92,6 +92,28 @@ final class UpdaterTest extends IntegrationTestCase
         $this->assertNothingChanged();
     }
 
+    public function testASignedZipCantBeRelabelledAsAnotherVersion(): void
+    {
+        $signed = $this->publish('1.1.0');
+        $relabelled = new Release('1.2.0', '', null, $signed->zipUrl, $signed->signatureUrl, false);
+
+        $this->expectRefusal('isn’t signed', fn() => $this->updater()->apply($relabelled));
+        $this->assertNothingChanged();
+    }
+
+    public function testADatabaseUpdateThatFailsPutsEverythingBack(): void
+    {
+        $release = $this->publish('1.1.0', ['consultdesk-1.1.0/consultdesk-app/migrations/999_broken.sql' => 'THIS IS NOT SQL;']);
+
+        $this->expectRefusal('was put back', fn() => $this->updater()->apply($release));
+
+        $this->assertNothingChanged();
+        self::assertSame('old', file_get_contents($this->public . '/assets/old.js'));
+        self::assertFileDoesNotExist($this->app . '/migrations/999_broken.sql');
+        self::assertSame("<?php return ['APP_URL' => 'mine'];", file_get_contents($this->app . '/config.php'));
+        self::invalidateSchema();
+    }
+
     public function testRefusesUnsafeOrMislabelledZips(): void
     {
         $this->expectRefusal('unsafe path', fn() => $this->updater()->apply($this->publish('1.1.0', ['../escape.txt' => 'x'])));
@@ -130,7 +152,7 @@ final class UpdaterTest extends IntegrationTestCase
             $this->pdo,
             $clock,
             '1.0.0',
-            $this->publicKey,
+            [$this->publicKey],
         );
     }
 
@@ -150,7 +172,7 @@ final class UpdaterTest extends IntegrationTestCase
         $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         $base = 'consultdesk-' . $version;
         $files = [
-            "{$base}/consultdesk-app/src/Version.php" => sprintf("<?php // CURRENT = '%s'", $versionInside ?? $version),
+            "{$base}/consultdesk-app/src/Version.php" => sprintf("<?php final class Version { public const CURRENT = '%s'; }", $versionInside ?? $version),
             "{$base}/consultdesk-app/vendor/autoload.php" => '<?php // new',
             "{$base}/consultdesk-app/http.php" => '<?php // new',
             "{$base}/public/index.html" => 'new page <script src="/assets/new.js">',
@@ -166,7 +188,8 @@ final class UpdaterTest extends IntegrationTestCase
             $zip->addFromString($name, $contents);
         }
         $zip->close();
-        file_put_contents($zipPath . '.sig', base64_encode(sodium_crypto_sign_detached((string) file_get_contents($zipPath), $this->secretKey)));
+        $manifest = \ConsultDesk\Updates\ReleaseKey::manifest($version, (string) hash_file('sha256', $zipPath));
+        file_put_contents($zipPath . '.sig', base64_encode(sodium_crypto_sign_detached($manifest, $this->secretKey)));
 
         return new Release($version, 'Notes', null, $zipPath, $zipPath . '.sig', false);
     }

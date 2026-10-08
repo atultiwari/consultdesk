@@ -53,7 +53,15 @@ final class Release
             (string) $a['zip_url'],
             (string) $a['signature_url'],
             (bool) ($a['prerelease'] ?? false),
-            is_string($a['page_url'] ?? null) ? $a['page_url'] : '',
+            self::safePageUrl(is_string($a['page_url'] ?? null) ? $a['page_url'] : ''),
         );
+    }
+
+    /**
+     * Only links to the GitHub repository's pages are shown.
+     */
+    public static function safePageUrl(string $url): string
+    {
+        return str_starts_with($url, 'https://github.com/') ? $url : '';
     }
 }

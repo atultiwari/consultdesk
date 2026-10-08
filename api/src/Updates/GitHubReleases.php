@@ -42,7 +42,13 @@ final class GitHubReleases implements ReleaseSource
             throw new UpdateFailed('GitHub sent an unexpected answer.');
         }
         foreach ($releases as $r) {
-            if (!is_array($r) || ($r['draft'] ?? true) || (($r['prerelease'] ?? false) && !$includePrereleases)) {
+            if (!is_array($r) || ($r['draft'] ?? true)) {
+                continue;
+            }
+            $version = ltrim((string) ($r['tag_name'] ?? ''), 'v');
+            // A version like 1.0.0-beta.1 is a pre-release whatever the release's flag says.
+            $prerelease = (bool) ($r['prerelease'] ?? false) || str_contains($version, '-');
+            if ($prerelease && !$includePrereleases) {
                 continue;
             }
             $zip = null;
@@ -61,13 +67,13 @@ final class GitHubReleases implements ReleaseSource
             }
 
             return new Release(
-                ltrim((string) ($r['tag_name'] ?? ''), 'v'),
+                $version,
                 mb_substr((string) ($r['body'] ?? ''), 0, 20_000),
                 is_string($r['published_at'] ?? null) ? $r['published_at'] : null,
                 $zip,
                 $sig,
-                (bool) ($r['prerelease'] ?? false),
-                (string) ($r['html_url'] ?? ''),
+                $prerelease,
+                Release::safePageUrl((string) ($r['html_url'] ?? '')),
             );
         }
 
@@ -94,6 +100,12 @@ final class GitHubReleases implements ReleaseSource
                         }
                     },
                 ],
+                // Enforced while downloading, not only from Content-Length.
+                RequestOptions::PROGRESS => static function (int $expected, int $downloaded) use ($maxBytes): void {
+                    if ($downloaded > $maxBytes) {
+                        throw new UpdateFailed('The update is unexpectedly large.');
+                    }
+                },
                 RequestOptions::ON_HEADERS => static function ($response) use ($maxBytes): void {
                     if ((int) $response->getHeaderLine('Content-Length') > $maxBytes) {
                         throw new UpdateFailed('The update is unexpectedly large.');

@@ -18,7 +18,7 @@ ConsultDesk is a self-hosted app for booking consultations with doctors, teacher
 | `e2e/` | Playwright end-to-end tests at 375 / 768 / 1280 px |
 | `docker/`, `docker-compose.yml` | **Local development only**: PHP 8.1 + Apache, MariaDB 10.6, Mailpit |
 | `.github/workflows/ci.yml` | Lint, static analysis, tests with coverage gate, build, E2E |
-| `release/`, `.github/workflows/release.yml` | The release zip: `release/build.sh` builds it; pushing a `v*` tag publishes it |
+| `release/`, `.github/workflows/release.yml` | The release zip: `release/build.sh` builds it; pushing a `v*` tag signs and publishes it ([docs/RELEASING.md](docs/RELEASING.md)) |
 
 ## Local development
 
