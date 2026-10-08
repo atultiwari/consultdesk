@@ -48,6 +48,9 @@ final class AdminUpdatesTest extends AdminTestCase
     {
         $this->public = sys_get_temp_dir() . '/consultdesk-web-' . bin2hex(random_bytes(4));
         mkdir($this->public);
+        // An installed release always has storage/; a fresh checkout (CI) may not.
+        $storage = dirname(__DIR__, 3) . '/storage';
+        $madeStorage = !is_dir($storage) && mkdir($storage, 0o755, true);
         file_put_contents($this->public . '/index.html', 'site');
         $this->createUser('owner@example.test');
         $this->login('owner@example.test');
@@ -57,6 +60,9 @@ final class AdminUpdatesTest extends AdminTestCase
 
         unlink($this->public . '/index.html');
         rmdir($this->public);
+        if ($madeStorage) {
+            rmdir($storage);
+        }
         self::assertSame([true, null], [$status['data']['can_update'], $status['data']['blocker']]);
     }
 
