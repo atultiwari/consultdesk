@@ -56,38 +56,34 @@ If not, do everything through **File Manager**: nothing below needs SSH.
 
 ## Part 1: Prepare hPanel
 
-### 1.1 Create the subdomain
+### 1.1 Create the booking site as its own PHP website
 
-> **Finding things in hPanel:** open **Websites**, pick **atultiwari.com**, and use the menu on the
-> left (Domains, Security, Files, Advanced…). Hostinger renames menu items from time to time: if a
-> name in this guide doesn't match, type it into the **Search** box at the top of that menu.
+ConsultDesk needs a **PHP** website. Make book.atultiwari.com a website of its own on your plan (not
+a subdomain inside atultiwari.com's settings): then it has its own dashboard with **PHP
+Configuration**, and it works whatever atultiwari.com itself runs on (for example a Node.js app,
+whose dashboard has no PHP settings).
 
-1. hPanel → **Websites → atultiwari.com → Domains → Subdomains**.
-2. Under **Create a New Subdomain**: type `book`, keep the domain **atultiwari.com**, and leave
-   **Custom folder for subdomain** unticked. Press **Create**.
-3. **List of Current Subdomains** now shows:
+> **Finding things in hPanel:** open **Websites**, then the site's **Dashboard**, and use the menu
+> on the left. Hostinger renames items from time to time: if a name in this guide doesn't match,
+> type it into the **Search** box at the top of that menu.
 
-   | Subdomain | Directory |
-   |---|---|
-   | book.atultiwari.com | `/home/u…/domains/atultiwari.com/public_html/book` |
+1. If you already created `book` under **atultiwari.com → Domains → Subdomains**, delete it there
+   first (red bin icon) so the name is free.
+2. hPanel → **Websites → Add website** (or **Create or migrate a website**) → an **empty / custom
+   PHP website** (not WordPress, AI Builder or Node.js), with the domain **book.atultiwari.com**.
+3. Its folders:
 
-   The `u…` part (e.g. `u123456789`) is your Hostinger account's username. Note this whole
-   **Directory** path: it's the subdomain's **web folder**, and you'll need the `/home/u…` part for
-   the cron job (2.4).
+   ```
+   /home/u123456789/domains/book.atultiwari.com/public_html       ← web folder
+   /home/u123456789/domains/book.atultiwari.com/consultdesk-app   ← the app goes here (Part 2)
+   ```
 
-So the layout is:
-
-```
-/home/u123456789/domains/atultiwari.com/public_html/book   ← web folder (book.atultiwari.com)
-/home/u123456789/domains/atultiwari.com/consultdesk-app    ← the app goes here (Part 2)
-```
-
-`consultdesk-app` sits next to `public_html`, not inside it. (Use your own `u…` number wherever this
-guide shows `u123456789`.)
-
-4. Hostinger sometimes puts a placeholder page into the new folder. Open **Files → File Manager**,
-   go to `domains/atultiwari.com/public_html/book`, and delete anything inside it (for example
-   `default.php` or `index.php`) so the folder is empty before you upload.
+   `u123456789` stands for your Hostinger account's username (it's shown in File Manager's paths
+   and under SSH Access); use your own wherever this guide shows it. `consultdesk-app` sits next to
+   `public_html`, never inside it.
+4. Hostinger puts a placeholder page into a new website. Open **Files → File Manager**, go to
+   `domains/book.atultiwari.com/public_html`, and delete everything inside it (e.g. `default.php`,
+   `index.php`) so the folder is empty before you upload.
 
 ### 1.2 Turn on HTTPS
 
@@ -101,11 +97,25 @@ The admin area and payments only work over https.
 
 ### 1.3 Set the PHP version and extensions
 
-1. hPanel → **Advanced → PHP Configuration**.
-2. **PHP version**: 8.1 or newer (8.2 or 8.3 are fine). Save.
-3. **PHP extensions** tab: make sure these are ticked: `intl`, `pdo_mysql`, `sodium`, `gd`, `exif`,
-   `mbstring`. Save.
-4. **PHP options** tab (optional, for restoring large backups and big photo uploads):
+hPanel → **Websites → book.atultiwari.com → Dashboard** → search the menu for **PHP Configuration**
+(it's under **Advanced**).
+
+1. **PHP version** tab: **PHP 8.3** (8.2–8.5 all work; Hostinger no longer offers 8.1). Press
+   **Update** if you changed it. The version applies to every PHP website on the plan.
+2. **PHP extensions** tab. Hostinger's names differ a little from ConsultDesk's list:
+
+   | ConsultDesk needs | Tick in hPanel | Usually |
+   |---|---|---|
+   | pdo_mysql | `pdo` and `nd_pdo_mysql` (with `mysqlnd`) | on |
+   | intl | `intl` | on |
+   | sodium | `sodium` | **off: tick it** |
+   | gd (photos, logos) | `gd` | on |
+   | zip (in-app updates) | `zip` | on |
+   | mbstring, fileinfo | `mbstring`, `fileinfo` | on |
+   | exif, curl, json, openssl | built-in (greyed out, always on) | on |
+
+   Press **Save** at the bottom.
+3. **PHP options** tab (optional, for restoring large backups and big photo uploads):
    `upload_max_filesize` 64M, `post_max_size` 64M, `memory_limit` 256M.
 
 The installer checks these again and tells you exactly what's missing.
@@ -118,17 +128,22 @@ The installer checks these again and tells you exactly what's missing.
 3. Hostinger prefixes both with your account, e.g. `u123456789_consultdesk`. Note the **full**
    database name, the **full** user name and the password. The host is `localhost`.
 
-### 1.5 Create the mailbox that sends booking emails
+### 1.5 Email: one mailbox to send, any address to receive
 
-1. hPanel → **Emails → Email Accounts** for atultiwari.com.
-2. Create `bookings@atultiwari.com` (or similar) with a strong password.
-3. The sending settings for Hostinger mail are:
-   - SMTP server: `smtp.hostinger.com`
-   - Port: `465` with **SSL** (or `587` with TLS)
-   - Login: the full mailbox address and its password
+ConsultDesk **sends** booking emails by logging in to a mailbox, so it needs a real mailbox with a
+password. An **alias** or forwarder (like `contact@atultiwari.com`) has no password of its own, so
+it can't be used to send, but it's perfect for **receiving**.
 
-> Tip: In **Emails → Email Accounts → DNS settings** make sure SPF and DKIM are set (hPanel offers a
-> one-click fix). Without them, booking emails are more likely to land in spam.
+1. hPanel → **Emails** for atultiwari.com → create a mailbox **`bookings@atultiwari.com`** with its
+   own strong password. ConsultDesk sends from it (keeping your personal mailbox's password out of
+   the server's settings). Its sending settings are:
+   - SMTP server `smtp.hostinger.com`, port `465` with **SSL** (or `587` with TLS)
+   - login: `bookings@atultiwari.com` and its password
+2. Your alias **`contact@atultiwari.com`** is where things should **arrive**: in the setup wizard
+   (2.5) put it as the teacher's **Email for new bookings**. New bookings and payments to verify
+   are sent there, and when customers press Reply on their booking emails, the reply goes there too.
+3. Make sure **SPF and DKIM** are set for atultiwari.com (Emails → the domain → DNS settings, which
+   offers a one-click fix). Without them, booking emails are more likely to land in spam.
 
 ---
 
@@ -138,23 +153,23 @@ The installer checks these again and tells you exactly what's missing.
 
 **With File Manager**
 
-1. hPanel → **Files → File Manager**, open `domains/atultiwari.com/`.
+1. hPanel → **Files → File Manager**, open `domains/book.atultiwari.com/`.
 2. Upload `consultdesk-<version>.zip` there and **Extract** it. You get a folder
    `consultdesk-<version>/` containing `public/` and `consultdesk-app/`.
 3. Move `consultdesk-<version>/consultdesk-app` up one level, so it sits at
-   `domains/atultiwari.com/consultdesk-app` (next to `public_html`).
+   `domains/book.atultiwari.com/consultdesk-app` (next to `public_html`).
 4. Open `consultdesk-<version>/public`, select **everything inside it** (including the hidden
    `.htaccess`; turn on "Show hidden files" in File Manager's settings if you don't see it) and move
-   it into `public_html/book`.
+   it into `public_html`.
 5. Delete the now-empty `consultdesk-<version>` folder and the zip.
 
 **With SSH** (same result)
 
 ```bash
-cd ~/domains/atultiwari.com
+cd ~/domains/book.atultiwari.com
 unzip consultdesk-<version>.zip            # after uploading the zip here
 mv consultdesk-<version>/consultdesk-app .
-cp -a consultdesk-<version>/public/. public_html/book/
+cp -a consultdesk-<version>/public/. public_html/
 rm -rf consultdesk-<version> consultdesk-<version>.zip
 ```
 
@@ -169,8 +184,8 @@ correctly by default; only change them if the installer says it can't write.
 1. Open **https://book.atultiwari.com/install** in your browser.
 2. If it lists problems (PHP version, an extension, permissions), fix them in hPanel and reload.
 3. **Setup code**: the installer has just written a file
-   `domains/atultiwari.com/consultdesk-app/install-code.txt`. Open it in File Manager (or
-   `cat ~/domains/atultiwari.com/consultdesk-app/install-code.txt` over SSH) and copy the code into
+   `domains/book.atultiwari.com/consultdesk-app/install-code.txt`. Open it in File Manager (or
+   `cat ~/domains/book.atultiwari.com/consultdesk-app/install-code.txt` over SSH) and copy the code into
    the form. This proves you control the server, so nobody else can install your site first.
 4. Fill in:
 
@@ -181,7 +196,7 @@ correctly by default; only change them if the installer says it can't write.
    | Booking codes start with | e.g. `AT` (atultiwari.com) or `VRL` (VRL). Optional; changeable later. |
    | Websites that will embed the booking pages | `https://atultiwari.com` and `https://www.atultiwari.com` (one per line) if you'll use the "Book a session" pop-up there (Part 5). |
    | Database name / user / password | from step 1.4 (the full `u123456789_…` names); host `localhost`, port `3306` |
-   | Send emails from / Mailbox / password | from step 1.5; SMTP server `smtp.hostinger.com`, port `465`, SSL |
+   | Send emails from / Mailbox / password | `bookings@atultiwari.com` and its password (the mailbox from 1.5, not the alias); SMTP server `smtp.hostinger.com`, port `465`, SSL |
 
 5. Press **Install**. It tests the database, generates the secret keys, writes
    `consultdesk-app/config.php` (readable only by your account), creates the tables, and shows you:
@@ -200,11 +215,11 @@ Calendar. ConsultDesk shows a warning in **System** if it isn't running.
 3. Command, using the path the installer showed:
 
    ```
-   /usr/bin/php /home/u123456789/domains/atultiwari.com/consultdesk-app/bin/cron.php
+   /usr/bin/php /home/u123456789/domains/book.atultiwari.com/consultdesk-app/bin/cron.php
    ```
 
    If hPanel asks only for the script path, give it
-   `domains/atultiwari.com/consultdesk-app/bin/cron.php`.
+   `domains/book.atultiwari.com/consultdesk-app/bin/cron.php`.
 
 4. Save. Within two minutes, **System** in the admin area should say "Scheduled tasks: Running".
 
@@ -293,7 +308,7 @@ then add to `config.php`:
 
 Connect the webhook, either way:
 
-- **SSH:** `php ~/domains/atultiwari.com/consultdesk-app/bin/telegram.php set-webhook`
+- **SSH:** `php ~/domains/book.atultiwari.com/consultdesk-app/bin/telegram.php set-webhook`
 - **No SSH:** open this address once in your browser (replace both values; the secret is the
   `TELEGRAM_WEBHOOK_SECRET` above):
 
@@ -379,7 +394,7 @@ Two ways (see [INSTALL.md → Putting booking on another site](INSTALL.md#puttin
   ```
 
   For the pop-up to load, book.atultiwari.com must allow atultiwari.com to frame it: you entered it
-  in the installer, or edit `public_html/book/.htaccess` and add it to the `frame-ancestors` list,
+  in the installer, or edit `public_html/.htaccess` and add it to the `frame-ancestors` list,
   e.g. `frame-ancestors 'self' https://atultiwari.com https://www.atultiwari.com;`. If atultiwari.com
   has its own Content-Security-Policy, add `https://book.atultiwari.com` to its `script-src` and
   `frame-src`.
@@ -405,7 +420,7 @@ Like WordPress, ConsultDesk updates itself:
    previous code also stays in `storage/updates/previous-<version>` until the next update.
 3. Press **Reload**. Done.
 
-Over SSH you can do the same with `php ~/domains/atultiwari.com/consultdesk-app/bin/update.php`
+Over SSH you can do the same with `php ~/domains/book.atultiwari.com/consultdesk-app/bin/update.php`
 (`check`, or `apply`).
 
 **Pre-releases:** updates offer only stable releases. To also get pre-releases (for testing), add
@@ -421,18 +436,18 @@ Updates panel says what.
 
 1. **Back up** first: admin → **System → Backups → Download backup**, and download
    `consultdesk-app/config.php`.
-2. Download the new release zip and extract it somewhere (e.g. in `domains/atultiwari.com/`).
+2. Download the new release zip and extract it somewhere (e.g. in `domains/book.atultiwari.com/`).
 3. Replace the app code, keeping your settings and uploads:
    - In `consultdesk-app/` replace `src/`, `vendor/`, `migrations/`, `bin/` and `http.php` with the
      new ones. **Do not** touch `config.php` or `storage/`.
    - With SSH:
 
      ```bash
-     cd ~/domains/atultiwari.com
+     cd ~/domains/book.atultiwari.com
      unzip consultdesk-<new>.zip
      rsync -a --delete --exclude config.php --exclude storage --exclude .installed consultdesk-<new>/consultdesk-app/ consultdesk-app/
      ```
-4. Replace the web files: copy the new `public/` contents into `public_html/book`, but **keep your
+4. Replace the web files: copy the new `public/` contents into `public_html`, but **keep your
    `.htaccess`** if you added embed sites to it (or copy the `frame-ancestors` line into the new
    one). The old `assets/` folder can be deleted first; the new one replaces it.
 5. Admin → **System**: if it lists database updates, press **Run database updates**.
@@ -454,9 +469,9 @@ Updates panel says what.
 
 For **book.vedantresearchlabs.com** (VRL, several teachers), repeat everything with VRL's own:
 
-- subdomain `book` on vedantresearchlabs.com (web folder
-  `domains/vedantresearchlabs.com/public_html/book`),
-- app folder `domains/vedantresearchlabs.com/consultdesk-app` (each site has its own),
+- a new PHP website **book.vedantresearchlabs.com** (web folder
+  `domains/book.vedantresearchlabs.com/public_html`),
+- app folder `domains/book.vedantresearchlabs.com/consultdesk-app` (each site has its own),
 - database, mailbox (e.g. `bookings@vedantresearchlabs.com`), installer run, cron job,
 - Razorpay webhook (the same Razorpay account can serve both sites: add one webhook per site), and
   Telegram bot (a bot can only point at one site, so create a second bot for VRL).
@@ -470,10 +485,10 @@ under **Providers**, and invite their logins under **Users**.
 
 | What you see | What to do |
 |---|---|
-| `/install` says the `consultdesk-app` folder wasn't found | It must be next to `public_html` (e.g. `domains/atultiwari.com/consultdesk-app`), not inside it, and contain `http.php` and `vendor/`. |
-| A blank page or "500 Internal Server Error" | hPanel → **Advanced → PHP Configuration**: PHP 8.1+ and the extensions in 1.3. The error log is in hPanel → **Advanced → Error Logs** (or `public_html/book/error_log`). |
+| `/install` says the `consultdesk-app` folder wasn't found | It must be next to `public_html` (e.g. `domains/book.atultiwari.com/consultdesk-app`), not inside it, and contain `http.php` and `vendor/`. |
+| A blank page or "500 Internal Server Error" | The website's **Advanced → PHP Configuration**: PHP 8.2+ and the extensions in 1.3 (especially `sodium`). The error log is in hPanel → **Advanced → Error Logs** (or `public_html/error_log`). |
 | The site loads but every page says "This site is not configured yet" | `consultdesk-app/config.php` is missing or has an error; check the error log for "configuration error". |
-| Booking pages show 404 for every path except the home page | `.htaccess` wasn't copied into `public_html/book` (File Manager hides dotfiles until you turn on "Show hidden files"). |
+| Booking pages show 404 for every path except the home page | `.htaccess` wasn't copied into `public_html` (File Manager hides dotfiles until you turn on "Show hidden files"). |
 | Emails don't arrive | Check System → "Emails, calendar and alerts" for failed jobs and the last error; check the mailbox password and port 465/SSL; set SPF/DKIM (1.5). |
 | System says cron isn't running | Check the cron job's command path and that it runs every minute; try the cron web address instead. |
 | Razorpay page opens but the booking stays "Awaiting payment" | The webhook URL or secret doesn't match (Test vs Live mode have separate webhooks). The return from Razorpay also confirms it, so this mostly shows when the tab was closed. |
