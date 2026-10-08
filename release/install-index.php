@@ -30,7 +30,7 @@ h2{font-size:1.05rem;margin:2rem 0 .5rem}.brand{display:flex;gap:.6rem;align-ite
 .card{background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:1.5rem;margin-top:1rem}
 label{display:block;font-weight:600;margin:1rem 0 .3rem}.hint{color:var(--ink2);font-size:.9rem;margin:.15rem 0 .4rem}
 input,select,textarea{width:100%;padding:.6rem .7rem;border:1px solid var(--rule);border-radius:10px;font:inherit;background:#fff}
-.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:0 1rem}.err{color:var(--bad);font-size:.9rem;margin:.3rem 0 0}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:0 1rem;align-items:start}.f{min-width:0}.err{color:var(--bad);font-size:.9rem;margin:.3rem 0 0}
 button{margin-top:1.5rem;background:var(--brand);color:#fff;border:0;border-radius:10px;padding:.8rem 1.3rem;font:600 1rem system-ui;cursor:pointer}
 .checks{list-style:none;padding:0;margin:0}.checks li{padding:.35rem 0}.ok{color:var(--good)}.no{color:var(--bad)}
 code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;word-break:break-all}.box{background:#f1f2f6;border-radius:10px;padding:.75rem 1rem}
@@ -115,9 +115,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $field = static function (string $name, string $label, string $hint = '', string $type = 'text', string $extra = '') use ($form, $errors, $e): string {
-    return '<label for="' . $name . '">' . $e($label) . '</label>' . ($hint !== '' ? '<p class="hint">' . $hint . '</p>' : '')
+    // One wrapper per field, so a label always stays with its box (also in two-column rows).
+    return '<div class="f"><label for="' . $name . '">' . $e($label) . '</label>' . ($hint !== '' ? '<p class="hint">' . $hint . '</p>' : '')
         . '<input id="' . $name . '" name="' . $name . '" type="' . $type . '" value="' . ($type === 'password' ? '' : $e($form[$name] ?? '')) . '" ' . $extra . '>'
-        . (isset($errors[$name]) ? '<p class="err">' . $e($errors[$name]) . '</p>' : '');
+        . (isset($errors[$name]) ? '<p class="err">' . $e($errors[$name]) . '</p>' : '') . '</div>';
 };
 $codePath = 'consultdesk-app/install-code.txt';
 $enc = $form['smtp_encryption'];
@@ -134,14 +135,14 @@ $page('Install', '<h1>Install ConsultDesk</h1><p>About five minutes. Have hPanel
     . '<label for="embed_sites">Websites that will embed the booking pages (optional)</label><p class="hint">For the “Book a session” button on another site, e.g. https://atultiwari.com — one per line.</p>'
     . '<textarea id="embed_sites" name="embed_sites" rows="2">' . $e($form['embed_sites']) . '</textarea>'
     . (isset($errors['embed_sites']) ? '<p class="err">' . $e($errors['embed_sites']) . '</p>' : '')
-    . '<h2>Database</h2><p class="hint">hPanel → Databases → MySQL Databases: create a database and user, then copy the names here (they start with u…_).</p>'
+    . '<h2>Database</h2><p class="hint">hPanel → Databases → Management: create a database and its user, then copy the full names here (they start with u…_, e.g. u123456789_consultdesk). Leave host and port as they are.</p>'
     . '<div class="row">' . $field('db_name', 'Database name', '', 'text', 'required') . $field('db_user', 'Database user', '', 'text', 'required') . '</div>'
     . $field('db_password', 'Database password', '', 'password', 'required autocomplete="new-password"')
     . '<div class="row">' . $field('db_host', 'Host', '', 'text') . $field('db_port', 'Port', '', 'text') . '</div>'
-    . '<h2>Email</h2><p class="hint">hPanel → Emails: create a mailbox such as bookings@yourdomain, then use its address and password here.</p>'
+    . '<h2>Email</h2><p class="hint">The mailbox that sends booking emails (hPanel → Emails), e.g. bookings@yourdomain: its address goes in both “Send emails from” and “Mailbox”, with its password. Leave the server settings as they are for Hostinger.</p>'
     . '<div class="row">' . $field('mail_from', 'Send emails from', '', 'email', 'required') . $field('mail_from_name', 'Sender name') . '</div>'
     . '<div class="row">' . $field('smtp_user', 'Mailbox (login)', '', 'email', 'required') . $field('smtp_password', 'Mailbox password', '', 'password', 'required autocomplete="new-password"') . '</div>'
     . '<div class="row">' . $field('smtp_host', 'SMTP server') . $field('smtp_port', 'Port')
-    . '<div><label for="smtp_encryption">Encryption</label><select id="smtp_encryption" name="smtp_encryption">'
+    . '<div class="f"><label for="smtp_encryption">Encryption</label><select id="smtp_encryption" name="smtp_encryption">'
     . '<option value="ssl"' . ($enc === 'ssl' ? ' selected' : '') . '>SSL (port 465)</option><option value="tls"' . ($enc === 'tls' ? ' selected' : '') . '>TLS (port 587)</option></select></div></div>'
     . '<button type="submit">Install</button></form>');
