@@ -128,22 +128,26 @@ The installer checks these again and tells you exactly what's missing.
 3. Hostinger prefixes both with your account, e.g. `u123456789_consultdesk`. Note the **full**
    database name, the **full** user name and the password. The host is `localhost`.
 
-### 1.5 Email: one mailbox to send, any address to receive
+### 1.5 Email: one mailbox for booking emails
 
-ConsultDesk **sends** booking emails by logging in to a mailbox, so it needs a real mailbox with a
-password. An **alias** or forwarder (like `contact@atultiwari.com`) has no password of its own, so
-it can't be used to send, but it's perfect for **receiving**.
+ConsultDesk **sends** booking emails by logging in to a real mailbox (an alias or forwarder has no
+password, so it can't send). The simplest setup is one mailbox that both sends and receives:
 
-1. hPanel → **Emails** for atultiwari.com → create a mailbox **`bookings@atultiwari.com`** with its
-   own strong password. ConsultDesk sends from it (keeping your personal mailbox's password out of
-   the server's settings). Its sending settings are:
+1. hPanel → **Emails** for atultiwari.com → create **`bookings@atultiwari.com`** with its own strong
+   password. ConsultDesk sends from it; its settings are:
    - SMTP server `smtp.hostinger.com`, port `465` with **SSL** (or `587` with TLS)
    - login: `bookings@atultiwari.com` and its password
-2. Your alias **`contact@atultiwari.com`** is where things should **arrive**: in the setup wizard
-   (2.5) put it as the teacher's **Email for new bookings**. New bookings and payments to verify
-   are sent there, and when customers press Reply on their booking emails, the reply goes there too.
-3. Make sure **SPF and DKIM** are set for atultiwari.com (Emails → the domain → DNS settings, which
+2. Use the same address to **receive**: in the setup wizard (2.5) put `bookings@atultiwari.com` as
+   the teacher's **Email for new bookings**. New bookings and payments to verify arrive there, and
+   when customers press Reply on their booking emails, the reply goes there too.
+3. Booking alerts also go to the **owner account's** email. To keep everything in one inbox, create
+   the owner account (2.5) with `bookings@atultiwari.com` as well; with a different address (e.g.
+   your personal Gmail) you get a second copy there, which some people like as a backup.
+4. Make sure **SPF and DKIM** are set for atultiwari.com (Emails → the domain → DNS settings, which
    offers a one-click fix). Without them, booking emails are more likely to land in spam.
+
+(An alias such as `contact@atultiwari.com` can still be the **Email for new bookings** if you'd
+rather receive there; it just can't be the sending mailbox.)
 
 ---
 
