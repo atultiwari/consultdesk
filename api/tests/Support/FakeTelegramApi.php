@@ -51,7 +51,7 @@ final class FakeTelegramApi implements TelegramApi
 
     /** @var list<array{url: string, secret: string}> */
     public array $webhooks = [];
-    /** What getMe answers; null makes it fail as for a revoked token. */
+    /** @var array<string, mixed>|null what getMe answers; null makes it fail as for a revoked token */
     public ?array $me = ['id' => 42, 'is_bot' => true, 'username' => 'ConsultDeskTestBot'];
     public bool $down = false;
 
