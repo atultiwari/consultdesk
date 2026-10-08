@@ -54,6 +54,10 @@ The local-development `CRON_KEY` from `docker-compose.yml` is refused on any `ht
 The bot sends "verify this UPI payment" and "approve this request" alerts with **Confirm** and
 **Reject** buttons. Email keeps working without it.
 
+> On an https site the easiest way is the admin area: **Integrations → Telegram bot**, paste the
+> token from @BotFather, done (the webhook is connected for you). The steps below set it up in
+> `.env` instead, which local development (plain http, using `poll`) needs.
+
 ### 1. Create the bot (about 2 minutes, on your phone)
 
 1. In Telegram, open a chat with **@BotFather** (blue tick) and send `/newbot`.

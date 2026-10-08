@@ -295,29 +295,20 @@ the confirmation email arrives. In Razorpay (Test Mode) → **Payment Links**, t
 
 ### 3.2 Telegram alerts (optional)
 
-Create the bot with @BotFather as in [INSTALL.md → Telegram bot](INSTALL.md#telegram-bot-phase-3-optional),
-then add to `config.php`:
+1. In Telegram, open **@BotFather** and send `/newbot`. Give it a name (e.g. "Bookings alerts") and
+   a username ending in `bot`. BotFather replies with an **API token**.
+2. Admin → **Integrations → Telegram bot**: paste the token → **Connect bot**. ConsultDesk checks
+   the token with Telegram, makes a webhook secret and connects the webhook for you; the page then
+   shows **Connected @your_bot**.
+3. **My account → Telegram → Get a Telegram link**, open it on your phone and press **Start**. (For
+   each teacher: their profile → **Connections → Telegram**.)
 
-```php
-'TELEGRAM_BOT_TOKEN' => '123456789:…',
-'TELEGRAM_WEBHOOK_SECRET' => 'another-long-random-secret-of-32-plus-characters',
-'TELEGRAM_BOT_USERNAME' => 'your_bot',
-```
+Make a test booking: the alert arrives with Confirm/Reject buttons.
 
-Connect the webhook, either way:
-
-- **SSH:** `php ~/domains/book.atultiwari.com/consultdesk-app/bin/telegram.php set-webhook`
-- **No SSH:** open this address once in your browser (replace both values; the secret is the
-  `TELEGRAM_WEBHOOK_SECRET` above):
-
-  ```
-  https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://book.atultiwari.com/api/webhooks/telegram&secret_token=<TELEGRAM_WEBHOOK_SECRET>
-  ```
-
-  Telegram answers `"ok":true`.
-
-Then in the admin area: **My profile → Connections → Telegram → Connect**, and press Start in
-Telegram. Make a test booking: the alert arrives with Confirm/Reject buttons.
+If you also use this bot somewhere else (e.g. on your computer), that takes its webhook away: press
+**Reconnect webhook** on Integrations to point it back here. (A bot can also be set in `config.php`
+with `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_BOT_USERNAME`; one set there
+takes precedence and is managed there.)
 
 ### 3.3 Google Calendar (optional)
 

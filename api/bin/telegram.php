@@ -10,6 +10,7 @@ declare(strict_types=1);
 //   php bin/telegram.php poll                    local development only: fetch updates from Telegram
 //                                                instead of the webhook, and run cron every few seconds.
 //                                                Removes the webhook; run set-webhook again on a live site.
+//                                                Restart it after connecting or changing the bot in the admin area.
 // Links work once: 24 hours for providers, 15 minutes for owner/admin users. (The admin panel will offer the same in Phase 6.)
 
 use ConsultDesk\Bootstrap\AppServices;
@@ -30,7 +31,7 @@ $fail = static function (string $message): never {
 
 try {
     $services = new AppServices(Config::load(dirname(__DIR__) . '/config.php', getenv()));
-    $config = $services->config->telegram ?? $fail('Telegram is not configured: set TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET.');
+    $config = $services->telegramConfig() ?? $fail('Telegram is not configured: connect a bot in the admin area (Integrations), or set TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET.');
     $telegram = $services->telegramServices() ?? $fail('Telegram is not configured.');
 
     switch ($args[1] ?? '') {

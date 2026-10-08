@@ -93,6 +93,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           { to: `${base}/users`, label: 'Users' },
           { to: `${base}/branding`, label: 'Branding' },
           { to: `${base}/payments`, label: 'Payments' },
+          { to: `${base}/integrations`, label: 'Integrations' },
           { to: `${base}/system`, label: 'System' },
         ]
       : []),

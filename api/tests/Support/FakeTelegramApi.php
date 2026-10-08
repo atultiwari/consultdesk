@@ -49,7 +49,19 @@ final class FakeTelegramApi implements TelegramApi
         $this->answers[] = ['id' => $callbackQueryId, 'text' => $text];
     }
 
-    public function setWebhook(string $url, string $secret): void {}
+    /** @var list<array{url: string, secret: string}> */
+    public array $webhooks = [];
+    /** What getMe answers; null makes it fail as for a revoked token. */
+    public ?array $me = ['id' => 42, 'is_bot' => true, 'username' => 'ConsultDeskTestBot'];
+    public bool $down = false;
+
+    public function setWebhook(string $url, string $secret): void
+    {
+        if ($this->down) {
+            throw new TelegramApiError('Telegram API unreachable (setWebhook).');
+        }
+        $this->webhooks[] = ['url' => $url, 'secret' => $secret];
+    }
 
     /** @var list<array{string, array<string, mixed>}> generic calls made */
     public array $calls = [];
@@ -59,6 +71,12 @@ final class FakeTelegramApi implements TelegramApi
     public function call(string $method, array $params = []): array
     {
         $this->calls[] = [$method, $params];
+        if ($this->down) {
+            throw new TelegramApiError(sprintf('Telegram API unreachable (%s).', $method));
+        }
+        if ($method === 'getMe') {
+            return $this->me ?? throw new TelegramApiError('Telegram getMe failed: Unauthorized');
+        }
         if ($method === 'getUpdates') {
             return array_shift($this->updates) ?? [];
         }

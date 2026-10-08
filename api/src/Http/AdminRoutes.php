@@ -24,6 +24,7 @@ use ConsultDesk\Http\Action\AdminScheduleActions;
 use ConsultDesk\Http\Action\AdminServiceActions;
 use ConsultDesk\Http\Action\AdminSetupActions;
 use ConsultDesk\Http\Action\AdminSystemActions;
+use ConsultDesk\Http\Action\AdminTelegramBotActions;
 use ConsultDesk\Http\Action\AdminUserActions;
 use ConsultDesk\Http\Middleware\RateLimit;
 use Slim\Routing\RouteCollectorProxy;
@@ -84,6 +85,13 @@ final class AdminRoutes
             $services->config->appUrl,
             $services->paymentMode(),
         );
+        $telegramBot = static fn(): AdminTelegramBotActions => new AdminTelegramBotActions(
+            $services->telegramSettings(),
+            $services->config->telegram,
+            $services->telegramApiFor(...),
+            $services->auditLog(),
+            $services->config->appUrl,
+        );
         $codes = static fn(): AdminBookingCodeActions => new AdminBookingCodeActions($services->bookingRefPrefix(), $services->auditLog());
         $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
         $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter(), $services->updateChecker(), $services->updater());
@@ -115,6 +123,10 @@ final class AdminRoutes
         // The current-password check must not become a way to guess it from a stolen session.
         $admin->post('/me/password', static fn($rq, $rs) => $me()->changePassword($rq, $rs))
             ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-password-change', 10, 3600, $services->clientIp()));
+        $admin->get('/integrations/telegram', static fn($rq, $rs) => $telegramBot()->show($rq, $rs));
+        $admin->put('/integrations/telegram', static fn($rq, $rs) => $telegramBot()->save($rq, $rs));
+        $admin->delete('/integrations/telegram', static fn($rq, $rs) => $telegramBot()->remove($rq, $rs));
+        $admin->post('/integrations/telegram/webhook', static fn($rq, $rs) => $telegramBot()->reconnect($rq, $rs));
         $admin->get('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegram($rq, $rs));
         $admin->post('/me/telegram/link', static fn($rq, $rs) => $integrations()->myTelegramLink($rq, $rs));
         $admin->delete('/me/telegram', static fn($rq, $rs) => $integrations()->myTelegramUnlink($rq, $rs));

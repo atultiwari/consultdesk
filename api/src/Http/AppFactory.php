@@ -75,7 +75,7 @@ final class AppFactory
             $api->post('/webhooks/razorpay', static fn($rq, $rs) => (new RazorpayWebhookAction($services->razorpayCheckout()))($rq, $rs))->add($limit('razorpay', 120, self::MINUTE));
             $api->post('/bookings/{ref}/utr', static fn($rq, $rs, array $a) => $bookings()->submitUtr($rq, $rs, $a))->add($limit('utr', 10, self::HOUR));
 
-            $api->post('/webhooks/telegram', static fn($rq, $rs) => (new TelegramWebhookAction($services->telegramBot(), $services->config->telegram?->webhookSecret))($rq, $rs))->add($limit('telegram', 600, self::MINUTE));
+            $api->post('/webhooks/telegram', static fn($rq, $rs) => (new TelegramWebhookAction($services->telegramBot(), $services->telegramConfig()?->webhookSecret))($rq, $rs))->add($limit('telegram', 600, self::MINUTE));
 
             $api->get('/google/callback', static fn($rq, $rs) => (new GoogleCallbackAction($services->googleOAuth()))($rq, $rs))->add($limit('google', 30, self::MINUTE));
 

@@ -17,7 +17,7 @@ export function TelegramBox({ providerId, configured, linked }: Props) {
   if (!configured) {
     return (
       <p className="hint">
-        Telegram isn't set up on this server yet (see INSTALL.md › Telegram bot).
+        No Telegram bot is connected yet. The owner can connect one in Integrations.
       </p>
     );
   }
