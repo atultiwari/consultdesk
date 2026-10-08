@@ -161,14 +161,16 @@ test('the owner saves Razorpay test keys and gets the webhook details', async ({
     .getByRole('navigation', { name: 'Admin' })
     .getByRole('link', { name: 'Payments' })
     .click();
-  const org = page.getByRole('region', { name: /organisation account/ });
+  const mode = page.getByRole('region', { name: 'Test or live payments' });
+  await expect(mode.getByText(/Test mode: no real money/)).toBeVisible();
+  const org = page.getByRole('region', { name: 'Test keys' });
 
   // Placeholder keys: saving never calls Razorpay, and they are removed again below.
   await org.getByLabel('Key ID').fill(`rzp_test_${'E'.repeat(14)}`);
   await org.getByLabel('Key Secret').fill(randomBytes(18).toString('hex'));
-  await org.getByRole('button', { name: 'Save keys' }).click();
+  await org.getByRole('button', { name: 'Save test keys' }).click();
 
-  await expect(org.getByText('Test mode', { exact: true })).toBeVisible();
+  await expect(org.getByText('In use', { exact: true })).toBeVisible();
   await expect(org.getByText(/\/api\/webhooks\/razorpay$/)).toBeVisible();
   await expect(org.getByRole('button', { name: 'Copy Webhook secret' })).toBeVisible();
 
