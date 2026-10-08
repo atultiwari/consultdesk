@@ -1635,3 +1635,101 @@
   font-size: 0.9rem;
   white-space: pre-wrap;
 }
+
+/* Payments: the Test/Live switch and the two sets of Razorpay keys */
+.pay-mode--live {
+  border-color: var(--success);
+  box-shadow: inset 4px 0 0 var(--success);
+}
+
+.pay-mode--test {
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+
+.pay-mode__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switch__track {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--bg-sunk);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+
+.switch__track[aria-checked='true'] {
+  background: var(--success);
+  border-color: transparent;
+}
+
+.switch__track:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switch__track:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.switch__thumb {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--bg-elev);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transform: translateY(-50%);
+  transition: transform var(--dur-1) var(--ease-out);
+}
+
+.switch__track[aria-checked='true'] .switch__thumb {
+  transform: translate(1.25rem, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch__track,
+  .switch__thumb {
+    transition: none;
+  }
+}
+
+.key-sets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+
+.key-set {
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.key-set__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.05rem;
+}

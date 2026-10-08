@@ -53,7 +53,7 @@ final class Config
         /** When set, the first-run "create the owner" form also asks for this key. */
         #[\SensitiveParameter]
         public readonly ?string $setupKey = null,
-        /** Real-money Razorpay keys (rzp_live_…) are accepted only when this is on. */
+        /** Start in Live payment mode until the owner chooses on the Payments page (older installs went live here). */
         public readonly bool $paymentsLive = false,
         /** The booking site's web folder on an installed release; null in development (no in-app updates). */
         public readonly ?string $publicPath = null,
@@ -137,7 +137,7 @@ final class Config
             adminPath: self::adminPath($v['ADMIN_PATH'] ?? '', $appUrl),
             mediaPath: rtrim(($v['MEDIA_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/media' : $v['MEDIA_PATH'], '/'),
             backupPath: rtrim(($v['BACKUP_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/backups' : $v['BACKUP_PATH'], '/'),
-            razorpay: RazorpayEnvKeys::fromValues($v, ($v['PAYMENTS_LIVE'] ?? '0') === '1'),
+            razorpay: RazorpayEnvKeys::fromValues($v),
             paymentsLive: ($v['PAYMENTS_LIVE'] ?? '0') === '1',
             publicPath: self::publicPath($v['PUBLIC_PATH'] ?? ''),
             betaUpdates: strtolower(trim($v['UPDATE_CHANNEL'] ?? '')) === 'beta',

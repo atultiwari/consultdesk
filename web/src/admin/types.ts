@@ -193,19 +193,31 @@ export type SystemSnapshot = {
   warnings?: string[];
 };
 
+export type PaymentMode = 'test' | 'live';
+
+/** One set of the organisation's Razorpay keys (no secrets). */
+export type RazorpayAccount = {
+  key_id: string;
+  /** "env": the default keys from the server's config; "settings": keys saved here (they win). */
+  source: 'settings' | 'env' | null;
+  has_webhook_secret: boolean;
+};
+
 export type PaymentSettings = {
   methods: { upi_enabled: boolean; razorpay_enabled: boolean };
   razorpay: {
+    /** Whether bookings use the live (real money) keys. */
+    live: boolean;
+    mode: PaymentMode;
+    /** The keys in use now, for the current mode. */
     configured: boolean;
-    mode: 'test' | 'live' | null;
     key_id: string | null;
     has_webhook_secret: boolean;
     webhook_url: string;
-    live_allowed: boolean;
-    /** "env": the default keys from the server's .env; "settings": keys saved here (they win). */
     source: 'settings' | 'env' | null;
-    /** The .env default's Key ID, if there is one: what removing saved keys falls back to. */
+    /** The server config's default Key ID, if there is one: what removing saved keys falls back to. */
     env_key_id: string | null;
+    accounts: Record<PaymentMode, RazorpayAccount | null>;
     /** Only in the answer that made it: shown once, to paste into Razorpay. */
     webhook_secret?: string;
   };
@@ -213,6 +225,7 @@ export type PaymentSettings = {
     provider_id: number;
     provider_name: string;
     key_id: string;
+    mode: PaymentMode;
     has_webhook_secret: boolean;
   }[];
 };

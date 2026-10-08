@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import { adminFetch } from './api';
-import type { PaymentSettings } from './types';
+import type { PaymentMode, PaymentSettings } from './types';
 
 const KEY = ['admin', 'payments'] as const;
 
@@ -47,21 +47,30 @@ export function useSaveOrgKeys() {
   );
 }
 
-export function useCheckOrgKeys() {
-  return usePaymentsMutation(() =>
-    adminFetch<PaymentSettings>('/payments/razorpay/check', { method: 'POST' }),
+/** Test or live payments: which set of keys bookings use. */
+export function useSavePaymentMode() {
+  return usePaymentsMutation((live: boolean) =>
+    adminFetch<PaymentSettings>('/payments/mode', { method: 'PUT', json: { live } }),
   );
 }
 
-export function useNewWebhookSecret() {
+export function useCheckOrgKeys(mode: PaymentMode) {
   return usePaymentsMutation(() =>
-    adminFetch<PaymentSettings>('/payments/razorpay/webhook-secret', { method: 'POST' }),
+    adminFetch<PaymentSettings>(`/payments/razorpay/check?mode=${mode}`, { method: 'POST' }),
   );
 }
 
-export function useRemoveOrgKeys() {
+export function useNewWebhookSecret(mode: PaymentMode) {
   return usePaymentsMutation(() =>
-    adminFetch<PaymentSettings>('/payments/razorpay', { method: 'DELETE' }),
+    adminFetch<PaymentSettings>(`/payments/razorpay/webhook-secret?mode=${mode}`, {
+      method: 'POST',
+    }),
+  );
+}
+
+export function useRemoveOrgKeys(mode: PaymentMode) {
+  return usePaymentsMutation(() =>
+    adminFetch<PaymentSettings>(`/payments/razorpay?mode=${mode}`, { method: 'DELETE' }),
   );
 }
 
@@ -90,8 +99,10 @@ export function useSaveProviderKeys() {
 export function useRemoveProviderKeys() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (providerId: number) =>
-      adminFetch<{ ok: true }>(`/providers/${providerId}/razorpay`, { method: 'DELETE' }),
+    mutationFn: ({ providerId, mode }: { providerId: number; mode: PaymentMode }) =>
+      adminFetch<{ ok: true }>(`/providers/${providerId}/razorpay?mode=${mode}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => client.invalidateQueries({ queryKey: KEY }),
   });
 }

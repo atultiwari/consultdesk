@@ -163,7 +163,7 @@ final class ConfigTest extends TestCase
     public function testRejectsEnvironmentDefaultsThatCannotWork(): void
     {
         $bad = [
-            'RAZORPAY_KEY_ID' => ['RAZORPAY_KEY_ID' => 'rzp_live_' . str_repeat('E', 14), 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24)],
+            'RAZORPAY_KEY_ID' => ['RAZORPAY_KEY_ID' => 'not-a-key-id', 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24)],
             'RAZORPAY_KEY_SECRET' => ['RAZORPAY_KEY_ID' => 'rzp_test_' . str_repeat('E', 14)],
             'RAZORPAY_WEBHOOK_SECRET' => ['RAZORPAY_KEY_ID' => 'rzp_test_' . str_repeat('E', 14), 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24), 'RAZORPAY_WEBHOOK_SECRET' => 'short'],
             'OWNER_EMAIL' => ['OWNER_EMAIL' => 'not-an-email'],
@@ -180,19 +180,13 @@ final class ConfigTest extends TestCase
         }
     }
 
-    public function testLiveRazorpayKeysNeedPaymentsLive(): void
+    public function testLiveRazorpayKeysAreReadAndPaymentsLiveOnlySetsTheStartingMode(): void
     {
         $live = ['RAZORPAY_KEY_ID' => 'rzp_live_' . str_repeat('L', 14), 'RAZORPAY_KEY_SECRET' => str_repeat('s', 24)];
-        try {
-            Config::load('/nonexistent/config.php', [...self::env(), ...$live]);
-            self::fail('live keys without PAYMENTS_LIVE must be refused');
-        } catch (InvalidArgumentException $e) {
-            self::assertStringContainsString('PAYMENTS_LIVE', $e->getMessage());
-        }
 
-        $config = Config::load('/nonexistent/config.php', [...self::env(), ...$live, 'PAYMENTS_LIVE' => '1']);
-        self::assertTrue($config->paymentsLive);
-        self::assertFalse($config->razorpay?->isTestMode());
-        self::assertFalse(Config::load('/nonexistent/config.php', self::env())->paymentsLive);
+        $config = Config::load('/nonexistent/config.php', [...self::env(), ...$live]);
+        self::assertFalse($config->razorpay?->isTestMode(), 'kept for Live mode, which is switched on in the admin area');
+        self::assertFalse($config->paymentsLive);
+        self::assertTrue(Config::load('/nonexistent/config.php', [...self::env(), ...$live, 'PAYMENTS_LIVE' => '1'])->paymentsLive);
     }
 }

@@ -3,6 +3,7 @@ import { Loading, Notice } from '../design/components/Notice';
 import { useAdmin } from './context';
 import { useAdminProviders } from './hooks';
 import { PaymentMethods } from './PaymentMethods';
+import { PaymentModeSwitch } from './PaymentModeSwitch';
 import { usePaymentSettings } from './paymentHooks';
 import { OrgRazorpay, TeacherAccounts } from './RazorpaySettings';
 
@@ -25,6 +26,7 @@ export function PaymentsPage() {
       )}
       {settings.data && (
         <div className="stack">
+          <PaymentModeSwitch settings={settings.data} />
           <PaymentMethods initial={settings.data.methods} />
           <OrgRazorpay settings={settings.data} />
           <TeacherAccounts settings={settings.data} />

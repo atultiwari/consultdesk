@@ -13,14 +13,17 @@ final class PdoCatalog implements CatalogRepository
 {
     private const PROVIDER_COLUMNS = "id, slug, name, title, bio, photo_path, timezone, upi_vpa,
         EXISTS (SELECT 1 FROM payment_gateways g WHERE g.gateway = 'razorpay' AND g.active = 1
+            AND g.mode = :gateway_mode
             AND (g.provider_id = providers.id OR g.provider_id IS NULL)) AS razorpay_ready";
     private const SERVICE_COLUMNS = 'id, provider_id, slug, title, tagline, description, audience, highlight, duration_min,
         price_minor, currency, requires_approval, payment_methods, questions';
 
     public function __construct(
         private readonly PDO $pdo,
-        /** The organisation's Razorpay keys come from .env, so every teacher can take online payment. */
+        /** The organisation's Razorpay keys for the mode in use come from .env, so every teacher can take online payment. */
         private readonly bool $razorpayDefaults = false,
+        /** Which Razorpay keys bookings use now: "test" or "live". */
+        private readonly string $paymentMode = 'test',
     ) {}
 
     public function activeProviders(): array
@@ -29,13 +32,13 @@ final class PdoCatalog implements CatalogRepository
 
         return array_map(
             fn(array $r): ProviderProfile => $this->provider($r, $switches),
-            $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE active = 1 ORDER BY sort_order, name', []),
+            $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE active = 1 ORDER BY sort_order, name', ['gateway_mode' => $this->paymentMode]),
         );
     }
 
     public function activeProvider(string $slug): ?ProviderProfile
     {
-        $rows = $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE slug = :slug AND active = 1', ['slug' => $slug]);
+        $rows = $this->rows('SELECT ' . self::PROVIDER_COLUMNS . ' FROM providers WHERE slug = :slug AND active = 1', ['slug' => $slug, 'gateway_mode' => $this->paymentMode]);
 
         return $rows === [] ? null : $this->provider($rows[0], $this->switches());
     }

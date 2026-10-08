@@ -10,7 +10,7 @@ use InvalidArgumentException;
  * The organisation's default Razorpay keys from .env (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and
  * optionally RAZORPAY_WEBHOOK_SECRET). Keys saved on the Payments page take precedence; removing
  * those falls back to these, so resetting the database keeps payments working. Live keys
- * (rzp_live_…) are accepted only with PAYMENTS_LIVE=1.
+ * (rzp_live_…) are used only once the owner switches the Payments page to Live.
  */
 final class RazorpayEnvKeys
 {
@@ -20,7 +20,7 @@ final class RazorpayEnvKeys
     /**
      * @param array<string, string> $values
      */
-    public static function fromValues(array $values, bool $live = false): ?RazorpayCredentials
+    public static function fromValues(array $values): ?RazorpayCredentials
     {
         $keyId = trim($values['RAZORPAY_KEY_ID'] ?? '');
         $secret = $values['RAZORPAY_KEY_SECRET'] ?? '';
@@ -30,9 +30,6 @@ final class RazorpayEnvKeys
         }
         if (preg_match(self::KEY_ID, $keyId) !== 1) {
             throw new InvalidArgumentException('RAZORPAY_KEY_ID must be a Key ID from Razorpay (rzp_test_… or rzp_live_…).');
-        }
-        if (!$live && str_starts_with($keyId, 'rzp_live_')) {
-            throw new InvalidArgumentException('RAZORPAY_KEY_ID is a live key: set PAYMENTS_LIVE=1 as well to take real payments.');
         }
         if (!self::looksLikeSecret($secret)) {
             throw new InvalidArgumentException('RAZORPAY_KEY_SECRET must be the Key Secret Razorpay showed with RAZORPAY_KEY_ID.');

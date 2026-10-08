@@ -65,6 +65,7 @@ use ConsultDesk\Notify\NotificationHandlers;
 use ConsultDesk\Notify\Outbox;
 use ConsultDesk\Notify\OutboxBookingEvents;
 use ConsultDesk\Notify\OutboxWorker;
+use ConsultDesk\Payments\PaymentMode;
 use ConsultDesk\Payments\Razorpay\GatewayKeys;
 use ConsultDesk\Payments\Razorpay\HttpRazorpayApi;
 use ConsultDesk\Payments\Razorpay\RazorpayApi;
@@ -154,7 +155,9 @@ final class AppServices
 
     public function catalog(): PdoCatalog
     {
-        return new PdoCatalog($this->pdo(), $this->config->razorpay !== null);
+        $keys = $this->gatewayKeys();
+
+        return new PdoCatalog($this->pdo(), $keys->orgSource() === 'env', $keys->mode());
     }
 
     public function slotFinder(): SlotFinder
@@ -236,7 +239,28 @@ final class AppServices
 
     public function gatewayKeys(): GatewayKeys
     {
-        return new GatewayKeys($this->pdo(), $this->crypto(), $this->clock, $this->config->razorpay);
+        return new GatewayKeys($this->pdo(), $this->crypto(), $this->clock, $this->config->razorpay, $this->paymentMode());
+    }
+
+    public function paymentMode(): PaymentMode
+    {
+        return new PaymentMode($this->settings(), $this->config->paymentsLive && $this->hasLiveOrgKeys());
+    }
+
+    /**
+     * PAYMENTS_LIVE=1 starts a site in Live mode only if it has live keys to take payments with;
+     * otherwise online payment would silently vanish.
+     */
+    private function hasLiveOrgKeys(): bool
+    {
+        if ($this->config->razorpay !== null && !$this->config->razorpay->isTestMode()) {
+            return true;
+        }
+
+        $statement = $this->pdo()->prepare("SELECT 1 FROM payment_gateways WHERE gateway = 'razorpay' AND active = 1 AND mode = 'live' AND provider_id IS NULL LIMIT 1");
+        $statement->execute();
+
+        return $statement->fetchColumn() !== false;
     }
 
     public function razorpayApi(): RazorpayApi

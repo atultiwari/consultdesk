@@ -82,7 +82,7 @@ final class AdminRoutes
             $services->auditLog(),
             $pdo(),
             $services->config->appUrl,
-            testKeysOnly: !$services->config->paymentsLive,
+            $services->paymentMode(),
         );
         $codes = static fn(): AdminBookingCodeActions => new AdminBookingCodeActions($services->bookingRefPrefix(), $services->auditLog());
         $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
@@ -141,6 +141,7 @@ final class AdminRoutes
 
         $admin->get('/payments', static fn($rq, $rs) => $payments()->show($rq, $rs));
         $admin->put('/payments/methods', static fn($rq, $rs) => $payments()->saveMethods($rq, $rs));
+        $admin->put('/payments/mode', static fn($rq, $rs) => $payments()->saveMode($rq, $rs));
         $admin->put('/payments/razorpay', static fn($rq, $rs) => $payments()->saveOrgKeys($rq, $rs));
         $admin->delete('/payments/razorpay', static fn($rq, $rs) => $payments()->removeOrgKeys($rq, $rs));
         $admin->post('/payments/razorpay/check', static fn($rq, $rs) => $payments()->check($rq, $rs));
