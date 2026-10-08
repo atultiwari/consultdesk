@@ -35,6 +35,7 @@ return [
     // Test/Live payments are switched in the admin area (Payments). PAYMENTS_LIVE=1 only sets the starting mode.
     // 'UPDATE_CHANNEL' => 'beta', // also offer pre-releases as in-app updates
     // 'PUBLIC_PATH' => '/home/u000000000/domains/example.com/public_html/book', // the installer sets this
+    // Telegram: easiest from the admin area (Integrations). Set here only to manage it in this file.
     // 'TELEGRAM_BOT_TOKEN' => '…',
     // 'TELEGRAM_WEBHOOK_SECRET' => '…',
     // 'TELEGRAM_BOT_USERNAME' => '…',

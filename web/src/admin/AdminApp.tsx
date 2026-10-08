@@ -7,6 +7,7 @@ import { useSiteTheme } from '../app/useSiteTheme';
 import { AccountPage } from './AccountPage';
 import { AdminLayout } from './AdminLayout';
 import { BrandingPage } from './BrandingPage';
+import { IntegrationsPage } from './IntegrationsPage';
 import { PaymentsPage } from './PaymentsPage';
 import { SetupPage } from './SetupPage';
 import { SystemPage } from './SystemPage';
@@ -122,6 +123,7 @@ export default function AdminApp({
               <Route path="users" element={<UsersPage />} />
               <Route path="branding" element={<BrandingPage />} />
               <Route path="payments" element={<PaymentsPage />} />
+              <Route path="integrations" element={<IntegrationsPage />} />
               <Route path="system" element={<SystemPage />} />
               <Route path="setup" element={<SetupPage />} />
             </>

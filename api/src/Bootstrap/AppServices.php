@@ -75,8 +75,10 @@ use ConsultDesk\Telegram\LinkCodes;
 use ConsultDesk\Telegram\MessageLog;
 use ConsultDesk\Telegram\TelegramApi;
 use ConsultDesk\Telegram\TelegramBot;
+use ConsultDesk\Telegram\TelegramConfig;
 use ConsultDesk\Telegram\TelegramDirectory;
 use ConsultDesk\Telegram\TelegramServices;
+use ConsultDesk\Telegram\TelegramSettings;
 use ConsultDesk\Updates\GitHubReleases;
 use ConsultDesk\Updates\ReleaseSource;
 use ConsultDesk\Updates\UpdateChecker;
@@ -97,6 +99,9 @@ final class AppServices
     private ?BookingService $bookingService = null;
     private ?Outbox $outbox = null;
     private ?PdoBookingViews $views = null;
+    private ?TelegramApi $botApi = null;
+    private ?TelegramConfig $telegramConfig = null;
+    private bool $telegramLoaded = false;
 
     public function __construct(
         public readonly Config $config,
@@ -342,7 +347,7 @@ final class AppServices
 
     public function telegramLinks(): TelegramLinks
     {
-        return new TelegramLinks($this->pdo(), $this->telegramServices(), $this->linkCodes(), $this->config->telegram?->botUsername);
+        return new TelegramLinks($this->pdo(), $this->telegramServices(), $this->linkCodes(), $this->telegramConfig()?->botUsername);
     }
 
     public function userDirectory(): UserDirectory
@@ -397,13 +402,39 @@ final class AppServices
 
     public function telegramServices(): ?TelegramServices
     {
-        $telegram = $this->config->telegram;
+        $telegram = $this->telegramConfig();
         if ($telegram === null) {
             return null;
         }
-        $this->telegramApi ??= new HttpTelegramApi($telegram->botToken, new Client());
+        $this->botApi ??= $this->telegramApiFor($telegram->botToken);
 
-        return new TelegramServices($this->telegramApi, new TelegramDirectory($this->pdo()), new MessageLog($this->pdo(), $this->clock));
+        return new TelegramServices($this->botApi, new TelegramDirectory($this->pdo()), new MessageLog($this->pdo(), $this->clock));
+    }
+
+    /**
+     * The bot in use: from config.php if set there, else the one connected in the admin area.
+     */
+    public function telegramConfig(): ?TelegramConfig
+    {
+        if (!$this->telegramLoaded) {
+            $this->telegramConfig = $this->config->telegram ?? $this->telegramSettings()->load();
+            $this->telegramLoaded = true;
+        }
+
+        return $this->telegramConfig;
+    }
+
+    public function telegramSettings(): TelegramSettings
+    {
+        return new TelegramSettings($this->settings(), $this->crypto());
+    }
+
+    /**
+     * A Bot API client for this token (a test's fake, whatever the token).
+     */
+    public function telegramApiFor(#[\SensitiveParameter] string $token): TelegramApi
+    {
+        return $this->telegramApi ?? new HttpTelegramApi($token, new Client());
     }
 
     public function telegramBot(): ?TelegramBot
@@ -420,7 +451,7 @@ final class AppServices
             $this->linkCodes(),
             $this->db(),
             $this->clock,
-            $this->config->telegram?->botUsername,
+            $this->telegramConfig()?->botUsername,
         );
     }
 

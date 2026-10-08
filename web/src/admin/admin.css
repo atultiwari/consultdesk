@@ -1733,3 +1733,11 @@
   margin: 0;
   font-size: 1.05rem;
 }
+
+/* Integrations: numbered setup steps */
+.steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
