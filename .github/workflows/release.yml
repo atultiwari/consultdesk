@@ -41,18 +41,60 @@ jobs:
           name: consultdesk-zip
           path: build/consultdesk-*.zip
 
-  publish:
+  # Signs the zip with RELEASE_SIGNING_KEY (Ed25519). Installations accept an update only with a
+  # valid signature (see api/src/Updates/ReleaseKey.php). No third-party code runs in this job.
+  sign:
     needs: zip
     if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # The key lives in this environment, which only v* tags may use (and only admins may push those).
+    environment: release-signing
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: api/src/Updates/ReleaseKey.php
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: consultdesk-zip
+      - name: Sign and check the signature against the keys in the code
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          php -r 'exit(function_exists("sodium_crypto_sign_detached") ? 0 : 1);'
+          for zip in consultdesk-*.zip; do
+            php -r '
+              $zip = $argv[1];
+              $version = substr(basename($zip, ".zip"), strlen("consultdesk-"));
+              $secret = base64_decode((string) getenv("RELEASE_SIGNING_KEY"), true);
+              if ($secret === false || strlen($secret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) { fwrite(STDERR, "RELEASE_SIGNING_KEY is missing or malformed\n"); exit(1); }
+              // The same manifest as ReleaseKey::manifest(): the version and the zip SHA-256.
+              $manifest = "consultdesk-release\n" . $version . "\n" . hash_file("sha256", $zip);
+              $signature = sodium_crypto_sign_detached($manifest, $secret);
+              preg_match_all("/\x27([A-Za-z0-9+\/=]{44})\x27/", file_get_contents("api/src/Updates/ReleaseKey.php"), $m);
+              $ok = false;
+              foreach ($m[1] as $key) { $ok = $ok || sodium_crypto_sign_verify_detached($signature, $manifest, base64_decode($key)); }
+              if (!$ok) { fwrite(STDERR, "The signing key matches none of ReleaseKey::PUBLIC_KEYS\n"); exit(1); }
+              file_put_contents($zip . ".sig", base64_encode($signature));
+            ' "$zip"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: consultdesk-signed
+          path: consultdesk-*.zip*
+
+  publish:
+    needs: sign
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: consultdesk-zip
+          name: consultdesk-signed
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" consultdesk-*.zip --title "ConsultDesk $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" consultdesk-*.zip consultdesk-*.zip.sig --title "ConsultDesk $GITHUB_REF_NAME" --generate-notes

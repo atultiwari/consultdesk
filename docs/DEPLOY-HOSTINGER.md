@@ -371,6 +371,37 @@ Two ways (see [INSTALL.md → Putting booking on another site](INSTALL.md#puttin
 
 ## Updating to a new version
 
+### From the admin area (0.9.0 and later)
+
+Like WordPress, ConsultDesk updates itself:
+
+1. Admin → **System → Updates**. It checks GitHub once a day (the Dashboard shows "ConsultDesk x.y.z
+   is available" when there's something new); press **Check for updates** to ask now.
+2. Read the release notes, type your password and press **Update to x.y.z**. It:
+   - saves a database backup to `consultdesk-app/storage/backups/` (`consultdesk-before-update-…`),
+   - downloads the release from GitHub and checks its **signature**: only zips signed with
+     ConsultDesk's release key are installed, so a tampered or fake download is refused,
+   - swaps in the new code and web files, keeping `config.php`, your uploads, backups and the embed
+     list in `.htaccess`,
+   - runs any database updates.
+   If something fails while swapping the code, the previous code is put back automatically. The
+   previous code also stays in `storage/updates/previous-<version>` until the next update.
+3. Press **Reload**. Done.
+
+Over SSH you can do the same with `php ~/domains/atultiwari.com/consultdesk-app/bin/update.php`
+(`check`, or `apply`).
+
+**Pre-releases:** updates offer only stable releases. To also get pre-releases (for testing), add
+`'UPDATE_CHANNEL' => 'beta',` to `config.php`.
+
+**Needs:** the `zip` PHP extension (hPanel → PHP Configuration → extensions) and write permission on
+`consultdesk-app` and the web folder (Hostinger's defaults are fine). If something's missing, the
+Updates panel says what.
+
+### By hand (and once, from 0.8.0 to 0.9.0)
+
+0.8.0 doesn't have the updater yet, so move to 0.9.0 by hand once; after that, use the button.
+
 1. **Back up** first: admin → **System → Backups → Download backup**, and download
    `consultdesk-app/config.php`.
 2. Download the new release zip and extract it somewhere (e.g. in `domains/atultiwari.com/`).
@@ -382,15 +413,13 @@ Two ways (see [INSTALL.md → Putting booking on another site](INSTALL.md#puttin
      ```bash
      cd ~/domains/atultiwari.com
      unzip consultdesk-<new>.zip
-     rsync -a --delete --exclude config.php --exclude storage consultdesk-<new>/consultdesk-app/ consultdesk-app/
+     rsync -a --delete --exclude config.php --exclude storage --exclude .installed consultdesk-<new>/consultdesk-app/ consultdesk-app/
      ```
 4. Replace the web files: copy the new `public/` contents into `public_html/book`, but **keep your
    `.htaccess`** if you added embed sites to it (or copy the `frame-ancestors` line into the new
    one). The old `assets/` folder can be deleted first; the new one replaces it.
 5. Admin → **System**: if it lists database updates, press **Run database updates**.
 6. Open the booking site and the admin area to check, then delete the extracted release folder.
-
----
 
 ## Backups
 

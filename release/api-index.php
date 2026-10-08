@@ -20,4 +20,7 @@ if ($app === '' || !is_file($app . '/http.php')) {
     exit;
 }
 
+// Tells the app where its web folder is, for in-app updates.
+define('CONSULTDESK_PUBLIC', dirname(__DIR__));
+
 require $app . '/http.php';

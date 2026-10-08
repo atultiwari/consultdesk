@@ -273,6 +273,10 @@ database server (MySQL or MariaDB) it came from. If a restore fails part-way, th
 put back automatically. Five wrong passwords in an hour lock backups for that account for the hour. From the shell: `php bin/backup.php [--out=FILE]`
 and `php bin/restore.php FILE`.
 
+**System → Updates** shows the installed version and whether a newer one is out (checked daily),
+with its release notes, and installs it in one step after your password: backup, signed download,
+new code, database updates. See [DEPLOY-HOSTINGER.md → Updating](DEPLOY-HOSTINGER.md#updating-to-a-new-version).
+
 **System** also shows whether cron has run in the last five minutes, the email/calendar/Telegram queue
 (with **Retry failed jobs**), the version, and any database updates waiting after an upgrade, with a
 **Run database updates** button. Take a backup before running updates. Sign-in keeps working while an

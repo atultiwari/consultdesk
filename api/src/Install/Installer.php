@@ -32,6 +32,8 @@ final class Installer
     public function __construct(
         private readonly string $appDir,
         private readonly ?string $migrationsDir = null,
+        /** The web folder (where /install runs), saved as PUBLIC_PATH for in-app updates. */
+        private readonly ?string $publicDir = null,
     ) {}
 
     public function installed(): bool
@@ -208,6 +210,9 @@ final class Installer
             'MAIL_FROM' => $field('mail_from'),
             'MAIL_FROM_NAME' => $field('mail_from_name') === '' ? 'Bookings' : $field('mail_from_name'),
         ];
+        if ($this->publicDir !== null) {
+            $values['PUBLIC_PATH'] = $this->publicDir;
+        }
         if (preg_match('#^https://[a-z0-9.-]+(:\d+)?$#i', $values['APP_URL']) !== 1) {
             $errors['app_url'] = 'Use the full https:// address of the booking site, without a path, e.g. https://book.example.com.';
         }

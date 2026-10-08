@@ -76,6 +76,11 @@ use ConsultDesk\Telegram\TelegramApi;
 use ConsultDesk\Telegram\TelegramBot;
 use ConsultDesk\Telegram\TelegramDirectory;
 use ConsultDesk\Telegram\TelegramServices;
+use ConsultDesk\Updates\GitHubReleases;
+use ConsultDesk\Updates\ReleaseSource;
+use ConsultDesk\Updates\UpdateChecker;
+use ConsultDesk\Updates\Updater;
+use ConsultDesk\Version;
 use GuzzleHttp\Client;
 use PDO;
 
@@ -85,6 +90,9 @@ use PDO;
  */
 final class AppServices
 {
+    /** Where releases are published (public repository). */
+    public const RELEASES_REPOSITORY = 'atultiwari/consultdesk';
+
     private ?BookingService $bookingService = null;
     private ?Outbox $outbox = null;
     private ?PdoBookingViews $views = null;
@@ -97,6 +105,7 @@ final class AppServices
         private ?TelegramApi $telegramApi = null,
         private ?GoogleApi $googleApi = null,
         private ?RazorpayApi $razorpayApi = null,
+        private ?ReleaseSource $releaseSource = null,
     ) {}
 
     public function clock(): Clock
@@ -218,6 +227,8 @@ final class AppServices
                 static fn(): int => $throttle->prune(),
                 static fn(): int => $resets->prune(),
                 static fn(): int => $customers->prune(),
+                // Installed releases look for updates once in a while (never in development or tests).
+                fn(): int => $this->config->publicPath === null ? 0 : $this->updateChecker()->checkIfDue(),
             ],
             static fn() => $settings->put(SystemStatus::CRON_KEY, ['last_run_at' => $clock->now()->format('Y-m-d H:i:s')]),
         );
@@ -273,6 +284,31 @@ final class AppServices
     public function migrator(): Migrator
     {
         return new Migrator($this->pdo(), dirname(__DIR__, 2) . '/migrations', $this->clock);
+    }
+
+    public function updateChecker(): UpdateChecker
+    {
+        return new UpdateChecker($this->releaseSource(), $this->settings(), $this->clock, $this->config->betaUpdates);
+    }
+
+    public function updater(): Updater
+    {
+        return new Updater(
+            dirname(__DIR__, 2),
+            $this->config->publicPath,
+            $this->releaseSource(),
+            $this->backup(),
+            $this->migrator(),
+            $this->settings(),
+            $this->pdo(),
+            $this->clock,
+            Version::CURRENT,
+        );
+    }
+
+    public function releaseSource(): ReleaseSource
+    {
+        return $this->releaseSource ??= new GitHubReleases(new Client(), self::RELEASES_REPOSITORY, 'ConsultDesk/' . Version::CURRENT);
     }
 
     public function systemStatus(): SystemStatus
