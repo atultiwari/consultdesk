@@ -62,7 +62,9 @@ final class PdoBookingViews implements BookingViewRepository
      */
     private function staffEmailsFor(?string $notifyEmail): array
     {
-        $statement = $this->pdo->prepare("SELECT email FROM users WHERE role = 'owner' ORDER BY id");
+        // Owners who turned off booking emails get none, unless nobody else would.
+        $hasNotify = is_string($notifyEmail) && $notifyEmail !== '';
+        $statement = $this->pdo->prepare("SELECT email FROM users WHERE role = 'owner'" . ($hasNotify ? ' AND booking_emails = 1' : '') . ' ORDER BY id');
         $statement->execute();
 
         $emails = [];

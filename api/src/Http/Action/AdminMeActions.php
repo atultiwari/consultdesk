@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace ConsultDesk\Http\Action;
 
+use ConsultDesk\Admin\AdminUser;
 use ConsultDesk\Admin\AdminUsers;
 use ConsultDesk\Admin\Passwords;
+use ConsultDesk\Admin\Role;
 use ConsultDesk\Admin\Sessions;
 use ConsultDesk\Domain\Booking\Actor;
+use ConsultDesk\Http\ApiException;
 use ConsultDesk\Http\JsonInput;
 use ConsultDesk\Http\JsonResponse;
 use ConsultDesk\Http\Validation\Input;
@@ -39,6 +42,42 @@ final class AdminMeActions
         $user = $this->users->find($session->user->id);
 
         return JsonResponse::success($response, ['user' => $user?->toArray(), 'csrf_token' => $session->csrfToken]);
+    }
+
+    /**
+     * Whether this owner gets copies of booking emails (new bookings, payments to verify). The
+     * teacher's own booking address always gets them.
+     */
+    public function notifications(Request $request, Response $response): Response
+    {
+        $user = AdminAuthActions::session($request)->user;
+
+        return JsonResponse::success($response, $this->notificationState($user));
+    }
+
+    public function saveNotifications(Request $request, Response $response): Response
+    {
+        $user = AdminAuthActions::session($request)->user;
+        if ($user->role !== Role::Owner) {
+            // Only owners get copies; a stored "off" would silently apply if roles ever changed.
+            throw ApiException::forbidden();
+        }
+        $input = new Input(JsonInput::decode($request));
+        $on = $input->bool('booking_emails', required: true);
+        $input->assertValid();
+
+        $this->users->setBookingEmails($user->id, (bool) $on);
+        $this->audit->record(Actor::user($user->id), 'admin.booking_emails_changed', 'user', $user->id, ['booking_emails' => $on]);
+
+        return JsonResponse::success($response, $this->notificationState($user));
+    }
+
+    /**
+     * @return array{booking_emails: bool, applies: bool}
+     */
+    private function notificationState(AdminUser $user): array
+    {
+        return ['booking_emails' => $this->users->bookingEmails($user->id), 'applies' => $user->role === Role::Owner];
     }
 
     /**

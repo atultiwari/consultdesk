@@ -1,7 +1,15 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fail, mockApi, ok, path, renderAt } from '../support';
-import { ADMIN, demoProvider, providerUser, signedIn, signedOut, thesisService } from './fixtures';
+import {
+  ADMIN,
+  demoProvider,
+  owner,
+  providerUser,
+  signedIn,
+  signedOut,
+  thesisService,
+} from './fixtures';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -47,6 +55,28 @@ describe('my account', () => {
       'href',
       'https://t.me/ConsultDeskTestBot?start=abc',
     );
+    expect(screen.queryByLabelText('Email me about bookings')).not.toBeInTheDocument();
+  });
+
+  it('lets the owner stop booking emails to their own address', async () => {
+    let on = true;
+    const calls = mockApi({
+      ...signedIn(owner),
+      'GET /api/admin/me/telegram': ok({ configured: false, linked: false }),
+      'GET /api/admin/me/notifications': () => ok({ booking_emails: on, applies: true }),
+      'PUT /api/admin/me/notifications': () => {
+        on = false;
+        return ok({ booking_emails: false, applies: true });
+      },
+    });
+    const user = userEvent.setup();
+    renderAt(`${ADMIN}/account`);
+
+    const toggle = await screen.findByLabelText('Email me about bookings');
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ booking_emails: false });
   });
 });
 

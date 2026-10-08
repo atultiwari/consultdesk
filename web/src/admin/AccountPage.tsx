@@ -4,7 +4,13 @@ import { Field } from '../design/components/Field';
 import { Loading, Notice } from '../design/components/Notice';
 import { useAdmin } from './context';
 import { fieldErrors, orNull } from './forms';
-import { useChangePassword, useMyTelegram, useRenameMe } from './settingsHooks';
+import {
+  useChangePassword,
+  useMyNotifications,
+  useMyTelegram,
+  useRenameMe,
+  useSaveMyNotifications,
+} from './settingsHooks';
 import { TelegramBox } from './TelegramBox';
 
 const MIN_PASSWORD = 10;
@@ -125,7 +131,41 @@ function MyTelegram() {
   );
 }
 
+function BookingEmails() {
+  const state = useMyNotifications();
+  const save = useSaveMyNotifications();
+  if (state.isPending) return <Loading />;
+  if (!state.data?.applies) return null;
+  return (
+    <section className="form-section" aria-labelledby="booking-emails-h">
+      <h2 id="booking-emails-h" className="form-section__title">
+        Booking emails
+      </h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={state.data.booking_emails}
+          disabled={save.isPending}
+          onChange={(e) => save.mutate(e.target.checked)}
+        />
+        <span>Email me about bookings</span>
+      </label>
+      <p className="hint">
+        Turn this off if a provider's booking email (for example a shared bookings inbox) already
+        gets them, so you don't get every email twice. If no booking email is set, you still get
+        them.
+      </p>
+      {save.isError && (
+        <Notice tone="danger" live>
+          Couldn't save that. Please try again.
+        </Notice>
+      )}
+    </section>
+  );
+}
+
 export function AccountPage() {
+  const { user } = useAdmin();
   return (
     <div className="page">
       <header className="page__head">
@@ -135,6 +175,7 @@ export function AccountPage() {
         <NameForm />
         <PasswordForm />
         <MyTelegram />
+        {user.role === 'owner' && <BookingEmails />}
       </div>
     </div>
   );
