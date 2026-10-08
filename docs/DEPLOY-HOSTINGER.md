@@ -272,27 +272,19 @@ curl -fsS "https://book.atultiwari.com/api/cron?key=<CRON_KEY>" > /dev/null
 1. Razorpay Dashboard → switch to **Test Mode** (toggle at the top).
 2. **Account & Settings → API Keys → Generate Test Key**. Copy the **Key ID** (`rzp_test_…`) and
    the **Key Secret** (shown once).
-3. Add them to ConsultDesk, either way:
-   - **Recommended:** File Manager → `consultdesk-app/config.php` → **Edit**, and add these lines
-     inside the `return [ … ];` list (keys from config survive a database restore):
-
-     ```php
-     'RAZORPAY_KEY_ID' => 'rzp_test_xxxxxxxxxxxxxx',
-     'RAZORPAY_KEY_SECRET' => 'xxxxxxxxxxxxxxxxxxxxxxxx',
-     'RAZORPAY_WEBHOOK_SECRET' => 'choose-a-long-random-secret-of-32-characters',
-     ```
-
-     For the webhook secret, make up a long random string (e.g. from your password manager).
-   - Or in the admin area: **Payments → Razorpay (organisation account)** → paste the keys →
-     **Save keys**. It then shows a webhook secret once: copy it for step 4.
+3. Add them in the admin area: **Payments → Razorpay (organisation account) → Test keys** → paste
+   the keys → **Save test keys**. It then shows a webhook secret once: copy it for step 4.
+   (Alternatively put `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and a long random
+   `RAZORPAY_WEBHOOK_SECRET` in `config.php`; keys there survive a database restore.)
 4. **Webhook** (so a booking confirms even if the customer closes the tab after paying):
    Razorpay Dashboard (still **Test Mode**) → **Account & Settings → Webhooks → Add New Webhook**:
    - URL: `https://book.atultiwari.com/api/webhooks/razorpay`
-   - Secret: the `RAZORPAY_WEBHOOK_SECRET` from step 3 (or the one the Payments page showed)
+   - Secret: the one the Payments page showed in step 3 (or your `RAZORPAY_WEBHOOK_SECRET`)
    - Active events: tick **payment_link.paid**
    - Save. If the same Razorpay account already has a webhook for another website, add this as a
      second one and leave the other alone.
-5. Admin → **Payments**: it should show "Test mode" and the Key ID. Press **Check connection**.
+5. Admin → **Payments**: the bar at the top says **Test mode: no real money moves**, and Test keys
+   shows **In use**. Press **Check connection**.
 6. Still on Payments: make sure **Online with Razorpay** is ticked under "Ways to pay", and press
    **Offer online payment on every paid session** (or tick "Razorpay payment link" per session).
 
@@ -355,32 +347,30 @@ Do this only when every item above works in Test Mode.
    details until the account shows as activated.
 2. Switch the Razorpay Dashboard to **Live Mode** → **Account & Settings → API Keys → Generate Live
    Key**. Copy the **Key ID** (`rzp_live_…`) and **Key Secret**.
-3. **Live webhook** (webhooks are separate for Test and Live mode): in **Live Mode** → **Webhooks →
-   Add New Webhook**: the same URL `https://book.atultiwari.com/api/webhooks/razorpay`, a **new**
-   long random secret, event **payment_link.paid**.
-4. Wait until no customer is in the middle of a Razorpay test payment (holds last 30 minutes), then
-   edit `consultdesk-app/config.php`:
-
-   ```php
-   'RAZORPAY_KEY_ID' => 'rzp_live_xxxxxxxxxxxxxx',
-   'RAZORPAY_KEY_SECRET' => 'live key secret',
-   'RAZORPAY_WEBHOOK_SECRET' => 'the new live webhook secret',
-   'PAYMENTS_LIVE' => '1',
-   ```
-
-   `PAYMENTS_LIVE` is the safety switch: without it ConsultDesk refuses live keys, so real money can
-   never be switched on by accident or from the browser. (If you saved keys on the Payments page
-   instead, remove them there first, or save the live keys there after adding `PAYMENTS_LIVE`.)
-5. Admin → **Payments**: it now shows **Live** and the `rzp_live_` Key ID. Press **Check connection**.
-6. **One real test with a few rupees:** admin → **Coupons → New coupon**, ₹ off, an amount that
+3. Admin → **Payments → Razorpay → Live keys**: paste the live Key ID and Key Secret → **Save live
+   keys**. ConsultDesk keeps them next to your test keys (still unused) and shows a **new webhook
+   secret** once: copy it.
+4. **Live webhook** (webhooks are separate for Test and Live mode): Razorpay Dashboard in **Live
+   Mode** → **Account & Settings → Webhooks → Add New Webhook**: the same URL
+   `https://book.atultiwari.com/api/webhooks/razorpay`, the secret from step 3, event
+   **payment_link.paid**.
+5. Back on **Payments → Live keys**, press **Check connection**.
+6. At the top of **Payments**, turn on **Live payments** and confirm **Yes, take real payments**.
+   ConsultDesk checks the live keys with Razorpay first. The bar turns green: **Live: customers pay
+   real money**. Bookings made before the switch keep their test links until those expire.
+7. **One real test with a few rupees:** admin → **Coupons → New coupon**, ₹ off, an amount that
    leaves ₹1–₹5 of your cheapest paid session (e.g. ₹495 off a ₹499 session), limited to 1 use. Book
    that session with the coupon, choose **Pay online**, pay with your own card or UPI, and check the
    booking confirms. Then **refund** it in Razorpay → **Transactions → Payments → Refund**, and
    delete the coupon.
-7. Keep the Test Mode keys somewhere safe in case you want to test again later.
 
-To go back to test mode: put the `rzp_test_` keys and test webhook secret back and remove the
-`PAYMENTS_LIVE` line.
+To go back to test mode, turn **Live payments** off and confirm. Both sets of keys stay saved, so
+you can switch back and forth without pasting anything again.
+
+(Keys can also come from `config.php`: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`,
+`RAZORPAY_WEBHOOK_SECRET` fill the test or live set according to the Key ID; keys saved on the
+Payments page take precedence. The older `'PAYMENTS_LIVE' => '1'` line now only makes a site start
+in Live mode until the switch is used.)
 
 > UPI with manual UTR doesn't involve Razorpay: it pays straight to your UPI ID and works the same in
 > test and live.
@@ -498,6 +488,6 @@ under **Providers**, and invite their logins under **Users**.
 | Emails don't arrive | Check System → "Emails, calendar and alerts" for failed jobs and the last error; check the mailbox password and port 465/SSL; set SPF/DKIM (1.5). |
 | System says cron isn't running | Check the cron job's command path and that it runs every minute; try the cron web address instead. |
 | Razorpay page opens but the booking stays "Awaiting payment" | The webhook URL or secret doesn't match (Test vs Live mode have separate webhooks). The return from Razorpay also confirms it, so this mostly shows when the tab was closed. |
-| "Only Test Mode keys can be used" on the Payments page | Add `'PAYMENTS_LIVE' => '1'` to `config.php` (Part 4). |
+| "Live payments" switch can't be turned on | Save your live keys (`rzp_live_…`) under **Payments → Live keys** first (Part 4). |
 | Admin path forgotten | It's `ADMIN_PATH` in `consultdesk-app/config.php`. |
 | Forgot the owner password | Use "Forgot your password?" on the sign-in page (email), or over SSH: `php consultdesk-app/bin/user.php reset-password --email=you@example.com`. |

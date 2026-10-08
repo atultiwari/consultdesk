@@ -11,13 +11,6 @@ final class AdminPaymentsTest extends AdminTestCase
 {
     private int $demo;
     private FakeRazorpayApi $fake;
-    private bool $live = false;
-
-    protected function extraEnv(): array
-    {
-        return [...parent::extraEnv(), ...($this->live ? ['PAYMENTS_LIVE' => '1'] : [])];
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -41,7 +34,7 @@ final class AdminPaymentsTest extends AdminTestCase
         self::assertSame(422, $this->admin('PUT', '/api/admin/payments/methods', ['upi_enabled' => 'no'])[0]);
     }
 
-    public function testOrganisationKeysAreTestModeOnlyAndStoredEncrypted(): void
+    public function testOrganisationKeysAreStoredEncrypted(): void
     {
         $this->createUser('owner@example.test');
         $this->login('owner@example.test');
@@ -50,14 +43,14 @@ final class AdminPaymentsTest extends AdminTestCase
 
         [$status, $body] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => $keyId, 'key_secret' => $secret]);
         self::assertSame(200, $status, json_encode($body) ?: '');
-        self::assertSame(['configured' => true, 'mode' => 'test', 'key_id' => $keyId], array_intersect_key($body['data']['razorpay'], ['configured' => 1, 'mode' => 1, 'key_id' => 1]));
+        self::assertSame(['mode' => 'test', 'configured' => true, 'key_id' => $keyId], array_intersect_key($body['data']['razorpay'], ['configured' => 1, 'mode' => 1, 'key_id' => 1]));
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{32,}$/', $body['data']['razorpay']['webhook_secret'], 'shown once, to paste into Razorpay');
         self::assertStringNotContainsString($secret, (string) json_encode($body));
         self::assertSame(['0'], self::column($this->pdo, 'SELECT COUNT(*) FROM payment_gateways WHERE secret_enc LIKE :s', ['s' => '%' . $secret . '%']), 'never stored in plain text');
         self::assertArrayNotHasKey('webhook_secret', $this->admin('GET', '/api/admin/payments')[1]['data']['razorpay']);
 
-        [$live, $errors] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => 'rzp_live_' . str_repeat('A', 14), 'key_secret' => $secret]);
-        self::assertSame([422, ['key_id']], [$live, array_keys($errors['error']['fields'])]);
+        [$bad, $errors] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => 'rzp_nope_' . str_repeat('A', 14), 'key_secret' => $secret]);
+        self::assertSame([422, ['key_id']], [$bad, array_keys($errors['error']['fields'])]);
 
         self::assertSame(200, $this->admin('POST', '/api/admin/payments/razorpay/check')[0]);
         $this->fake->rejectKeys = true;
@@ -131,18 +124,6 @@ final class AdminPaymentsTest extends AdminTestCase
 
         self::assertSame(403, $this->admin('GET', '/api/admin/payments')[0]);
         self::assertSame(403, $this->admin('PUT', "/api/admin/providers/{$this->demo}/razorpay", ['key_id' => 'rzp_test_' . str_repeat('A', 14), 'key_secret' => str_repeat('s', 24)])[0]);
-    }
-
-    public function testLiveKeysAreAcceptedOnceTheServerSaysPaymentsAreLive(): void
-    {
-        $this->live = true;
-        $this->createUser('owner@example.test');
-        $this->login('owner@example.test');
-
-        [$status, $body] = $this->admin('PUT', '/api/admin/payments/razorpay', ['key_id' => 'rzp_live_' . str_repeat('L', 14), 'key_secret' => str_repeat('s', 24)]);
-
-        self::assertSame(200, $status, json_encode($body) ?: '');
-        self::assertSame(['live', true], [$body['data']['razorpay']['mode'], $body['data']['razorpay']['live_allowed']]);
     }
 
     /**

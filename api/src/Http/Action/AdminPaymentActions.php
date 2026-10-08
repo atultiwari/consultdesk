@@ -12,17 +12,21 @@ use ConsultDesk\Http\JsonResponse;
 use ConsultDesk\Http\Validation\Input;
 use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Settings;
+use ConsultDesk\Payments\PaymentMode;
 use ConsultDesk\Payments\PaymentSwitches;
 use ConsultDesk\Payments\Razorpay\GatewayKeys;
 use ConsultDesk\Payments\Razorpay\RazorpayApi;
+use ConsultDesk\Payments\Razorpay\RazorpayCredentials;
 use ConsultDesk\Payments\Razorpay\RazorpayError;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * The owner's Payments page: which ways to pay are on, the organisation's Razorpay keys, and any
- * provider's own Razorpay account. Secrets are write-only; a webhook secret is shown once, when made.
+ * The owner's Payments page: which ways to pay are on, the organisation's Razorpay keys (a test and
+ * a live set), the Test/Live switch, and any provider's own Razorpay account. Secrets are
+ * write-only; a webhook secret is shown once, when made. Actions on one set of keys take
+ * ?mode=test|live, defaulting to the mode in use.
  */
 final class AdminPaymentActions
 {
@@ -36,8 +40,7 @@ final class AdminPaymentActions
         private readonly AuditLog $audit,
         private readonly PDO $pdo,
         private readonly string $appUrl,
-        /** Live keys stay off until real-money payments are signed off (Phase 7 is test mode only). */
-        private readonly bool $testKeysOnly = true,
+        private readonly PaymentMode $mode,
     ) {}
 
     public function show(Request $request, Response $response): Response
@@ -63,8 +66,8 @@ final class AdminPaymentActions
     public function saveOrgKeys(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
-        $webhookSecret = $this->saveKeys($request, null);
-        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_saved', 'settings', null, ['key_id' => $this->keys->find(null)?->keyId]);
+        [$keyId, $webhookSecret] = $this->saveKeys($request, null);
+        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_saved', 'settings', null, ['key_id' => $keyId]);
 
         return JsonResponse::success($response, $this->state($webhookSecret));
     }
@@ -72,7 +75,31 @@ final class AdminPaymentActions
     public function check(Request $request, Response $response): Response
     {
         AdminScope::owner($request);
-        $this->checkAccount(null);
+        $this->checkAccount(null, self::modeFrom($request));
+
+        return JsonResponse::success($response, $this->state());
+    }
+
+    /**
+     * The Test/Live switch. Going live needs live keys that Razorpay accepts; going back to test is
+     * always allowed (links already sent keep working, as each booking remembers its account).
+     */
+    public function saveMode(Request $request, Response $response): Response
+    {
+        $owner = AdminScope::owner($request);
+        $input = new Input(JsonInput::decode($request));
+        $live = $input->bool('live', required: true);
+        $input->assertValid();
+
+        if ($live === true) {
+            if ($this->keys->find(null, PaymentMode::LIVE) === null) {
+                throw new ApiException(409, 'no_live_keys', 'Save your live keys (rzp_live_…) first.');
+            }
+            $this->checkAccount(null, PaymentMode::LIVE);
+        }
+        $from = $this->mode->current();
+        $this->mode->set($live === true);
+        $this->audit->record(Actor::user($owner->id), 'admin.payments_mode_changed', 'settings', null, ['from' => $from, 'to' => $this->mode->current()]);
 
         return JsonResponse::success($response, $this->state());
     }
@@ -80,10 +107,11 @@ final class AdminPaymentActions
     public function newWebhookSecret(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
-        $this->assertSavedHere();
+        $mode = self::modeFrom($request);
+        $this->assertSavedHere($mode);
         $secret = self::randomSecret();
-        $this->keys->setWebhookSecret(null, $secret);
-        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_webhook_secret_changed', 'settings', null);
+        $this->keys->setWebhookSecret(null, $secret, $mode);
+        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_webhook_secret_changed', 'settings', null, ['mode' => $mode ?? $this->keys->mode()]);
 
         return JsonResponse::success($response, $this->state($secret));
     }
@@ -110,10 +138,14 @@ final class AdminPaymentActions
     public function removeOrgKeys(Request $request, Response $response): Response
     {
         $owner = AdminScope::owner($request);
-        $this->assertSavedHere();
-        $this->assertNoOpenLinks(null);
-        $this->keys->delete(null);
-        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'settings', null);
+        $mode = self::modeFrom($request);
+        $this->assertSavedHere($mode);
+        if (($mode ?? $this->keys->mode()) === PaymentMode::LIVE && $this->mode->isLive()) {
+            throw new ApiException(409, 'live_keys_in_use', 'These keys are taking real payments. Switch to test mode first, then remove them.');
+        }
+        $this->assertNoOpenLinks(null, $mode);
+        $this->keys->delete(null, $mode);
+        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'settings', null, ['mode' => $mode ?? $this->keys->mode()]);
 
         return JsonResponse::success($response, $this->state());
     }
@@ -125,8 +157,7 @@ final class AdminPaymentActions
     {
         $owner = AdminScope::owner($request);
         $providerId = (int) AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0))['id'];
-        $webhookSecret = $this->saveKeys($request, $providerId);
-        $keyId = $this->keys->find($providerId)?->keyId;
+        [$keyId, $webhookSecret] = $this->saveKeys($request, $providerId);
         $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_saved', 'provider', $providerId, ['key_id' => $keyId]);
 
         return JsonResponse::success($response, ['provider_id' => $providerId, 'key_id' => $keyId, 'webhook_secret' => $webhookSecret]);
@@ -139,7 +170,7 @@ final class AdminPaymentActions
     {
         AdminScope::owner($request);
         $providerId = (int) AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0))['id'];
-        $this->checkAccount($providerId);
+        $this->checkAccount($providerId, self::modeFrom($request));
 
         return JsonResponse::success($response, ['ok' => true]);
     }
@@ -151,51 +182,55 @@ final class AdminPaymentActions
     {
         $owner = AdminScope::owner($request);
         $providerId = (int) AdminScope::provider($this->providers, $request, (int) ($args['id'] ?? 0))['id'];
-        $this->assertNoOpenLinks($providerId);
-        $this->keys->delete($providerId);
-        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'provider', $providerId);
+        $mode = self::modeFrom($request);
+        $this->assertNoOpenLinks($providerId, $mode);
+        $this->keys->delete($providerId, $mode);
+        $this->audit->record(Actor::user($owner->id), 'admin.razorpay_keys_removed', 'provider', $providerId, ['mode' => $mode ?? $this->keys->mode()]);
 
         return JsonResponse::success($response, ['ok' => true]);
     }
 
     /**
-     * Validates and stores keys. A new account gets a fresh webhook secret, returned to show once;
-     * re-saving the same account keeps its secret (and returns null), so its webhook keeps working.
+     * Validates and stores keys, as the test or live set by their prefix. A new account gets a fresh
+     * webhook secret, returned to show once; re-saving the same account keeps its secret (and returns
+     * null), so its webhook keeps working.
+     *
+     * @return array{string, ?string} the key id and any new webhook secret
      */
-    private function saveKeys(Request $request, ?int $providerId): ?string
+    private function saveKeys(Request $request, ?int $providerId): array
     {
         $input = new Input(JsonInput::decode($request));
         $keyId = $input->string('key_id', max: 64);
         $secret = $input->secret('key_secret', max: 128);
         if ($keyId !== null && preg_match(self::KEY_ID, $keyId) !== 1) {
-            $input->reject('key_id', 'Paste the Key ID from Razorpay → Settings → API Keys; it starts with rzp_test_.');
-        } elseif ($keyId !== null && $this->testKeysOnly && !str_starts_with($keyId, 'rzp_test_')) {
-            $input->reject('key_id', 'Only Test Mode keys (rzp_test_…) can be used for now. For real payments, set PAYMENTS_LIVE=1 in the server’s config.php.');
+            $input->reject('key_id', 'Paste the Key ID from Razorpay → Settings → API Keys; it starts with rzp_test_ or rzp_live_.');
         }
         if ($secret !== null && (strlen($secret) < 16 || preg_match('/\s/', $secret) === 1)) {
             $input->reject('key_secret', 'Paste the Key Secret exactly as Razorpay showed it.');
         }
         $input->assertValid();
 
-        $current = $this->keys->find($providerId);
+        $keyId = (string) $keyId;
+        $mode = GatewayKeys::modeOf($keyId);
+        $current = $this->keys->find($providerId, $mode);
         if ($current !== null && $current->keyId !== $keyId) {
-            $this->assertNoOpenLinks($providerId);
+            $this->assertNoOpenLinks($providerId, $mode);
         }
         // Keys saved over the .env defaults get their own webhook secret, even for the same account.
-        $saved = $this->keys->saved($providerId);
+        $saved = $this->keys->saved($providerId, $mode);
         $keepSecret = $saved !== null && $saved->keyId === $keyId && $saved->webhookSecret !== null;
         $webhookSecret = $keepSecret ? null : self::randomSecret();
-        $this->keys->save($providerId, (string) $keyId, (string) $secret, $webhookSecret);
+        $this->keys->save($providerId, $keyId, (string) $secret, $webhookSecret);
 
-        return $webhookSecret;
+        return [$keyId, $webhookSecret];
     }
 
     /**
      * Customers still holding payment links from this account must be able to finish paying.
      */
-    private function assertNoOpenLinks(?int $providerId): void
+    private function assertNoOpenLinks(?int $providerId, ?string $mode = null): void
     {
-        $open = $this->keys->openLinks($providerId);
+        $open = $this->keys->openLinks($providerId, $mode);
         if ($open > 0) {
             throw new ApiException(409, 'links_open', sprintf(
                 '%d %s waiting to be paid with these keys. Try again in about half an hour, once %s.',
@@ -209,9 +244,9 @@ final class AdminPaymentActions
     /**
      * Keys from .env are changed in .env; only keys saved here can be rotated or removed here.
      */
-    private function assertSavedHere(): void
+    private function assertSavedHere(?string $mode): void
     {
-        $source = $this->keys->orgSource();
+        $source = $this->keys->orgSource($mode);
         if ($source === null) {
             throw self::notConfigured();
         }
@@ -220,9 +255,9 @@ final class AdminPaymentActions
         }
     }
 
-    private function checkAccount(?int $providerId): void
+    private function checkAccount(?int $providerId, ?string $mode = null): void
     {
-        $credentials = $this->keys->find($providerId) ?? throw self::notConfigured();
+        $credentials = $this->keys->find($providerId, $mode) ?? throw self::notConfigured();
         $api = $this->api ?? throw self::notConfigured();
         try {
             $api->check($credentials);
@@ -236,16 +271,21 @@ final class AdminPaymentActions
      */
     private function state(?string $newWebhookSecret = null): array
     {
-        $org = $this->keys->find(null);
+        $mode = $this->keys->mode();
+        $org = $this->keys->find(null, $mode);
         $razorpay = [
+            'live' => $mode === PaymentMode::LIVE,
+            'mode' => $mode,
             'configured' => $org !== null,
-            'mode' => $org === null ? null : ($org->isTestMode() ? 'test' : 'live'),
             'key_id' => $org?->keyId,
-            'source' => $this->keys->orgSource(),
+            'source' => $this->keys->orgSource($mode),
             'env_key_id' => $this->keys->defaults()?->keyId,
             'has_webhook_secret' => $org?->webhookSecret !== null,
             'webhook_url' => $this->appUrl . '/api/webhooks/razorpay',
-            'live_allowed' => !$this->testKeysOnly,
+            'accounts' => [
+                PaymentMode::TEST => $this->account(PaymentMode::TEST),
+                PaymentMode::LIVE => $this->account(PaymentMode::LIVE),
+            ],
         ];
         if ($newWebhookSecret !== null) {
             $razorpay['webhook_secret'] = $newWebhookSecret;
@@ -256,6 +296,38 @@ final class AdminPaymentActions
             'razorpay' => $razorpay,
             'overrides' => $this->keys->overrides(),
         ];
+    }
+
+    /**
+     * One set of the organisation's keys, without secrets.
+     *
+     * @return array{key_id: string, source: ?string, has_webhook_secret: bool}|null
+     */
+    private function account(string $mode): ?array
+    {
+        $keys = $this->keys->find(null, $mode);
+
+        return $keys === null ? null : self::describe($keys, $this->keys->orgSource($mode));
+    }
+
+    /**
+     * @return array{key_id: string, source: ?string, has_webhook_secret: bool}
+     */
+    private static function describe(RazorpayCredentials $keys, ?string $source): array
+    {
+        return ['key_id' => $keys->keyId, 'source' => $source, 'has_webhook_secret' => $keys->webhookSecret !== null];
+    }
+
+    /**
+     * ?mode=test|live from the query string; null (the mode in use) when absent.
+     */
+    private static function modeFrom(Request $request): ?string
+    {
+        $input = new Input($request->getQueryParams());
+        $mode = $input->oneOf('mode', [PaymentMode::TEST, PaymentMode::LIVE], required: false);
+        $input->assertValid();
+
+        return $mode;
     }
 
     private static function randomSecret(): string

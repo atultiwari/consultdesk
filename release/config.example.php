@@ -32,7 +32,7 @@ return [
     // 'RAZORPAY_KEY_ID' => 'rzp_test_…',
     // 'RAZORPAY_KEY_SECRET' => '…',
     // 'RAZORPAY_WEBHOOK_SECRET' => '…',
-    // 'PAYMENTS_LIVE' => '1',   // only once you switch to rzp_live_ keys
+    // Test/Live payments are switched in the admin area (Payments). PAYMENTS_LIVE=1 only sets the starting mode.
     // 'UPDATE_CHANNEL' => 'beta', // also offer pre-releases as in-app updates
     // 'PUBLIC_PATH' => '/home/u000000000/domains/example.com/public_html/book', // the installer sets this
     // 'TELEGRAM_BOT_TOKEN' => '…',
