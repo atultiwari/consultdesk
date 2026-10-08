@@ -110,6 +110,8 @@ final class AdminRoutes
         $admin->delete("/blocked/{$id}", static fn($rq, $rs, array $a) => $schedule()->deleteBlocked($rq, $rs, $a));
 
         $admin->patch('/me', static fn($rq, $rs) => $me()->rename($rq, $rs));
+        $admin->get('/me/notifications', static fn($rq, $rs) => $me()->notifications($rq, $rs));
+        $admin->put('/me/notifications', static fn($rq, $rs) => $me()->saveNotifications($rq, $rs));
         // The current-password check must not become a way to guess it from a stolen session.
         $admin->post('/me/password', static fn($rq, $rs) => $me()->changePassword($rq, $rs))
             ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-password-change', 10, 3600, $services->clientIp()));

@@ -19,6 +19,7 @@ export const settingsKeys = {
   branding: ['admin', 'branding'] as const,
   system: ['admin', 'system'] as const,
   myTelegram: ['admin', 'my-telegram'] as const,
+  myNotifications: ['admin', 'my-notifications'] as const,
   integrations: (providerId: number) => ['admin', 'integrations', providerId] as const,
   calendars: (providerId: number) => ['admin', 'calendars', providerId] as const,
 };
@@ -148,6 +149,32 @@ export function useMyTelegram() {
     queryFn: ({ signal }) =>
       adminFetch<{ configured: boolean; linked: boolean }>('/me/telegram', { signal }),
     retry: once,
+  });
+}
+
+export interface MyNotifications {
+  booking_emails: boolean;
+  applies: boolean;
+}
+
+/** Whether new-booking emails also go to my own address (owners only). */
+export function useMyNotifications() {
+  return useQuery({
+    queryKey: settingsKeys.myNotifications,
+    queryFn: ({ signal }) => adminFetch<MyNotifications>('/me/notifications', { signal }),
+    retry: once,
+  });
+}
+
+export function useSaveMyNotifications() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (bookingEmails: boolean) =>
+      adminFetch<MyNotifications>('/me/notifications', {
+        method: 'PUT',
+        json: { booking_emails: bookingEmails },
+      }),
+    onSuccess: (state) => client.setQueryData(settingsKeys.myNotifications, state),
   });
 }
 

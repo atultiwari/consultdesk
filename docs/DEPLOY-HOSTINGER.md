@@ -140,9 +140,11 @@ password, so it can't send). The simplest setup is one mailbox that both sends a
 2. Use the same address to **receive**: in the setup wizard (2.5) put `bookings@atultiwari.com` as
    the teacher's **Email for new bookings**. New bookings and payments to verify arrive there, and
    when customers press Reply on their booking emails, the reply goes there too.
-3. Booking alerts also go to the **owner account's** email. To keep everything in one inbox, create
-   the owner account (2.5) with `bookings@atultiwari.com` as well; with a different address (e.g.
-   your personal Gmail) you get a second copy there, which some people like as a backup.
+3. Booking alerts also go to the **owner account's** email. If your owner account uses a separate
+   address (e.g. `admin@atultiwari.com`, which is safer for sign-in and password resets) and you
+   don't want a second copy there, go to **My account → Booking emails** and untick **Email me
+   about bookings** (0.9.1 and later). Alerts then go only to the Email for new bookings. If that
+   is ever left empty, the owner still gets them, so no booking goes unnoticed.
 4. Make sure **SPF and DKIM** are set for atultiwari.com (Emails → the domain → DNS settings, which
    offers a one-click fix). Without them, booking emails are more likely to land in spam.
 

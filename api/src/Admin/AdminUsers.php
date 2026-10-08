@@ -66,6 +66,20 @@ final class AdminUsers
         return (int) $this->pdo->lastInsertId();
     }
 
+    public function bookingEmails(int $userId): bool
+    {
+        $statement = $this->pdo->prepare('SELECT booking_emails FROM users WHERE id = :id');
+        $statement->execute(['id' => $userId]);
+
+        return (bool) $statement->fetchColumn();
+    }
+
+    public function setBookingEmails(int $userId, bool $on): void
+    {
+        $this->pdo->prepare('UPDATE users SET booking_emails = :on, updated_at = :now WHERE id = :id')
+            ->execute(['on' => (int) $on, 'now' => $this->now(), 'id' => $userId]);
+    }
+
     public function hasPassword(int $userId): bool
     {
         $statement = $this->pdo->prepare('SELECT password_set_at IS NOT NULL FROM users WHERE id = :id');
