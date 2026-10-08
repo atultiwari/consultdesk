@@ -55,6 +55,10 @@ final class Config
         public readonly ?string $setupKey = null,
         /** Real-money Razorpay keys (rzp_live_…) are accepted only when this is on. */
         public readonly bool $paymentsLive = false,
+        /** The booking site's web folder on an installed release; null in development (no in-app updates). */
+        public readonly ?string $publicPath = null,
+        /** "beta" also offers pre-releases as updates. */
+        public readonly bool $betaUpdates = false,
         /** What booking codes start with until staff choose (VRL → VRL-7F3K). */
         public readonly string $bookingPrefix = BookingRefPrefix::FALLBACK,
     ) {}
@@ -135,10 +139,22 @@ final class Config
             backupPath: rtrim(($v['BACKUP_PATH'] ?? '') === '' ? dirname(__DIR__, 2) . '/storage/backups' : $v['BACKUP_PATH'], '/'),
             razorpay: RazorpayEnvKeys::fromValues($v, ($v['PAYMENTS_LIVE'] ?? '0') === '1'),
             paymentsLive: ($v['PAYMENTS_LIVE'] ?? '0') === '1',
+            publicPath: self::publicPath($v['PUBLIC_PATH'] ?? ''),
+            betaUpdates: strtolower(trim($v['UPDATE_CHANNEL'] ?? '')) === 'beta',
             owner: OwnerDefaults::fromValues($v),
             setupKey: self::setupKey($v['SETUP_KEY'] ?? ''),
             bookingPrefix: self::bookingPrefix($v['BOOKING_PREFIX'] ?? ''),
         );
+    }
+
+    /**
+     * PUBLIC_PATH from config.php, else the web folder the release's api/index.php reports.
+     */
+    private static function publicPath(string $value): ?string
+    {
+        $path = trim($value) !== '' ? trim($value) : (defined('CONSULTDESK_PUBLIC') ? (string) constant('CONSULTDESK_PUBLIC') : '');
+
+        return $path !== '' && is_dir($path) ? rtrim($path, '/') : null;
     }
 
     private static function bookingPrefix(string $value): string

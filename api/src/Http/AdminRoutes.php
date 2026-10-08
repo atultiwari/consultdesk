@@ -86,7 +86,7 @@ final class AdminRoutes
         );
         $codes = static fn(): AdminBookingCodeActions => new AdminBookingCodeActions($services->bookingRefPrefix(), $services->auditLog());
         $coupons = static fn(): AdminCouponActions => new AdminCouponActions(new CouponSettings($pdo(), $services->clock()), $services->auditLog());
-        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter());
+        $system = static fn(): AdminSystemActions => new AdminSystemActions($services->systemStatus(), $services->auditLog(), $services->backup(), $services->adminUsers(), new Passwords(), $services->rateLimiter(), $services->updateChecker(), $services->updater());
         $id = self::ID;
 
         $admin->get('/dashboard', static fn($rq, $rs) => $bookings()->dashboard($rq, $rs));
@@ -163,6 +163,11 @@ final class AdminRoutes
         $admin->get('/system', static fn($rq, $rs) => $system()->show($rq, $rs));
         $admin->post('/system/migrate', static fn($rq, $rs) => $system()->migrate($rq, $rs));
         $admin->post('/system/retry-failed', static fn($rq, $rs) => $system()->retryFailed($rq, $rs));
+        $admin->get('/system/updates', static fn($rq, $rs) => $system()->updates($rq, $rs));
+        $admin->post('/system/updates/check', static fn($rq, $rs) => $system()->checkUpdates($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-update-check', 20, 3600, $services->clientIp()));
+        $admin->post('/system/updates/apply', static fn($rq, $rs) => $system()->applyUpdate($rq, $rs))
+            ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-update', 5, 3600, $services->clientIp()));
         $admin->post('/system/backup', static fn($rq, $rs) => $system()->backup($rq, $rs))
             ->add(new RateLimit(static fn() => $services->rateLimiter(), 'admin-backup', 10, 3600, $services->clientIp()));
         $admin->post('/system/restore', static fn($rq, $rs) => $system()->restore($rq, $rs))

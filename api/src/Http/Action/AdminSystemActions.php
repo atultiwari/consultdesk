@@ -17,6 +17,10 @@ use ConsultDesk\Infra\AuditLog;
 use ConsultDesk\Infra\Backup;
 use ConsultDesk\Infra\InvalidBackup;
 use ConsultDesk\Infra\RateLimiter;
+use ConsultDesk\Updates\UpdateChecker;
+use ConsultDesk\Updates\UpdateFailed;
+use ConsultDesk\Updates\Updater;
+use ConsultDesk\Version;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\UploadedFileInterface;
@@ -36,6 +40,8 @@ final class AdminSystemActions
         private readonly AdminUsers $users,
         private readonly Passwords $passwords,
         private readonly RateLimiter $limiter,
+        private readonly ?UpdateChecker $updates = null,
+        private readonly ?Updater $updater = null,
     ) {}
 
     /** Wrong passwords allowed per hour when confirming a backup or restore, per account. */
@@ -152,6 +158,65 @@ final class AdminSystemActions
      * Checks the owner's password again. Wrong guesses are limited per account (not per address,
      * so a stolen session can't be used to guess the password from many places) and audited.
      */
+    public function updates(Request $request, Response $response): Response
+    {
+        AdminScope::owner($request);
+
+        return JsonResponse::success($response, $this->updateState($this->checker()->status()));
+    }
+
+    public function checkUpdates(Request $request, Response $response): Response
+    {
+        AdminScope::owner($request);
+
+        return JsonResponse::success($response, $this->updateState($this->checker()->check()));
+    }
+
+    /**
+     * Installs the newest release found by the last check, after the owner's password.
+     */
+    public function applyUpdate(Request $request, Response $response): Response
+    {
+        $owner = AdminScope::owner($request);
+        $input = new Input(JsonInput::decode($request));
+        $this->confirmPassword($owner, $input, $input->secret('password', max: Passwords::MAX_LENGTH));
+        $input->assertValid();
+
+        $release = $this->checker()->release();
+        if ($release === null || !UpdateChecker::newer($release->version, Version::CURRENT)) {
+            throw new ApiException(409, 'no_update', 'There’s no newer version to install. Check for updates first.');
+        }
+        self::longRunning();
+        $updater = $this->updater ?? throw new RuntimeException('Updater not configured.');
+        try {
+            $result = $updater->apply($release);
+        } catch (UpdateFailed $e) {
+            $this->audit->record(Actor::user($owner->id), 'admin.update_failed', 'system', null, ['version' => $release->version, 'reason' => $e->getMessage()]);
+
+            throw new ApiException(422, 'update_failed', $e->getMessage());
+        }
+        $this->audit->record(Actor::user($owner->id), 'admin.updated', 'system', null, $result);
+
+        return JsonResponse::success($response, $result);
+    }
+
+    /**
+     * @param array<string, mixed> $status
+     *
+     * @return array<string, mixed>
+     */
+    private function updateState(array $status): array
+    {
+        $blocker = $this->updater === null ? 'Updates aren’t set up here.' : $this->updater->blocker();
+
+        return [...$status, 'can_update' => $blocker === null && $status['available'] === true, 'blocker' => $blocker];
+    }
+
+    private function checker(): UpdateChecker
+    {
+        return $this->updates ?? throw new RuntimeException('Update checker not configured.');
+    }
+
     private function confirmPassword(AdminUser $owner, Input $input, #[\SensitiveParameter] ?string $password): void
     {
         if ($password === null) {

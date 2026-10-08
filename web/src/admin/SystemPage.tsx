@@ -2,6 +2,7 @@ import { Button } from '../design/components/Button';
 import { Badge, Loading, Notice } from '../design/components/Notice';
 import { visitorTimezone } from '../lib/time';
 import { BackupPanel } from './BackupPanel';
+import { UpdatesPanel } from './UpdatesPanel';
 import { formatWhen } from './format';
 import { useSystem, useSystemAction } from './settingsHooks';
 
@@ -110,6 +111,7 @@ export function SystemPage() {
           </section>
         </div>
       )}
+      {s && <UpdatesPanel />}
       {s && <BackupPanel />}
     </div>
   );

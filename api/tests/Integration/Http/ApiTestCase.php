@@ -28,6 +28,7 @@ abstract class ApiTestCase extends IntegrationTestCase
     protected ?FakeTelegramApi $telegram = null;
     protected ?FakeGoogleApi $google = null;
     protected ?FakeRazorpayApi $razorpay = null;
+    protected ?\ConsultDesk\Updates\ReleaseSource $releases = null;
     private string $now = self::NOW;
 
     protected function setUp(): void
@@ -56,7 +57,7 @@ abstract class ApiTestCase extends IntegrationTestCase
             ...$this->extraEnv(),
         ]);
 
-        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram, googleApi: $this->google, razorpayApi: $this->razorpay);
+        return new AppServices($config, db: $this->database, clock: new FrozenClock($this->now), mailer: $this->mailer, telegramApi: $this->telegram, googleApi: $this->google, razorpayApi: $this->razorpay, releaseSource: $this->releases);
     }
 
     /**

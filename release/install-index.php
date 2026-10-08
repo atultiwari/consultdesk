@@ -44,7 +44,7 @@ if ($app === '' || !is_file($app . '/vendor/autoload.php')) {
     $page('Install', '<h1>Almost there</h1><div class="alert">The <code>consultdesk-app</code> folder wasn’t found. Upload it next to your web folder (for example next to <code>public_html</code>), not inside it, then reload this page.</div>');
 }
 require $app . '/vendor/autoload.php';
-$installer = new Installer($app);
+$installer = new Installer($app, null, dirname(__DIR__));
 
 if ($installer->installed()) {
     $page('Installed', '<h1>ConsultDesk is installed</h1><p>This page is switched off now. Open your admin area at the secret address you chose, or the <a href="/">booking site</a>.</p>');

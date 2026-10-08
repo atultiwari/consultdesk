@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 import { useAdmin } from './context';
 import { useDashboard } from './hooks';
 import { useSetup } from './setupHooks';
+import { useUpdateStatus } from './updateHooks';
 import type { BookingAction, BookingRow } from './types';
 
 function Queue({
@@ -61,6 +62,19 @@ function SetupReminder() {
   );
 }
 
+/** A quiet note for the owner when a newer ConsultDesk is out (from the last daily check). */
+function UpdateNotice() {
+  const { base, user } = useAdmin();
+  const status = useUpdateStatus(user.role === 'owner');
+  if (!status.data?.available || !status.data.latest) return null;
+  return (
+    <Notice tone="info">
+      ConsultDesk {status.data.latest.version} is available.{' '}
+      <Link to={`${base}/system`}>See what’s new and update</Link>
+    </Notice>
+  );
+}
+
 export function DashboardPage() {
   const timezone = visitorTimezone();
   const dashboard = useDashboard(timezone);
@@ -72,6 +86,7 @@ export function DashboardPage() {
         <p className="page__sub">What needs you now, and what&apos;s coming up.</p>
       </header>
       <SetupReminder />
+      <UpdateNotice />
       {dashboard.isPending && <Loading />}
       {dashboard.isError && (
         <Notice tone="danger" live>

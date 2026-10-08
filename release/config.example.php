@@ -33,6 +33,8 @@ return [
     // 'RAZORPAY_KEY_SECRET' => '…',
     // 'RAZORPAY_WEBHOOK_SECRET' => '…',
     // 'PAYMENTS_LIVE' => '1',   // only once you switch to rzp_live_ keys
+    // 'UPDATE_CHANNEL' => 'beta', // also offer pre-releases as in-app updates
+    // 'PUBLIC_PATH' => '/home/u000000000/domains/example.com/public_html/book', // the installer sets this
     // 'TELEGRAM_BOT_TOKEN' => '…',
     // 'TELEGRAM_WEBHOOK_SECRET' => '…',
     // 'TELEGRAM_BOT_USERNAME' => '…',

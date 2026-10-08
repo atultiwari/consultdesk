@@ -67,6 +67,7 @@ final class InstallerTest extends IntegrationTestCase
         $config = Config::load($this->app . '/config.php', []);
         self::assertSame(['https://book.example.test', 'desk-test-install', 'VRL'], [$config->appUrl, $config->adminPath, $config->bookingPrefix]);
         self::assertSame(32, strlen($config->appKey));
+        self::assertSame($this->app, $config->publicPath, 'the web folder is remembered for in-app updates');
         self::assertSame('0600', substr(sprintf('%o', fileperms($this->app . '/config.php')), -4));
         self::assertFileDoesNotExist($this->app . '/install-code.txt');
         self::assertContains('migrations', self::column($this->pdo, 'SHOW TABLES'));
@@ -131,7 +132,7 @@ final class InstallerTest extends IntegrationTestCase
 
     private function installer(): Installer
     {
-        return new Installer($this->app, self::MIGRATIONS_DIR);
+        return new Installer($this->app, self::MIGRATIONS_DIR, $this->app);
     }
 
     /**
