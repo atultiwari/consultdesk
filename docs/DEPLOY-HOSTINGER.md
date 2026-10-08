@@ -58,19 +58,36 @@ If not, do everything through **File Manager**: nothing below needs SSH.
 
 ### 1.1 Create the subdomain
 
-1. hPanel → **Domains → Subdomains**.
-2. Create subdomain: **book** (for atultiwari.com).
-3. Leave **Custom folder for subdomain** unticked so it uses `public_html/book`, or note the
-   folder it shows. This is the subdomain's **web folder**.
+> **Finding things in hPanel:** open **Websites**, pick **atultiwari.com**, and use the menu on the
+> left (Domains, Security, Files, Advanced…). Hostinger renames menu items from time to time: if a
+> name in this guide doesn't match, type it into the **Search** box at the top of that menu.
 
-In File Manager the paths are:
+1. hPanel → **Websites → atultiwari.com → Domains → Subdomains**.
+2. Under **Create a New Subdomain**: type `book`, keep the domain **atultiwari.com**, and leave
+   **Custom folder for subdomain** unticked. Press **Create**.
+3. **List of Current Subdomains** now shows:
+
+   | Subdomain | Directory |
+   |---|---|
+   | book.atultiwari.com | `/home/u…/domains/atultiwari.com/public_html/book` |
+
+   The `u…` part (e.g. `u123456789`) is your Hostinger account's username. Note this whole
+   **Directory** path: it's the subdomain's **web folder**, and you'll need the `/home/u…` part for
+   the cron job (2.4).
+
+So the layout is:
 
 ```
 /home/u123456789/domains/atultiwari.com/public_html/book   ← web folder (book.atultiwari.com)
 /home/u123456789/domains/atultiwari.com/consultdesk-app    ← the app goes here (Part 2)
 ```
 
-(`u123456789` is your account's username, shown at the top of File Manager and in SSH Access.)
+`consultdesk-app` sits next to `public_html`, not inside it. (Use your own `u…` number wherever this
+guide shows `u123456789`.)
+
+4. Hostinger sometimes puts a placeholder page into the new folder. Open **Files → File Manager**,
+   go to `domains/atultiwari.com/public_html/book`, and delete anything inside it (for example
+   `default.php` or `index.php`) so the folder is empty before you upload.
 
 ### 1.2 Turn on HTTPS
 
